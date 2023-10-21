@@ -2,7 +2,7 @@
 
 use abscissa_core::{Command, Runnable};
 use crate::prelude::*;
-use crate::components::rpc_client::RpcClient;
+use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::wallet::Wallet;
 
 
@@ -16,8 +16,8 @@ impl Runnable for BurnCmd {
     fn run(&self) {
         let config = APP.config();
 
-        let rpc_client = RpcClient::new();
-        let wallet = Wallet::new();
+        let rpc_client = ReqwestRpcClient::new();
+        let wallet = Wallet::empty();
 
         todo!()
     }

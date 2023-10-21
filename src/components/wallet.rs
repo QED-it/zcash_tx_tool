@@ -1,33 +1,28 @@
 mod structs;
 
 use bridgetree::{self, BridgeTree};
-use byteorder::{ReadBytesExt, WriteBytesExt};
 use incrementalmerkletree::Position;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
+use std::sync::Arc;
 use abscissa_core::prelude::{error, info};
 
 use zcash_primitives::{
-    consensus::BlockHeight,
     sapling::NOTE_COMMITMENT_TREE_DEPTH,
-    transaction::{components::Amount, TxId},
+    transaction::{components::Amount},
 };
 
-use orchard::issuance::{IssueBundle, Signed};
-use orchard::keys::IssuanceAuthorizingKey;
-use orchard::note::{AssetBase, ExtractedNoteCommitment};
-use orchard::{
-    bundle::Authorized,
-    keys::{FullViewingKey, IncomingViewingKey, Scope, SpendingKey},
-    note::Nullifier,
-    tree::MerkleHashOrchard,
-    Address, Bundle, Note,
-};
+use orchard::{bundle::Authorized, keys::{FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey}, note::Nullifier, tree::MerkleHashOrchard, Address, Bundle, Note, Anchor};
+use orchard::keys::OutgoingViewingKey;
+use orchard::note_encryption::OrchardDomain;
 use orchard::tree::MerklePath;
-use zebra_chain::block::Block;
-use zebra_chain::transaction::Transaction;
-use crate::components::wallet::structs::{OrderedAddress, OrchardSpendInfo};
 
+use zcash_note_encryption::try_note_decryption;
+use zebra_chain::block::{Block, Hash as BlockHash, Height as BlockHeight};
+use zebra_chain::transaction::Transaction;
+use zcash_primitives::transaction as zp_tx;
+use zcash_primitives::transaction::TxId;
+use crate::components::wallet::structs::OrderedAddress;
 
 pub const MAX_CHECKPOINTS: usize = 100;
 
@@ -76,12 +71,18 @@ struct NotePositions {
     /// of the output note's commitment within the global Merkle tree.
     note_positions: BTreeMap<usize, Position>,
 }
+#[derive(Debug)]
+pub struct NoteSpendMetadata {
+    pub note: Note,
+    pub sk: SpendingKey,
+    pub merkle_path: MerklePath
+}
 
 struct KeyStore {
     payment_addresses: BTreeMap<OrderedAddress, IncomingViewingKey>,
     viewing_keys: BTreeMap<IncomingViewingKey, FullViewingKey>,
     spending_keys: BTreeMap<FullViewingKey, SpendingKey>,
-    issuance_keys: BTreeMap<usize, IssuanceAuthorizingKey>,
+//    issuance_keys: BTreeMap<usize, IssuanceAuthorizingKey>,
 }
 
 impl KeyStore {
@@ -90,7 +91,7 @@ impl KeyStore {
             payment_addresses: BTreeMap::new(),
             viewing_keys: BTreeMap::new(),
             spending_keys: BTreeMap::new(),
-            issuance_keys: BTreeMap::new(),
+//            issuance_keys: BTreeMap::new(),
         }
     }
 
@@ -118,10 +119,6 @@ impl KeyStore {
         has_fvk
     }
 
-    pub fn add_issuance_key(&mut self, account_id: usize, iak: IssuanceAuthorizingKey) {
-        self.issuance_keys.insert(account_id, iak);
-    }
-
     pub fn spending_key_for_ivk(&self, ivk: &IncomingViewingKey) -> Option<&SpendingKey> {
         self.viewing_keys
             .get(ivk)
@@ -138,9 +135,13 @@ impl KeyStore {
             .map(|fvk| note.nullifier(fvk))
     }
 
-    pub fn get_issuance_key(&self, account_id: usize) -> Option<&IssuanceAuthorizingKey> {
-        self.issuance_keys.get(&account_id)
-    }
+    // pub fn add_issuance_key(&mut self, account_id: usize, iak: IssuanceAuthorizingKey) {
+    //     self.issuance_keys.insert(account_id, iak);
+    // }
+    //
+    // pub fn get_issuance_key(&self, account_id: usize) -> Option<&IssuanceAuthorizingKey> {
+    //     self.issuance_keys.get(&account_id)
+    // }
 }
 
 pub struct Wallet {
@@ -159,25 +160,52 @@ pub struct Wallet {
     /// belonging to the wallet.
     commitment_tree: BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH>,
     /// The block height at which the last checkpoint was created, if any.
-    last_checkpoint: Option<BlockHeight>,
-    /// The block height and transaction index of the note most recently added to
-    /// `commitment_tree`
-    last_observed: Option<LastObserved>,
-    /// Notes marked as mined as a consequence of their nullifiers having been observed
-    /// in bundle action inputs in bundles appended to the commitment tree.  The keys of
-    /// this map are the outpoints where the spent notes were created, and the values
-    /// are the inpoints identifying the actions in which they are spent.
-    mined_notes: BTreeMap<OutPoint, InPoint>,
+    last_block_height: Option<BlockHeight>,
+    /// The block hash at which the last checkpoint was created, if any.
+    last_block_hash: Option<BlockHash>,
     /// For each nullifier which appears more than once in transactions that this
     /// wallet has observed, the set of inpoints where those nullifiers were
     /// observed as as having been spent.
     potential_spends: BTreeMap<Nullifier, BTreeSet<InPoint>>,
 }
 
+impl Wallet {
+
+    pub fn last_block_hash(&self) -> Option<BlockHash> {
+        self.last_block_hash
+    }
+
+    pub fn last_block_height(&self) -> Option<BlockHeight> {
+        self.last_block_height
+    }
+
+    pub(crate) fn reorg(&self, height: BlockHeight) {
+        todo!()
+    }
+
+    pub(crate) fn select_spendable_notes(&self, total_amount: u64) -> Vec<NoteSpendMetadata> {
+        Vec::new() // TODO
+    }
+
+    pub(crate) fn change_address(&self) -> Address {
+        todo!()
+        // auto ovk = orchardSpendingKeys[0].ToFullViewingKey().ToInternalOutgoingViewingKey();
+        // AddOrchardOutput(ovk, firstOrchardSpendAddr.value(), change, std::nullopt, asset);
+    }
+
+    pub(crate) fn orchard_ovk(&self) -> Option<OutgoingViewingKey> {
+        todo!()
+    }
+
+    pub(crate) fn orchard_anchor(&self) -> Option<Anchor> {
+        todo!()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum WalletError {
     OutOfOrder(LastObserved, BlockHeight, usize),
-    NoteCommitmentTreeFull,
+    NoteCommitmentTreeFull
 }
 
 #[derive(Debug, Clone)]
@@ -201,6 +229,8 @@ pub enum BundleLoadError {
     /// An action index identified as potentially spending one of our
     /// notes is not a valid action index for the bundle.
     InvalidActionIndex(usize),
+    /// Invalid Transaction data format
+    InvalidTransactionFormat
 }
 
 #[derive(Debug, Clone)]
@@ -220,9 +250,8 @@ impl Wallet {
             wallet_note_positions: BTreeMap::new(),
             nullifiers: BTreeMap::new(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
-            last_checkpoint: None,
-            last_observed: None,
-            mined_notes: BTreeMap::new(),
+            last_block_height: None,
+            last_block_hash: None,
             potential_spends: BTreeMap::new(),
         }
     }
@@ -235,9 +264,8 @@ impl Wallet {
     pub fn reset(&mut self) {
         self.wallet_note_positions.clear();
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
-        self.last_checkpoint = None;
-        self.last_observed = None;
-        self.mined_notes = BTreeMap::new();
+        self.last_block_height = None;
+        self.last_block_hash = None;
     }
 
     /// Checkpoints the note commitment tree. This returns `false` and leaves the note
@@ -245,30 +273,30 @@ impl Wallet {
     /// the last checkpointed block height (unless the note commitment tree is empty,
     /// in which case it unconditionally succeeds). This must be called exactly once
     /// per block.
-    pub fn checkpoint(&mut self, block_height: BlockHeight) -> bool {
+    fn checkpoint(&mut self, block_height: BlockHeight) -> bool {
         // checkpoints must be in order of sequential block height and every
         // block must be checkpointed
-        if let Some(last_height) = self.last_checkpoint {
-            let expected_height = last_height + 1;
+        if let Some(last_height) = self.last_block_height {
+            let expected_height = last_height.next();
+
             if block_height != expected_height {
                 error!(
                     "Expected checkpoint height {}, given {}",
-                    expected_height,
-                    block_height
+                    expected_height.0,
+                    block_height.0
                 );
                 return false;
             }
         }
 
-        self.commitment_tree.checkpoint(block_height.into());
-        self.last_checkpoint = Some(block_height);
+        self.commitment_tree.checkpoint(block_height.0);
         true
     }
 
     /// Returns the last checkpoint if any. If no checkpoint exists, the wallet has not
     /// yet observed any blocks.
     pub fn last_checkpoint(&self) -> Option<BlockHeight> {
-        self.last_checkpoint
+        self.last_block_height
     }
 
     /// Rewinds the note commitment tree to the given height, removes notes and spentness
@@ -283,14 +311,14 @@ impl Wallet {
     /// information, we allow the wallet to continue to rewind, under the assumption that the state
     /// of the note commitment tree will be overwritten prior to the next append.
     pub fn rewind(&mut self, to_height: BlockHeight) -> Result<BlockHeight, RewindError> {
-        if let Some(checkpoint_height) = self.last_checkpoint {
+        if let Some(checkpoint_height) = self.last_block_height {
             if to_height >= checkpoint_height {
                 info!("Last checkpoint is before the rewind height, nothing to do.");
                 return Ok(checkpoint_height);
             }
 
             info!("Rewinding note commitment tree");
-            let blocks_to_rewind = <u32>::from(checkpoint_height) - <u32>::from(to_height);
+            let blocks_to_rewind = checkpoint_height.0 - to_height.0;
             let checkpoint_count = self.commitment_tree.checkpoints().len();
             for _ in 0..blocks_to_rewind {
                 // If the rewind fails, we have no more checkpoints. This is fine in the
@@ -307,36 +335,14 @@ impl Wallet {
 
             // retain notes that correspond to transactions that are not "un-mined" after
             // the rewind
-            let to_retain: BTreeSet<_> = self
-                .wallet_note_positions
-                .iter()
-                .filter_map(|(txid, n)| {
-                    if n.tx_height <= to_height {
-                        Some(*txid)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            info!("Retaining notes in transactions {:?}", to_retain);
-
-            self.mined_notes.retain(|_, v| to_retain.contains(&v.txid));
-
-            // nullifier and received note data are retained, because these values are stable
-            // once we've observed a note for the first time. The block height at which we
-            // observed the note is removed along with the note positions, because the
-            // transaction will no longer have been observed as having been mined.
-            self.wallet_note_positions
-                .retain(|txid, _| to_retain.contains(txid));
+            // TODO remove mined status from transactions with height > to_height via ORM
 
             // reset our last observed height to ensure that notes added in the future are
             // from a new block
-            self.last_observed = Some(LastObserved {
-                block_height: to_height,
-                block_tx_idx: None,
-            });
+            self.last_block_height = Some(to_height);
+            // TODO self.last_block_hash = get_block_hash(to_height);
 
-            self.last_checkpoint = if checkpoint_count > blocks_to_rewind as usize {
+            self.last_block_height = if checkpoint_count > blocks_to_rewind as usize {
                 Some(to_height)
             } else {
                 // checkpoint_count <= blocks_to_rewind
@@ -350,10 +356,8 @@ impl Wallet {
             // If we have no witnessed notes, it's okay to keep "rewinding" even though
             // we have no checkpoints. We then allow last_observed to assume the height
             // to which we have reset the tree state.
-            self.last_observed = Some(LastObserved {
-                block_height: to_height,
-                block_tx_idx: None,
-            });
+            self.last_block_height = Some(to_height);
+            // TODO self.last_block_hash = get_block_hash(to_height);
 
             Ok(to_height)
         } else {
@@ -363,29 +367,43 @@ impl Wallet {
 
     /// Add note data from all V5 transactions of the block to the wallet.
     /// Versions other than V5 are ignored.
-    pub fn add_notes_from_block(&mut self, block: &Block) {
-        block.transactions.iter().for_each( |tx| if tx.version() == 5 {
-            self.add_notes_from_tx(tx)
-        })
+    pub fn add_notes_from_block(&mut self, block: Block) -> Result<(), BundleLoadError> {
+        let block_height = block.coinbase_height().unwrap();
+
+        block.transactions.into_iter().for_each( |tx| if tx.version() == 5 {
+            self.add_notes_from_tx(tx).unwrap();
+        });
+
+        self.checkpoint(block_height);
+
+        self.last_block_hash = Some(block.header.previous_block_hash);
+        self.last_block_height = Some(block_height);
+        Ok(())
     }
 
     /// Add note data to the wallet, and return a a data structure that describes
     /// the actions that are involved with this wallet.
-    pub fn add_notes_from_tx(&mut self, tx: Transaction::V5) {
+    pub fn add_notes_from_tx(&mut self, zebra_tx: Arc<Transaction>) -> Result<(), BundleLoadError> {
+
         let mut issued_notes_offset = 0;
 
-        // TODO Add transparent notes
+        let z_tx =  &Arc::<Transaction>::try_unwrap( zebra_tx)
+            .map_err(|e| BundleLoadError::InvalidTransactionFormat)?;
+
+        let tx: zp_tx::Transaction = z_tx.try_into().map_err(|e| BundleLoadError::InvalidTransactionFormat)?;
 
         // Add note from Orchard bundle
-        if let Some(bundle) = tx.orchard_shielded_data() {
+        if let Some(bundle) = tx.orchard_bundle() {
             issued_notes_offset = bundle.actions().len();
-            self.add_notes_from_orchard_bundle(tx.id, bundle);
+            self.add_notes_from_orchard_bundle(&tx.txid(), bundle);
         };
 
         // Add notes from Issue bundle
-        if let Some(issue_bundle) = tx.issue_bundle() {
-            self.add_notes_from_issue_bundle(tx.id, issue_bundle, issued_notes_offset);
-        };
+        // if let Some(issue_bundle) = tx.issue_bundle() {
+        //     self.add_notes_from_issue_bundle(tx.hash(), issue_bundle, issued_notes_offset);
+        // };
+
+        Ok(())
     }
 
 
@@ -405,33 +423,61 @@ impl Wallet {
             .cloned()
             .collect::<Vec<_>>();
 
-        for (action_idx, ivk, note, recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
+        for (action_idx, ivk, note, recipient, memo) in self.decrypt_outputs_with_keys(&bundle, &keys) {
             assert!(self.add_decrypted_note(txid, action_idx, ivk.clone(), note, recipient, memo));
+            // TODO append note commitment
         }
+    }
+
+    /// Performs trial decryption of each action in the bundle with each of the
+    /// specified incoming viewing keys, and returns a vector of each decrypted
+    /// note plaintext contents along with the index of the action from which it
+    /// was derived.
+    fn decrypt_outputs_with_keys(
+        &self,
+        bundle: &Bundle<Authorized, Amount>,
+        keys: &[IncomingViewingKey],
+    ) -> Vec<(usize, IncomingViewingKey, Note, Address, [u8; 512])> {
+        let prepared_keys: Vec<_> = keys
+            .iter()
+            .map(|ivk| (ivk, PreparedIncomingViewingKey::new(ivk)))
+            .collect();
+        bundle.actions()
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, action)| {
+                let domain = OrchardDomain::for_action(&action);
+                prepared_keys.iter().find_map(|(ivk, prepared_ivk)| {
+                    try_note_decryption(&domain, prepared_ivk, action)
+                        .map(|(n, a, m)| (idx, (*ivk).clone(), n, a, m))
+                })
+            })
+            .collect()
     }
 
     /// Add note data to the wallet, and return a a data structure that describes
     /// the actions that are involved with this wallet.
-    fn add_notes_from_issue_bundle(
-        &mut self,
-        txid: &TxId,
-        bundle: &IssueBundle<Signed>,
-        note_index_offset: usize,
-    ) {
-        for (note_index, note) in bundle.actions().iter().flat_map(|a| a.notes()).enumerate() {
-            if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
-                let note_index = note_index + note_index_offset;
-                assert!(self.add_decrypted_note(
-                    txid,
-                    note_index,
-                    ivk.clone(),
-                    *note,
-                    note.recipient(),
-                    [0; 512]
-                ));
-            }
-        }
-    }
+    // fn add_notes_from_issue_bundle(
+    //     &mut self,
+    //     txid: &TxId,
+    //     bundle: &IssueBundle<Signed>,
+    //     note_index_offset: usize,
+    // ) {
+    //     for (note_index, note) in bundle.actions().iter().flat_map(|a| a.notes()).enumerate() {
+    //         if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
+    //             let note_index = note_index + note_index_offset;
+    //             assert!(self.add_decrypted_note(
+    //                 txid,
+    //                 note_index,
+    //                 ivk.clone(),
+    //                 *note,
+    //                 note.recipient(),
+    //                 [0; 512]
+    //             ));
+    //             // TODO append note commitment
+    //         }
+    //     }
+    // }
 
     /// Restore note and potential spend data from a bundle using the provided
     /// metadata.
@@ -568,237 +614,124 @@ impl Wallet {
             .insert(inpoint);
     }
 
-    /// Add note commitments for the Orchard components of a transaction to the note
-    /// commitment tree, and mark the tree at the notes decryptable by this wallet so that
-    /// in the future we can produce authentication paths to those notes.
-    ///
-    /// * `block_height` - Height of the block containing the transaction that provided
-    ///   this bundle.
-    /// * `block_tx_idx` - Index of the transaction within the block
-    /// * `txid` - Identifier of the transaction.
-    /// * `bundle_opt` - Orchard component of the transaction (may be null for issue-only tx).
-    /// * `issue_bundle_opt` - IssueBundle component of the transaction  (may be null for transfer-only tx).
-    pub fn append_bundle_commitments(
-        &mut self,
-        block_height: BlockHeight,
-        block_tx_idx: usize,
-        txid: &TxId,
-        bundle_opt: Option<&Bundle<Authorized, Amount>>,
-        issue_bundle_opt: Option<&IssueBundle<Signed>>,
-    ) -> Result<(), WalletError> {
-        // Check that the wallet is in the correct state to update the note commitment tree with
-        // new outputs.
-        if let Some(last) = &self.last_observed {
-            if !(
-                // we are observing a subsequent transaction in the same block
-                (block_height == last.block_height && last.block_tx_idx.map_or(false, |idx| idx < block_tx_idx))
-                    // or we are observing a new block
-                    || block_height > last.block_height
-            ) {
-                return Err(WalletError::OutOfOrder(
-                    last.clone(),
-                    block_height,
-                    block_tx_idx,
-                ));
-            }
-        }
-
-        self.last_observed = Some(LastObserved {
-            block_height,
-            block_tx_idx: Some(block_tx_idx),
-        });
-
-        // update the block height recorded for the transaction
-        let my_notes_for_tx = self.wallet_received_notes.get(txid);
-        if my_notes_for_tx.is_some() {
-            info!("Tx is ours, marking as mined");
-            assert!(self
-                .wallet_note_positions
-                .insert(
-                    *txid,
-                    NotePositions {
-                        tx_height: block_height,
-                        note_positions: BTreeMap::default(),
-                    },
-                )
-                .is_none());
-        }
-
-        // Process note commitments
-        let mut note_commitments: Vec<ExtractedNoteCommitment> = if let Some(bundle) = bundle_opt {
-            bundle
-                .actions()
-                .iter()
-                .map(|action| *action.cmx())
-                .collect()
-        } else {
-            Vec::new()
-        };
-
-        let mut issued_note_commitments: Vec<ExtractedNoteCommitment> =
-            if let Some(issue_bundle) = issue_bundle_opt {
-                issue_bundle
-                    .actions()
-                    .iter()
-                    .flat_map(|a| a.notes())
-                    .map(|note| note.commitment().into())
-                    .collect()
-            } else {
-                Vec::new()
-            };
-
-        note_commitments.append(&mut issued_note_commitments);
-
-        for (note_index, commitment) in note_commitments.iter().enumerate() {
-            // append the note commitment for each action to the note commitment tree
-            if !self
-                .commitment_tree
-                .append(MerkleHashOrchard::from_cmx(commitment))
-            {
-                return Err(WalletError::NoteCommitmentTreeFull);
-            }
-
-            // for notes that are ours, mark the current state of the tree
-            if my_notes_for_tx
-                .as_ref()
-                .and_then(|n| n.decrypted_notes.get(&note_index))
-                .is_some()
-            {
-                info!("Witnessing Orchard note ({}, {})", txid, note_index);
-                let pos = self.commitment_tree.mark().expect("tree is not empty");
-                assert!(self
-                    .wallet_note_positions
-                    .get_mut(txid)
-                    .expect("We created this above")
-                    .note_positions
-                    .insert(note_index, pos)
-                    .is_none());
-            }
-        }
-
-        // For nullifiers that are ours that we detect as spent by this action,
-        // we will record that input as being mined.
-        if let Some(bundle) = bundle_opt {
-            for (action_idx, action) in bundle.actions().iter().enumerate() {
-                if let Some(outpoint) = self.nullifiers.get(action.nullifier()) {
-                    assert!(self
-                        .mined_notes
-                        .insert(
-                            *outpoint,
-                            InPoint {
-                                txid: *txid,
-                                action_idx,
-                            },
-                        )
-                        .is_none());
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn get_filtered_notes(
-        &self,
-        ivk: Option<&IncomingViewingKey>,
-        ignore_mined: bool,
-        require_spending_key: bool,
-        asset: Option<AssetBase>,
-    ) -> Vec<(OutPoint, DecryptedNote)> {
-        info!("Filtering notes");
-        self.wallet_received_notes
-            .iter()
-            .flat_map(|(txid, tx_notes)| {
-                tx_notes
-                    .decrypted_notes
-                    .iter()
-                    .filter_map(move |(idx, dnote)| {
-                        if asset.is_some() && asset.unwrap() != dnote.note.asset() {
-                            return None;
-                        }
-
-                        let outpoint = OutPoint {
-                            txid: *txid,
-                            action_idx: *idx,
-                        };
-
-                        self.key_store
-                            .ivk_for_address(&dnote.note.recipient())
-                            // if `ivk` is `None`, return all notes that match the other conditions
-                            .filter(|dnote_ivk| ivk.map_or(true, |ivk| &ivk == dnote_ivk))
-                            .and_then(|dnote_ivk| {
-                                if (ignore_mined && self.mined_notes.contains_key(&outpoint))
-                                    || (require_spending_key
-                                    && self.key_store.spending_key_for_ivk(dnote_ivk).is_none())
-                                {
-                                    None
-                                } else {
-                                    info!("Selected note at {:?}", outpoint);
-                                    Some((outpoint, (*dnote).clone()))
-                                }
-                            })
-                    })
-            })
-            .collect()
-    }
-
-    /// Fetches the information necessary to spend the note at the given `OutPoint`,
-    /// relative to the specified root of the Orchard note commitment tree.
-    ///
-    /// Returns `None` if the `OutPoint` is not known to the wallet, or the Orchard bundle
-    /// containing the note had not been passed to `Wallet::append_bundle_commitments` at
-    /// the specified checkpoint depth.
-    pub fn get_spend_info(
-        &self,
-        outpoint: OutPoint,
-        checkpoint_depth: usize,
-    ) -> Result<OrchardSpendInfo, SpendRetrievalError> {
-        info!("Searching for {:?}", outpoint);
-        let dnote = self
-            .wallet_received_notes
-            .get(&outpoint.txid)
-            .and_then(|tx_notes| tx_notes.decrypted_notes.get(&outpoint.action_idx))
-            .ok_or(SpendRetrievalError::DecryptedNoteNotFound(outpoint))?;
-        info!("Found decrypted note for outpoint: {:?}", dnote);
-
-        let fvk = self
-            .key_store
-            .ivk_for_address(&dnote.note.recipient())
-            .ok_or_else(|| SpendRetrievalError::NoIvkForRecipient(dnote.note.recipient()))
-            .and_then(|ivk| {
-                self.key_store
-                    .viewing_keys
-                    .get(ivk)
-                    .ok_or_else(|| SpendRetrievalError::FvkNotFound(ivk.clone()))
-            })?;
-        info!("Found FVK for note");
-
-        let position = self
-            .wallet_note_positions
-            .get(&outpoint.txid)
-            .and_then(|tx_notes| tx_notes.note_positions.get(&outpoint.action_idx))
-            .ok_or(SpendRetrievalError::NoteNotPositioned(outpoint))?;
-        info!("Found position for note: {:?}", position);
-
-        assert_eq!(
-            self.commitment_tree
-                .get_marked_leaf(*position)
-                .expect("This note has been marked as one of ours."),
-            &MerkleHashOrchard::from_cmx(&dnote.note.commitment().into()),
-        );
-
-        let path = self
-            .commitment_tree
-            .witness(*position, checkpoint_depth)
-            .map_err(|_| SpendRetrievalError::WitnessNotAvailableAtDepth(checkpoint_depth))?;
-
-        Ok(OrchardSpendInfo::from_parts(
-            fvk.clone(),
-            dnote.note,
-            MerklePath::from_parts(
-                u64::from(*position).try_into().unwrap(),
-                path.try_into().unwrap(),
-            ),
-        ))
-    }
+ //    /// Add note commitments for the Orchard components of a transaction to the note
+ //    /// commitment tree, and mark the tree at the notes decryptable by this wallet so that
+ //    /// in the future we can produce authentication paths to those notes.
+ //    ///
+ //    /// * `block_height` - Height of the block containing the transaction that provided
+ //    ///   this bundle.
+ //    /// * `block_tx_idx` - Index of the transaction within the block
+ //    /// * `txid` - Identifier of the transaction.
+ //    /// * `bundle_opt` - Orchard component of the transaction (may be null for issue-only tx).
+ //    /// * `issue_bundle_opt` - IssueBundle component of the transaction  (may be null for transfer-only tx).
+ //    pub fn append_bundle_commitments(
+ //        &mut self,
+ //        block_height: BlockHeight,
+ //        block_tx_idx: usize,
+ //        txid: &TxHash,
+ //        bundle_opt: Option<&Bundle<Authorized, Amount>>,
+ // //       issue_bundle_opt: Option<&IssueBundle<Signed>>,
+ //    ) -> Result<(), WalletError> {
+ //        // Check that the wallet is in the correct state to update the note commitment tree with
+ //        // new outputs.
+ //        if let Some(last) = &self.last_observed {
+ //            if !(
+ //                // we are observing a subsequent transaction in the same block
+ //                (block_height == last.block_height && last.block_tx_idx.map_or(false, |idx| idx < block_tx_idx))
+ //                    // or we are observing a new block
+ //                    || block_height > last.block_height
+ //            ) {
+ //                return Err(WalletError::OutOfOrder(
+ //                    last.clone(),
+ //                    block_height,
+ //                    block_tx_idx,
+ //                ));
+ //            }
+ //        }
+ //
+ //        self.last_observed = Some(LastObserved {
+ //            block_height,
+ //            block_tx_idx: Some(block_tx_idx),
+ //        });
+ //
+ //        // update the block height recorded for the transaction
+ //        let my_notes_for_tx = self.wallet_received_notes.get(txid);
+ //        if my_notes_for_tx.is_some() {
+ //            info!("Tx is ours, marking as mined");
+ //            assert!(self
+ //                .wallet_note_positions
+ //                .insert(
+ //                    txid.clone(),
+ //                    NotePositions {
+ //                        tx_height: block_height,
+ //                        note_positions: BTreeMap::default(),
+ //                    },
+ //                )
+ //                .is_none());
+ //        }
+ //
+ //        // Process note commitments
+ //        let mut note_commitments: Vec<ExtractedNoteCommitment> = if let Some(bundle) = bundle_opt {
+ //            bundle
+ //                .actions()
+ //                .iter()
+ //                .map(|action| *action.cmx())
+ //                .collect()
+ //        } else {
+ //            Vec::new()
+ //        };
+ //
+ //        // let mut issued_note_commitments: Vec<ExtractedNoteCommitment> =
+ //        //     if let Some(issue_bundle) = issue_bundle_opt {
+ //        //         issue_bundle
+ //        //             .actions()
+ //        //             .iter()
+ //        //             .flat_map(|a| a.notes())
+ //        //             .map(|note| note.commitment().into())
+ //        //             .collect()
+ //        //     } else {
+ //        //         Vec::new()
+ //        //     };
+ //        //
+ //        // note_commitments.append(&mut issued_note_commitments);
+ //
+ //        for (note_index, commitment) in note_commitments.iter().enumerate() {
+ //            // append the note commitment for each action to the note commitment tree
+ //            if !self
+ //                .commitment_tree
+ //                .append(MerkleHashOrchard::from_cmx(commitment))
+ //            {
+ //                return Err(WalletError::NoteCommitmentTreeFull);
+ //            }
+ //
+ //            // for notes that are ours, mark the current state of the tree
+ //            if my_notes_for_tx
+ //                .as_ref()
+ //                .and_then(|n| n.decrypted_notes.get(&note_index))
+ //                .is_some()
+ //            {
+ //                info!("Witnessing Orchard note ({}, {})", txid, note_index);
+ //                let pos = self.commitment_tree.mark().expect("tree is not empty");
+ //                assert!(self
+ //                    .wallet_note_positions
+ //                    .get_mut(txid)
+ //                    .expect("We created this above")
+ //                    .note_positions
+ //                    .insert(note_index, pos)
+ //                    .is_none());
+ //            }
+ //        }
+ //
+ //        // For nullifiers that are ours that we detect as spent by this action,
+ //        // we will record that input as being mined.
+ //        if let Some(bundle) = bundle_opt {
+ //            for (action_idx, action) in bundle.actions().iter().enumerate() {
+ //                if let Some(outpoint) = self.nullifiers.get(action.nullifier()) {
+ //                    // TODO set mined status on the transaction via ORM with txid and action_idx as spend data
+ //                }
+ //            }
+ //        }
+ //
+ //        Ok(())
+ //    }
 }

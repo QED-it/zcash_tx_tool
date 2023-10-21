@@ -15,10 +15,6 @@
     unused_qualifications
 )]
 
-use std::env;
-use diesel::{Connection, SqliteConnection};
-use dotenvy::dotenv;
-
 pub mod application;
 pub mod config;
 pub mod error;
@@ -26,4 +22,5 @@ pub mod prelude;
 pub mod commands;
 pub mod components;
 mod schema;
+mod util;
 

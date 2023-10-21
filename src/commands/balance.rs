@@ -7,15 +7,15 @@ use crate::components::wallet::Wallet;
 
 /// `getbalance` subcommand
 #[derive(clap::Parser, Command, Debug)]
-pub struct GetBalanceCmd {
+pub struct GetWalletInfoCmd {
 }
 
-impl Runnable for GetBalanceCmd {
+impl Runnable for GetWalletInfoCmd {
     /// Run the `getbalance` subcommand.
     fn run(&self) {
         let config = APP.config();
 
-        let wallet = Wallet::new();
+        let wallet = Wallet::empty();
 
         todo!()
     }

@@ -1,12 +1,10 @@
 //! `sync` subcommand - initialize the application, generate keys from seed phrase and sync with the blockchain
 
-use std::time::Duration;
-use std::thread::sleep;
-
 use crate::prelude::*;
 use crate::config::ZsaWalletConfig;
 use abscissa_core::{config, Command, FrameworkError, Runnable};
-use crate::components::block_cache::BlockCache;
+use zebra_chain::block::{Block, Height};
+use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::rpc_client::RpcClient;
 use crate::components::wallet::Wallet;
 
@@ -42,35 +40,49 @@ impl Runnable for SyncCmd {
     /// Run the `sync` subcommand.
     fn run(&self) {
         let config = APP.config();
-        println!("Seed phrase: {}", &config.wallet.seed_phrase);
+        info!("Seed phrase: {}", &config.wallet.seed_phrase);
 
-        let rpc = RpcClient::new();
-        let mut blocks = BlockCache::new();
-        let wallet = Wallet::new();
+        let rpc = ReqwestRpcClient::new();
+        let mut wallet = Wallet::empty();
 
         info!("Starting sync");
 
-        while !self.interrupted {
-            let best_block_hash = rpc.get_best_block_hash();
-            if best_block_hash == blocks.latest_hash {
-                // We are in a fully synced data, sync is successfully over
-                sleep(Duration::from_secs(2));
-                return
+        loop {
+            let best_block_hash = match rpc.get_best_block_hash() {
+                Ok(hash) => hash,
+                Err(error) => panic!("Error getting best block hash: {}", error)
+                // TODO handle empty blockchain?
+            };
+
+            info!("Best block hash: {}", best_block_hash);
+
+            if let Some(wallet_last_hash) = wallet.last_block_hash()  {
+                if best_block_hash == wallet_last_hash {
+                    // We are in a fully synced data, sync is successfully over
+                    return
+                }
             } else {
                 // We are not in a synced state, we either need to get new blocks or do a reorg
-                let height = blocks.latest_height + 1;
-                let block = rpc.get_block(height);
+                let height: Height = match wallet.last_block_height() {
+                    Some(height) => height.next(),
+                    None => Height(0),
+                };
 
-                // TODO handle no block at this height
+                let block: Block = rpc.get_block(height).unwrap();
 
-                if blocks.latest_hash == block.prev_hash {
-                    // We are in a normal state, just add the block to the cache and wallet
-                    blocks.add(&block);
-                    wallet.add_notes_from_block(&block);
+                if height.is_min() {
+                    // We are dealing with genesis block
+                    wallet.add_notes_from_block(block).unwrap();
                 } else {
-                    // We are in a reorg state, we need to drop the block and all the blocks after it
-                    warn!("REORG: dropping block {} at height {}", blocks.latest_hash, height);
-                    blocks.reorg(height - 1);
+                    let wallet_last_hash = wallet.last_block_hash().unwrap(); // it's ok to panic when we don't have block at height != 0
+                    if wallet_last_hash == block.header.previous_block_hash {
+                        // We are in a normal state, just add the block to the cache and wallet
+                        wallet.add_notes_from_block(block).unwrap();
+                    } else {
+                        // We are in a reorg state, we need to drop the block and all the blocks after it
+                        warn!("REORG: dropping block {} at height {}", wallet_last_hash, height.0);
+                        wallet.reorg(height.previous());
+                    }
                 }
             }
         }
