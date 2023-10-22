@@ -405,6 +405,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bridgetree"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbfcb6c5a091e80cb3d3b0c1a7f126af4631cd5065b1f9929b139f1be8f3fb62"
+dependencies = [
+ "incrementalmerkletree 0.5.0",
+]
+
+[[package]]
 name = "bs58"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4121,6 +4130,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "zcash_proofs"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df0c99f65a840ff256c106b28d67d702d9759d206112473d4982c92003262406"
+dependencies = [
+ "bellman",
+ "blake2b_simd",
+ "bls12_381",
+ "group",
+ "home",
+ "jubjub",
+ "known-folders",
+ "lazy_static",
+ "rand_core 0.6.4",
+ "redjubjub",
+ "tracing",
+ "xdg",
+ "zcash_primitives 0.13.0",
+]
+
+[[package]]
 name = "zcash_script"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4130,7 +4160,7 @@ dependencies = [
  "bindgen 0.68.1",
  "blake2b_simd",
  "bls12_381",
- "bridgetree",
+ "bridgetree 0.3.0",
  "byteorder",
  "cc",
  "crossbeam-channel",
@@ -4153,7 +4183,7 @@ dependencies = [
  "zcash_encoding",
  "zcash_note_encryption",
  "zcash_primitives 0.12.0",
- "zcash_proofs",
+ "zcash_proofs 0.12.1",
 ]
 
 [[package]]
@@ -4165,7 +4195,7 @@ dependencies = [
  "bitvec",
  "blake2b_simd",
  "blake2s_simd",
- "bridgetree",
+ "bridgetree 0.3.0",
  "bs58",
  "byteorder",
  "chrono",
@@ -4234,7 +4264,7 @@ dependencies = [
  "tower-fallback",
  "tracing",
  "tracing-futures",
- "zcash_proofs",
+ "zcash_proofs 0.12.1",
  "zebra-chain",
  "zebra-node-services",
  "zebra-script",
@@ -4372,13 +4402,13 @@ name = "zsa_wallet"
 version = "0.1.0"
 dependencies = [
  "abscissa_core",
- "bridgetree",
+ "bridgetree 0.4.0",
  "byteorder",
  "clap",
  "diesel",
  "dotenvy",
  "hex",
- "incrementalmerkletree 0.4.0",
+ "incrementalmerkletree 0.5.0",
  "once_cell",
  "orchard 0.6.0",
  "rand 0.8.5",
@@ -4390,6 +4420,6 @@ dependencies = [
  "zcash_client_backend",
  "zcash_note_encryption",
  "zcash_primitives 0.13.0",
- "zebra-chain",
+ "zcash_proofs 0.13.0",
  "zebra-rpc",
 ]

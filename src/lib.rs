@@ -22,5 +22,5 @@ pub mod prelude;
 pub mod commands;
 pub mod components;
 mod schema;
-mod util;
+mod model;
 

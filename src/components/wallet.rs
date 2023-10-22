@@ -4,7 +4,6 @@ use bridgetree::{self, BridgeTree};
 use incrementalmerkletree::Position;
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
-use std::sync::Arc;
 use abscissa_core::prelude::{error, info};
 
 use zcash_primitives::{
@@ -18,9 +17,9 @@ use orchard::note_encryption::OrchardDomain;
 use orchard::tree::MerklePath;
 
 use zcash_note_encryption::try_note_decryption;
-use zebra_chain::block::{Block, Hash as BlockHash, Height as BlockHeight};
-use zebra_chain::transaction::Transaction;
-use zcash_primitives::transaction as zp_tx;
+use zcash_primitives::block::BlockHash;
+use zcash_primitives::consensus::BlockHeight;
+use zcash_primitives::transaction::Transaction;
 use zcash_primitives::transaction::TxId;
 use crate::components::wallet::structs::OrderedAddress;
 
@@ -233,15 +232,6 @@ pub enum BundleLoadError {
     InvalidTransactionFormat
 }
 
-#[derive(Debug, Clone)]
-pub enum SpendRetrievalError {
-    DecryptedNoteNotFound(OutPoint),
-    NoIvkForRecipient(Address),
-    FvkNotFound(IncomingViewingKey),
-    NoteNotPositioned(OutPoint),
-    WitnessNotAvailableAtDepth(usize),
-}
-
 impl Wallet {
     pub fn empty() -> Self {
         Wallet {
@@ -277,19 +267,20 @@ impl Wallet {
         // checkpoints must be in order of sequential block height and every
         // block must be checkpointed
         if let Some(last_height) = self.last_block_height {
-            let expected_height = last_height.next();
+            let expected_height = last_height + 1;
 
             if block_height != expected_height {
                 error!(
                     "Expected checkpoint height {}, given {}",
-                    expected_height.0,
-                    block_height.0
+                    expected_height,
+                    block_height
                 );
                 return false;
             }
         }
 
-        self.commitment_tree.checkpoint(block_height.0);
+        let block_height: u32 = block_height.into();
+        self.commitment_tree.checkpoint(block_height);
         true
     }
 
@@ -318,9 +309,9 @@ impl Wallet {
             }
 
             info!("Rewinding note commitment tree");
-            let blocks_to_rewind = checkpoint_height.0 - to_height.0;
+            let blocks_to_rewind: u32 = (checkpoint_height - to_height).into();
             let checkpoint_count = self.commitment_tree.checkpoints().len();
-            for _ in 0..blocks_to_rewind {
+            for _ in 0..blocks_to_rewind  {
                 // If the rewind fails, we have no more checkpoints. This is fine in the
                 // case that we have a recently-initialized tree, so long as we have no
                 // witnessed indices. In the case that we have any witnessed notes, we
@@ -342,7 +333,7 @@ impl Wallet {
             self.last_block_height = Some(to_height);
             // TODO self.last_block_hash = get_block_hash(to_height);
 
-            self.last_block_height = if checkpoint_count > blocks_to_rewind as usize {
+            self.last_block_height = if checkpoint_count as u32 > blocks_to_rewind.into() {
                 Some(to_height)
             } else {
                 // checkpoint_count <= blocks_to_rewind
@@ -367,32 +358,25 @@ impl Wallet {
 
     /// Add note data from all V5 transactions of the block to the wallet.
     /// Versions other than V5 are ignored.
-    pub fn add_notes_from_block(&mut self, block: Block) -> Result<(), BundleLoadError> {
-        let block_height = block.coinbase_height().unwrap();
-
-        block.transactions.into_iter().for_each( |tx| if tx.version() == 5 {
+    pub fn add_notes_from_block(&mut self, block_height: BlockHeight, block_hash: BlockHash, transactions: Vec<Transaction>) -> Result<(), BundleLoadError> {
+        transactions.into_iter().for_each( |tx| if tx.version().header() == 5 {
             self.add_notes_from_tx(tx).unwrap();
         });
 
         self.checkpoint(block_height);
 
-        self.last_block_hash = Some(block.header.previous_block_hash);
+        self.last_block_hash = Some(block_hash);
         self.last_block_height = Some(block_height);
         Ok(())
     }
 
     /// Add note data to the wallet, and return a a data structure that describes
     /// the actions that are involved with this wallet.
-    pub fn add_notes_from_tx(&mut self, zebra_tx: Arc<Transaction>) -> Result<(), BundleLoadError> {
+    pub fn add_notes_from_tx(&mut self, tx: Transaction) -> Result<(), BundleLoadError> {
 
         let mut issued_notes_offset = 0;
 
-        let z_tx =  &Arc::<Transaction>::try_unwrap( zebra_tx)
-            .map_err(|e| BundleLoadError::InvalidTransactionFormat)?;
-
-        let tx: zp_tx::Transaction = z_tx.try_into().map_err(|e| BundleLoadError::InvalidTransactionFormat)?;
-
-        // Add note from Orchard bundle
+         // Add note from Orchard bundle
         if let Some(bundle) = tx.orchard_bundle() {
             issued_notes_offset = bundle.actions().len();
             self.add_notes_from_orchard_bundle(&tx.txid(), bundle);

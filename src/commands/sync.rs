@@ -3,10 +3,11 @@
 use crate::prelude::*;
 use crate::config::ZsaWalletConfig;
 use abscissa_core::{config, Command, FrameworkError, Runnable};
-use zebra_chain::block::{Block, Height};
+use zcash_primitives::consensus::BlockHeight;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::rpc_client::RpcClient;
 use crate::components::wallet::Wallet;
+use crate::model::Block;
 
 /// `sync` subcommand
 #[derive(clap::Parser, Command, Debug)]
@@ -63,25 +64,27 @@ impl Runnable for SyncCmd {
                 }
             } else {
                 // We are not in a synced state, we either need to get new blocks or do a reorg
-                let height: Height = match wallet.last_block_height() {
-                    Some(height) => height.next(),
-                    None => Height(0),
+                let height: BlockHeight = match wallet.last_block_height() {
+                    Some(height) => height + 1,
+                    None => BlockHeight::from_u32(0),
                 };
 
-                let block: Block = rpc.get_block(height).unwrap();
+                let block: Block = rpc.get_block(height.into()).unwrap();
 
-                if height.is_min() {
+                if height == BlockHeight::from_u32(0) {
                     // We are dealing with genesis block
-                    wallet.add_notes_from_block(block).unwrap();
+                    let transactions = block.tx_ids.into_iter().map(| tx_id| rpc.get_transaction(tx_id).unwrap()).collect();
+                    wallet.add_notes_from_block(block.height, block.hash, transactions).unwrap();
                 } else {
                     let wallet_last_hash = wallet.last_block_hash().unwrap(); // it's ok to panic when we don't have block at height != 0
-                    if wallet_last_hash == block.header.previous_block_hash {
+                    if wallet_last_hash == block.previous_block_hash {
                         // We are in a normal state, just add the block to the cache and wallet
-                        wallet.add_notes_from_block(block).unwrap();
+                        let transactions = block.tx_ids.into_iter().map(| tx_id| rpc.get_transaction(tx_id).unwrap()).collect();
+                        wallet.add_notes_from_block(block.height, block.hash, transactions).unwrap();
                     } else {
                         // We are in a reorg state, we need to drop the block and all the blocks after it
-                        warn!("REORG: dropping block {} at height {}", wallet_last_hash, height.0);
-                        wallet.reorg(height.previous());
+                        warn!("REORG: dropping block {} at height {}", wallet_last_hash, height);
+                        wallet.reorg(height - 1);
                     }
                 }
             }

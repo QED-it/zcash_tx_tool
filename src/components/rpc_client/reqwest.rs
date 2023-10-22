@@ -1,15 +1,16 @@
-use hex::FromHex;
+use std::convert::TryInto;
 use reqwest::blocking::Client;
-use zebra_chain::block::{Block, Hash as BlockHash, Height};
 use crate::components::rpc_client::{RpcClient, NODE_URL};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::io;
 use std::io::ErrorKind;
 use serde::de::DeserializeOwned;
-use zebra_chain::serialization::{ZcashDeserialize, ZcashSerialize};
-use zebra_chain::transaction::{Transaction, Hash as TxHash};
-use zebra_rpc::methods::{GetBlock, SentTransactionHash};
+use zcash_primitives::block::BlockHash;
+use zcash_primitives::consensus::{BlockHeight, BranchId};
+use zcash_primitives::transaction::{Transaction, TxId};
+use zebra_rpc::methods::{GetBlock, GetRawTransaction, SentTransactionHash};
+use crate::model::Block;
 use crate::prelude::info;
 
 pub struct ReqwestRpcClient {
@@ -45,28 +46,47 @@ impl ReqwestRpcClient {
 impl RpcClient for ReqwestRpcClient {
 
     fn get_best_block_hash(&self) -> Result<BlockHash, Box<dyn Error>> {
-        let hash_string: String = self.request(&RpcRequest::new("getbestblockhash"))?;
-        let hash = BlockHash::from_hex(hash_string.as_str())?;
-        Ok(hash)
+        let hash: String = self.request(&RpcRequest::new("getbestblockhash"))?;
+        Ok(BlockHash::from_slice(hex::decode(hash).unwrap().as_slice()))
     }
 
-    fn get_block(&self, height: Height) -> Result<Block, Box<dyn Error>> {
+    fn get_block(&self, height: u32) -> Result<Block, Box<dyn Error>> {
         let mut params: Vec<ParamType> = Vec::new();
-        params.push(ParamType::String(height.0.to_string())); // Height
-        params.push(ParamType::Number(0)); // Verbosity
+        params.push(ParamType::String(height.to_string())); // Height
+        params.push(ParamType::Number(2)); // Verbosity
         let block: GetBlock = self.request(&RpcRequest::new_with_params("getblock", params))?;
 
         match block {
-            GetBlock::Raw(bdata) => Ok(Block::zcash_deserialize(bdata.as_ref())?),
-            GetBlock::Object { .. } => Err(io::Error::new(ErrorKind::InvalidData, "GetBlock::Object not supported yet").into())
+            GetBlock::Raw(_) => Err(io::Error::new(ErrorKind::InvalidData, "GetBlock::Raw is not supported").into()),
+            GetBlock::Object{ hash, confirmations, height, tx, trees } => Ok(Block {
+                hash: BlockHash(hash.0.0),
+                height: BlockHeight::from_u32(height.unwrap().0),
+                confirmations: confirmations,
+                tx_ids: tx.iter().map(|tx_id_str| TxId::from_bytes(hex::decode(tx_id_str).unwrap().as_slice().try_into().unwrap())).collect(),
+                previous_block_hash: BlockHash([0; 32]) // TODO add previous block hash to Getblock RPC
+            })
         }
     }
 
-    fn send_raw_transaction(&self, tx: Transaction) -> Result<TxHash, Box<dyn Error>> {
+    fn send_transaction(&self, tx: Transaction) -> Result<TxId, Box<dyn Error>> {
+        let mut tx_bytes = vec![];
+        tx.write(&mut tx_bytes).unwrap();
+
         let mut params: Vec<ParamType> = Vec::new();
-        params.push(ParamType::String(hex::encode(tx.zcash_serialize_to_vec().unwrap())));
+        params.push(ParamType::String(hex::encode(tx_bytes)));
         let tx_hash: SentTransactionHash = self.request(&RpcRequest::new_with_params("sendrawtransaction", params))?;
-        Ok(tx_hash.0)
+        Ok(TxId::from_bytes(tx_hash.0.0))
+    }
+
+    fn get_transaction(&self, txid: TxId) -> Result<Transaction, Box<dyn Error>> {
+        let mut params: Vec<ParamType> = Vec::new();
+        params.push(ParamType::String(hex::encode(txid.as_ref())));
+        let rpc_tx: GetRawTransaction = self.request(&RpcRequest::new_with_params("getrawtransaction", params))?;
+
+        match rpc_tx {
+            GetRawTransaction::Raw(txdata) =>  Ok(Transaction::read(txdata.as_ref(), BranchId::Nu5).unwrap()),
+            GetRawTransaction::Object { .. } => Err(io::Error::new(ErrorKind::InvalidData, "GetBlock::Raw is not supported").into()),
+        }
     }
 }
 

@@ -2,21 +2,16 @@
 
 use abscissa_core::{Command, Runnable};
 use orchard::Address;
-use orchard::builder::Builder;
-use orchard::bundle::Flags;
-use orchard::circuit::ProvingKey;
-use orchard::value::NoteValue;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_primitives::consensus::TEST_NETWORK;
-use rand::rngs::OsRng;
-use zebra_chain::block;
-use zebra_chain::parameters::NetworkUpgrade;
-use zebra_chain::transaction::{LockTime, Transaction};
+use zcash_primitives::memo::MemoBytes;
+use zcash_primitives::transaction::builder::Builder;
+use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
+use zcash_proofs::prover::LocalTxProver;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::rpc_client::RpcClient;
 use crate::prelude::*;
 use crate::components::wallet::Wallet;
-use crate::util;
 
 
 /// `transfer` subcommand
@@ -36,11 +31,12 @@ impl Runnable for TransferCmd {
 
         info!("Transfer {} zatoshi to {}", self.amount_to_transfer, self.dest_address);
 
-        let mut orchard_builder = Builder::new(Flags::from_parts(true, true), wallet.orchard_anchor().unwrap());
+        let mut tx = Builder::new(TEST_NETWORK, wallet.last_block_height().unwrap(), wallet.orchard_anchor());
+
          // Add inputs
         let inputs = wallet.select_spendable_notes(self.amount_to_transfer);
         let total_inputs_amount = inputs.iter().fold(0, |acc, input| acc + input.note.value().inner());
-        inputs.into_iter().for_each(|input| orchard_builder.add_spend((&input.sk).into(), input.note, input.merkle_path).unwrap());
+        inputs.into_iter().for_each(|input| tx.add_orchard_spend::<FeeError>(input.sk, input.note, input.merkle_path).unwrap());
 
         let ovk = wallet.orchard_ovk();
 
@@ -64,33 +60,18 @@ impl Runnable for TransferCmd {
         };
 
         // Add main transfer output
-        orchard_builder.add_recipient(ovk.clone(), orchard_recipient, NoteValue::from_raw(self.amount_to_transfer), None).unwrap();
+        tx.add_orchard_output::<FeeError>(ovk.clone(), orchard_recipient, self.amount_to_transfer, MemoBytes::empty()).unwrap();
 
         // Add change output
         let change_amount = total_inputs_amount - self.amount_to_transfer;
         let change_address = wallet.change_address();
-        orchard_builder.add_recipient(ovk, change_address, NoteValue::from_raw(change_amount), None).unwrap();
+        tx.add_orchard_output::<FeeError>(ovk, change_address, change_amount, MemoBytes::empty()).unwrap();
 
-        let mut rng = OsRng;
-        let sighash = [0; 32]; // TODO
-        let pk = ProvingKey::build(); // TODO Move someplace else?
+        let fee_rule = &FeeRule::standard();
+        let prover = LocalTxProver::with_default_location().unwrap();
 
-        let bundle = orchard_builder.build(rng).unwrap().create_proof(&pk, &mut rng)
-            .unwrap()
-            .prepare(rng, sighash)
-            .finalize()
-            .unwrap();
+        let (tx, _) = tx.build(&prover, fee_rule).unwrap();
 
-        let tx = Transaction::V5 {
-            network_upgrade: NetworkUpgrade::Nu5,
-            lock_time: LockTime::min_lock_time_timestamp(),
-            expiry_height: block::Height(0),
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            sapling_shielded_data: None,
-            orchard_shielded_data: Some(util::convert_orchard_bundle_to_shielded_data(bundle).unwrap()),
-        };
-
-        let tx_hash = rpc_client.send_raw_transaction(tx).unwrap();
+        let tx_hash = rpc_client.send_transaction(tx).unwrap();
     }
 }
