@@ -68,7 +68,7 @@ impl RpcClient for ReqwestRpcClient {
         }
     }
 
-    fn send_transaction(&self, tx: Transaction) -> Result<TxId, Box<dyn Error>> {
+    fn send_transaction(&mut self, tx: Transaction) -> Result<TxId, Box<dyn Error>> {
         let mut tx_bytes = vec![];
         tx.write(&mut tx_bytes).unwrap();
 

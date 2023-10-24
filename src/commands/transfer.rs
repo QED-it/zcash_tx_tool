@@ -26,8 +26,8 @@ impl Runnable for TransferCmd {
     fn run(&self) {
         let config = APP.config();
 
-        let rpc_client = ReqwestRpcClient::new();
-        let wallet = Wallet::empty();
+        let mut rpc_client = ReqwestRpcClient::new();
+        let wallet = Wallet::new();
 
         info!("Transfer {} zatoshi to {}", self.amount_to_transfer, self.dest_address);
 
@@ -60,12 +60,12 @@ impl Runnable for TransferCmd {
         };
 
         // Add main transfer output
-        tx.add_orchard_output::<FeeError>(ovk.clone(), orchard_recipient, self.amount_to_transfer, MemoBytes::empty()).unwrap();
+        tx.add_orchard_output::<FeeError>(Some(ovk.clone()), orchard_recipient, self.amount_to_transfer, MemoBytes::empty()).unwrap();
 
         // Add change output
         let change_amount = total_inputs_amount - self.amount_to_transfer;
         let change_address = wallet.change_address();
-        tx.add_orchard_output::<FeeError>(ovk, change_address, change_amount, MemoBytes::empty()).unwrap();
+        tx.add_orchard_output::<FeeError>(Some(ovk), change_address, change_amount, MemoBytes::empty()).unwrap();
 
         let fee_rule = &FeeRule::standard();
         let prover = LocalTxProver::with_default_location().unwrap();

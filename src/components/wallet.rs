@@ -6,10 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
 use abscissa_core::prelude::{error, info};
 
-use zcash_primitives::{
-    sapling::NOTE_COMMITMENT_TREE_DEPTH,
-    transaction::{components::Amount},
-};
+use zcash_primitives::{constants, sapling::NOTE_COMMITMENT_TREE_DEPTH, transaction::{components::Amount}};
 
 use orchard::{bundle::Authorized, keys::{FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey}, note::Nullifier, tree::MerkleHashOrchard, Address, Bundle, Note, Anchor};
 use orchard::keys::OutgoingViewingKey;
@@ -166,6 +163,8 @@ pub struct Wallet {
     /// wallet has observed, the set of inpoints where those nullifiers were
     /// observed as as having been spent.
     potential_spends: BTreeMap<Nullifier, BTreeSet<InPoint>>,
+    /// The seed used to derive the wallet's keys.
+    seed: [u8; 32]
 }
 
 impl Wallet {
@@ -187,17 +186,17 @@ impl Wallet {
     }
 
     pub(crate) fn change_address(&self) -> Address {
-        todo!()
-        // auto ovk = orchardSpendingKeys[0].ToFullViewingKey().ToInternalOutgoingViewingKey();
-        // AddOrchardOutput(ovk, firstOrchardSpendAddr.value(), change, std::nullopt, asset);
+        let sk = SpendingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, 0).unwrap();
+        FullViewingKey::from(&sk).address_at(0u32, Scope::Internal)
     }
 
-    pub(crate) fn orchard_ovk(&self) -> Option<OutgoingViewingKey> {
-        todo!()
+    pub(crate) fn orchard_ovk(&self) -> OutgoingViewingKey {
+        let sk = SpendingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, 0).unwrap();
+        FullViewingKey::from(&sk).to_ovk(Scope::External)
     }
 
     pub(crate) fn orchard_anchor(&self) -> Option<Anchor> {
-        todo!()
+        Some(Anchor::from(self.commitment_tree.root(0).unwrap()))
     }
 }
 
@@ -233,7 +232,7 @@ pub enum BundleLoadError {
 }
 
 impl Wallet {
-    pub fn empty() -> Self {
+    pub fn new() -> Self {
         Wallet {
             key_store: KeyStore::empty(),
             wallet_received_notes: BTreeMap::new(),
@@ -243,6 +242,7 @@ impl Wallet {
             last_block_height: None,
             last_block_hash: None,
             potential_spends: BTreeMap::new(),
+            seed: [0; 32]
         }
     }
 

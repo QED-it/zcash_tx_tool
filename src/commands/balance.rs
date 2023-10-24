@@ -15,7 +15,7 @@ impl Runnable for GetWalletInfoCmd {
     fn run(&self) {
         let config = APP.config();
 
-        let wallet = Wallet::empty();
+        let wallet = Wallet::new();
 
         todo!()
     }

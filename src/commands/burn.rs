@@ -17,7 +17,7 @@ impl Runnable for BurnCmd {
         let config = APP.config();
 
         let rpc_client = ReqwestRpcClient::new();
-        let wallet = Wallet::empty();
+        let wallet = Wallet::new();
 
         todo!()
     }

@@ -30,7 +30,7 @@ pub const CONFIG_FILE: &str = "zsa_wallet.toml";
 #[derive(clap::Parser, Command, Debug, Runnable)]
 pub enum ZsaWalletCmd {
     /// Initialize the application, generate keys from seed phrase and sync with the blockchain
-    Init(SyncCmd), Transfer(TransferCmd)
+    Sync(SyncCmd), Transfer(TransferCmd)
 }
 
 /// Entry point for the application. It needs to be a struct to allow using subcommands!
@@ -85,7 +85,7 @@ impl Configurable<ZsaWalletConfig> for EntryPoint {
         config: ZsaWalletConfig,
     ) -> Result<ZsaWalletConfig, FrameworkError> {
         match &self.cmd {
-            ZsaWalletCmd::Init(cmd) => cmd.override_config(config),
+            ZsaWalletCmd::Sync(cmd) => cmd.override_config(config),
             // If you don't need special overrides for some
             // subcommands, you can just use a catch all
             _ => Ok(config),
