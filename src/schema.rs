@@ -1,12 +1,15 @@
 // @generated automatically by Diesel CLI.
-#![allow(unused_qualifications)]
+
 diesel::table! {
     notes (id) {
         id -> Integer,
         amount -> BigInt,
         tx_id -> Binary,
-        tx_index -> Integer,
+        action_index -> Integer,
+        spend_tx_id -> Binary,
+        spend_tx_index -> Integer,
         merkle_path -> Binary,
         encrypted_note -> Binary,
+        nullifier -> Binary,
     }
 }

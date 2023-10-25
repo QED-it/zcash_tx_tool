@@ -1,9 +1,4 @@
-use crate::components::persistence::model::RawNoteData;
+use crate::components::persistence::model::NoteData;
 
-mod model;
-mod sqlite;
-
-trait DataStorage {
-    fn find_notes(&self) -> Vec<RawNoteData>;
-    fn insert_note(&self, note: RawNoteData) -> RawNoteData;
-}
+pub mod model;
+pub mod sqlite;

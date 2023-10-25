@@ -13,11 +13,13 @@ use orchard::keys::OutgoingViewingKey;
 use orchard::note_encryption::OrchardDomain;
 use orchard::tree::MerklePath;
 
-use zcash_note_encryption::try_note_decryption;
+use zcash_note_encryption::{ENC_CIPHERTEXT_SIZE, ShieldedOutput, try_note_decryption};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::Transaction;
 use zcash_primitives::transaction::TxId;
+use crate::components::persistence::model::NoteData;
+use crate::components::persistence::sqlite::SqliteDataStorage;
 use crate::components::wallet::structs::OrderedAddress;
 
 pub const MAX_CHECKPOINTS: usize = 100;
@@ -141,14 +143,15 @@ impl KeyStore {
 }
 
 pub struct Wallet {
+    db: SqliteDataStorage,
     /// The in-memory index of keys and addresses known to the wallet.
     key_store: KeyStore,
     /// The in-memory index from txid to notes from the associated transaction that have
     /// been decrypted with the IVKs known to this wallet.
-    wallet_received_notes: BTreeMap<TxId, TxNotes>,
+    // wallet_received_notes: BTreeMap<TxId, TxNotes>,
     /// The in-memory index from txid to note positions from the associated transaction.
     /// This map should always have a subset of the keys in `wallet_received_notes`.
-    wallet_note_positions: BTreeMap<TxId, NotePositions>,
+    // wallet_note_positions: BTreeMap<TxId, NotePositions>,
     /// The in-memory index from nullifier to the outpoint of the note from which that
     /// nullifier was derived.
     nullifiers: BTreeMap<Nullifier, OutPoint>,
@@ -163,7 +166,7 @@ pub struct Wallet {
     /// wallet has observed, the set of inpoints where those nullifiers were
     /// observed as as having been spent.
     potential_spends: BTreeMap<Nullifier, BTreeSet<InPoint>>,
-    /// The seed used to derive the wallet's keys.
+    /// The seed used to derive the wallet's keys. TODO better seed handling
     seed: [u8; 32]
 }
 
@@ -234,9 +237,8 @@ pub enum BundleLoadError {
 impl Wallet {
     pub fn new() -> Self {
         Wallet {
+            db: SqliteDataStorage::new(),
             key_store: KeyStore::empty(),
-            wallet_received_notes: BTreeMap::new(),
-            wallet_note_positions: BTreeMap::new(),
             nullifiers: BTreeMap::new(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
             last_block_height: None,
@@ -252,10 +254,10 @@ impl Wallet {
     /// in place with the expectation that they will be overwritten and/or updated in
     /// the rescan process.
     pub fn reset(&mut self) {
-        self.wallet_note_positions.clear();
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
+        // TODO clean db
     }
 
     /// Checkpoints the note commitment tree. This returns `false` and leaves the note
@@ -408,7 +410,7 @@ impl Wallet {
             .collect::<Vec<_>>();
 
         for (action_idx, ivk, note, recipient, memo) in self.decrypt_outputs_with_keys(&bundle, &keys) {
-            assert!(self.add_decrypted_note(txid, action_idx, ivk.clone(), note, recipient, memo));
+            self.add_decrypted_note(txid, action_idx, ivk.clone(), note, bundle.actions().get(action_idx).unwrap().enc_ciphertext(), recipient).unwrap();
             // TODO append note commitment
         }
     }
@@ -499,9 +501,7 @@ impl Wallet {
 
         for (action_idx, ivk) in hints.into_iter() {
             if let Some((note, recipient, memo)) = bundle.decrypt_output_with_key(action_idx, ivk) {
-                if !self.add_decrypted_note(txid, action_idx, ivk.clone(), note, recipient, memo) {
-                    return Err(BundleLoadError::FvkNotFound(ivk.clone()));
-                }
+                self.add_decrypted_note(txid, action_idx, ivk.clone(), note, bundle.actions().get(action_idx).unwrap().enc_ciphertext(), recipient)?;
             } else {
                 return Err(BundleLoadError::ActionDecryptionFailed(action_idx));
             }
@@ -510,49 +510,41 @@ impl Wallet {
         Ok(())
     }
 
-    // Common functionality for add_notes_from_bundle and load_bundle
     #[allow(clippy::too_many_arguments)]
     fn add_decrypted_note(
         &mut self,
         txid: &TxId,
-        action_idx: usize,
+        action_index: usize,
         ivk: IncomingViewingKey,
         note: Note,
+        encrypted_note: &[u8; ENC_CIPHERTEXT_SIZE],
         recipient: Address,
-        memo: [u8; 512],
-    ) -> bool {
-        // Generate the nullifier for the received note and add it to the nullifiers map so
-        // that we can detect when the note is later spent.
+    ) -> Result<(), BundleLoadError> {
         if let Some(fvk) = self.key_store.viewing_keys.get(&ivk) {
             info!("Adding decrypted note to the wallet");
-            let outpoint = OutPoint {
-                txid: *txid,
-                action_idx,
-            };
 
             // Generate the nullifier for the received note and add it to the nullifiers map so
             // that we can detect when the note is later spent.
             let nf = note.nullifier(fvk);
-            self.nullifiers.insert(nf, outpoint);
 
-            // add the decrypted note data to the wallet
-            let note_data = DecryptedNote { note, memo };
-            self.wallet_received_notes
-                .entry(*txid)
-                .or_insert_with(|| TxNotes {
-                    decrypted_notes: BTreeMap::new(),
-                })
-                .decrypted_notes
-                .insert(action_idx, note_data);
+            let note_data = NoteData {
+                id: 0,
+                amount: note.value().inner() as i64,
+                tx_id: txid.as_ref().to_vec(),
+                action_index: action_index as i32,
+                merkle_path: vec![],
+                encrypted_note: encrypted_note.to_vec(),
+                nullifier: nf.to_bytes().to_vec(),
+            };
+            self.db.insert_note(note_data);
 
             // add the association between the address and the IVK used
             // to decrypt the note
             self.key_store.add_raw_address(recipient, ivk.clone());
-
-            true
+            Ok(())
         } else {
             info!("Can't add decrypted note to the wallet, missing FVK");
-            false
+            Err(BundleLoadError::FvkNotFound(ivk.clone()))
         }
     }
 

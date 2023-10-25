@@ -1,6 +1,5 @@
 //! `sync` subcommand - initialize the application, generate keys from seed phrase and sync with the blockchain
 
-use std::error::Error;
 use crate::prelude::*;
 use crate::config::ZsaWalletConfig;
 use abscissa_core::{config, Command, FrameworkError, Runnable};
@@ -9,7 +8,6 @@ use crate::components::rpc_client::mock::MockZcashNode;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::rpc_client::RpcClient;
 use crate::components::wallet::Wallet;
-use crate::model::Block;
 
 /// `sync` subcommand
 #[derive(clap::Parser, Command, Debug)]
@@ -37,7 +35,6 @@ impl config::Override<ZsaWalletConfig> for SyncCmd {
         Ok(config)
     }
 }
-
 
 impl Runnable for SyncCmd {
     /// Run the `sync` subcommand.
