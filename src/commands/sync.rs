@@ -5,7 +5,6 @@ use crate::config::ZsaWalletConfig;
 use abscissa_core::{config, Command, FrameworkError, Runnable};
 use zcash_primitives::consensus::BlockHeight;
 use crate::components::rpc_client::mock::MockZcashNode;
-use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::rpc_client::RpcClient;
 use crate::components::wallet::Wallet;
 
@@ -42,34 +41,38 @@ impl Runnable for SyncCmd {
         let config = APP.config();
         info!("Seed phrase: {}", &config.wallet.seed_phrase);
 
-        let rpc = MockZcashNode::new();
+        let mut rpc = MockZcashNode::new();
         let mut wallet = Wallet::new();
 
-        info!("Starting sync");
+        sync(&mut wallet, &mut rpc)
+    }
+}
 
-        loop {
-            let next_height: BlockHeight = match wallet.last_block_height() {
-                Some(height) => height + 1,
-                None => BlockHeight::from_u32(0)
-            };
+pub fn sync(wallet: &mut Wallet, rpc: &mut MockZcashNode) {
+    info!("Starting sync");
 
-            let block = match rpc.get_block(next_height.into()) {
-                Ok(block) => block,
-                Err(err) => {
-                    warn!("Error getting block at height {}: {}", next_height, err);
-                    return
-                }
-            };
+    loop {
+        let next_height: BlockHeight = match wallet.last_block_height() {
+            Some(height) => height + 1,
+            None => BlockHeight::from_u32(0)
+        };
 
-            if true /* block.prev_hash == wallet.last_block_hash */ {
-                info!("Adding transactions from block {} at height {}", block.hash, block.height);
-                let transactions = block.tx_ids.into_iter().map(| tx_id| rpc.get_transaction(tx_id).unwrap()).collect();
-                wallet.add_notes_from_block(block.height, block.hash, transactions).unwrap();
-            } else {
-                // TODO We have a reorg, we need to drop the block and all the blocks after it
-                warn!("REORG: dropping block {} at height {}", wallet.last_block_hash().unwrap(), next_height);
-                wallet.reorg(next_height - 1);
+        let block = match rpc.get_block(next_height.into()) {
+            Ok(block) => block,
+            Err(err) => {
+                warn!("Error getting block at height {}: {}", next_height, err);
+                return
             }
+        };
+
+        if true /* block.prev_hash == wallet.last_block_hash */ {
+            info!("Adding transactions from block {} at height {}", block.hash, block.height);
+            let transactions = block.tx_ids.into_iter().map(| tx_id| rpc.get_transaction(tx_id).unwrap()).collect();
+            wallet.add_notes_from_block(block.height, block.hash, transactions).unwrap();
+        } else {
+            // TODO We have a reorg, we need to drop the block and all the blocks after it
+            warn!("REORG: dropping block {} at height {}", wallet.last_block_hash().unwrap(), next_height);
+            wallet.reorg(next_height - 1);
         }
     }
 }

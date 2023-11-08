@@ -23,4 +23,5 @@ pub mod commands;
 pub mod components;
 mod schema;
 mod model;
+mod util;
 

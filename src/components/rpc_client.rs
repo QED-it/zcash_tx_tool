@@ -15,3 +15,25 @@ pub trait RpcClient {
     fn send_transaction(&mut self, tx: Transaction) -> Result<TxId, Box<dyn Error>>;
     fn get_transaction(&self, txid: TxId) -> Result<Transaction, Box<dyn Error>>;
 }
+
+/// =========================== Messages ===========================
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct GetBlock {
+        /// The hash of the requested block in hex.
+        hash: String,
+
+        /// The number of confirmations of this block in the best chain,
+        /// or -1 if it is not in the best chain.
+        confirmations: i64,
+
+        /// The height of the requested block.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        height: Option<u32>,
+
+        /// List of transaction IDs in block order, hex-encoded.
+        //
+        // TODO: use a typed Vec<transaction::Hash> here
+        tx: Vec<String>
+}
+

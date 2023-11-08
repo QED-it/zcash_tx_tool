@@ -6,12 +6,15 @@ use diesel::prelude::*;
 pub struct NoteData {
     pub id: i32,
     pub amount: i64,
- //   pub asset: AssetBase,
+    pub asset: Vec<u8>,
     pub tx_id: Vec<u8>,
     pub action_index: i32,
-    pub merkle_path: Vec<u8>,
-    pub encrypted_note: Vec<u8>,
+    pub position: i64,
+    pub serialized_note: Vec<u8>,
+    pub memo: Vec<u8>,
     pub nullifier: Vec<u8>,
+    pub spend_tx_id: Option<Vec<u8>>,
+    pub spend_action_index: i32,
 }
 
 #[derive(Insertable)]
@@ -19,23 +22,30 @@ pub struct NoteData {
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct InsertableNoteData {
     pub amount: i64,
-    //   pub asset: AssetBase,
+    pub asset: Vec<u8>,
     pub tx_id: Vec<u8>,
     pub action_index: i32,
-    pub merkle_path: Vec<u8>,
-    pub encrypted_note: Vec<u8>,
+    pub position: i64,
+    pub serialized_note: Vec<u8>,
+    pub memo: Vec<u8>,
     pub nullifier: Vec<u8>,
+    pub spend_tx_id: Option<Vec<u8>>,
+    pub spend_action_index: i32,
 }
 
 impl InsertableNoteData {
     pub fn from_note_data(note: NoteData) -> Self {
         Self {
             amount: note.amount,
+            asset: note.asset,
             tx_id: note.tx_id,
             action_index: note.action_index,
-            merkle_path: note.merkle_path,
-            encrypted_note: note.encrypted_note,
+            position: note.position,
+            serialized_note: note.serialized_note,
+            memo: note.memo,
             nullifier: note.nullifier,
+            spend_tx_id: note.spend_tx_id,
+            spend_action_index: note.spend_action_index,
         }
     }
 }

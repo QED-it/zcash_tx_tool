@@ -1,23 +1,27 @@
 //! `transfer` - transfer assets
 
+use std::convert::TryInto;
 use abscissa_core::{Command, Runnable};
 use orchard::Address;
-use zcash_client_backend::address::RecipientAddress;
-use zcash_primitives::consensus::TEST_NETWORK;
+use orchard::note::AssetBase;
+use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
 use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::transaction::builder::Builder;
+use zcash_primitives::transaction::components::Amount;
 use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
 use zcash_proofs::prover::LocalTxProver;
-use crate::components::rpc_client::reqwest::ReqwestRpcClient;
+use crate::components::rpc_client::mock::MockZcashNode;
 use crate::components::rpc_client::RpcClient;
 use crate::prelude::*;
 use crate::components::wallet::Wallet;
+use crate::util::orchard_address_from_ua;
 
 
 /// `transfer` subcommand
 #[derive(clap::Parser, Command, Debug)]
 pub struct TransferCmd {
     amount_to_transfer: u64,
+    asset_hex: String,
     dest_address: String
 }
 
@@ -26,52 +30,46 @@ impl Runnable for TransferCmd {
     fn run(&self) {
         let config = APP.config();
 
-        let mut rpc_client = ReqwestRpcClient::new();
-        let wallet = Wallet::new();
+        let mut rpc_client = MockZcashNode::new();
+        let mut wallet = Wallet::new();
 
-        info!("Transfer {} zatoshi to {}", self.amount_to_transfer, self.dest_address);
+        let orchard_recipient = orchard_address_from_ua(&self.dest_address);
+        let asset = AssetBase::from_bytes(hex::decode(&self.asset_hex).unwrap().as_slice().try_into().unwrap()).unwrap();
 
-        let mut tx = Builder::new(TEST_NETWORK, wallet.last_block_height().unwrap(), wallet.orchard_anchor());
-
-         // Add inputs
-        let inputs = wallet.select_spendable_notes(self.amount_to_transfer);
-        let total_inputs_amount = inputs.iter().fold(0, |acc, input| acc + input.note.value().inner());
-        inputs.into_iter().for_each(|input| tx.add_orchard_spend::<FeeError>(input.sk, input.note, input.merkle_path).unwrap());
-
-        let ovk = wallet.orchard_ovk();
-
-        // TODO implement reasonable address parsing
-        let orchard_recipient: Address = match RecipientAddress::decode(&TEST_NETWORK /* TODO take from config */, &self.dest_address.as_str()) {
-            Some(RecipientAddress::Unified(ua)) => {
-                ua.orchard().unwrap().clone()
-            }
-            Some(_) => {
-                panic!(
-                    "{} did not decode to a unified address value.",
-                    &self.dest_address.as_str()
-                );
-            }
-            None => {
-                panic!(
-                    "Failed to decode unified address from test vector: {}",
-                    &self.dest_address.as_str()
-                );
-            }
-        };
-
-        // Add main transfer output
-        tx.add_orchard_output::<FeeError>(Some(ovk.clone()), orchard_recipient, self.amount_to_transfer, MemoBytes::empty()).unwrap();
-
-        // Add change output
-        let change_amount = total_inputs_amount - self.amount_to_transfer;
-        let change_address = wallet.change_address();
-        tx.add_orchard_output::<FeeError>(Some(ovk), change_address, change_amount, MemoBytes::empty()).unwrap();
-
-        let fee_rule = &FeeRule::standard();
-        let prover = LocalTxProver::with_default_location().unwrap();
-
-        let (tx, _) = tx.build(&prover, fee_rule).unwrap();
-
-        let tx_hash = rpc_client.send_transaction(tx).unwrap();
+        transfer(orchard_recipient, self.amount_to_transfer, asset, &mut wallet, &mut rpc_client)
     }
+}
+
+pub fn transfer(recipient: Address, amount: u64, asset: AssetBase, wallet: &mut Wallet, rpc: &mut MockZcashNode) {
+
+    info!("Transfer {} zatoshi", amount);
+
+    let ovk = wallet.orchard_ovk();
+
+    let mut tx = Builder::new(TEST_NETWORK, /*wallet.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_421), wallet.orchard_anchor());
+
+    // Add inputs
+    let inputs = wallet.select_spendable_notes(amount);
+    let total_inputs_amount = inputs.iter().fold(0, |acc, input| acc + input.note.value().inner());
+
+    info!("Total inputs amount: {}, amount to transfer: {}", total_inputs_amount, amount);
+
+    inputs.into_iter().for_each(|input| tx.add_orchard_spend::<FeeError>(input.sk, input.note, input.merkle_path).unwrap());
+
+    // Add main transfer output
+    tx.add_orchard_output::<FeeError>(Some(ovk.clone()), recipient, amount, asset, MemoBytes::empty()).unwrap();
+
+    // Add change output
+    let change_amount = total_inputs_amount - amount;
+    let change_address = wallet.change_address();
+    tx.add_orchard_output::<FeeError>(Some(ovk), change_address, change_amount, asset, MemoBytes::empty()).unwrap();
+
+    let fee_rule = &FeeRule::non_standard(Amount::from_u64(0).unwrap(), 20, 150, 34).unwrap();
+    let prover = LocalTxProver::with_default_location().unwrap();
+
+    let (tx, _) = tx.build(&prover, fee_rule).unwrap();
+
+    let tx_hash = rpc.send_transaction(tx).unwrap();
+
+    info!("TxId: {}", tx_hash);
 }
