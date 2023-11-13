@@ -60,7 +60,7 @@ pub fn sync(wallet: &mut Wallet, rpc: &mut MockZcashNode) {
         let block = match rpc.get_block(next_height.into()) {
             Ok(block) => block,
             Err(err) => {
-                warn!("Error getting block at height {}: {}", next_height, err);
+                info!("No block at height {}: {}", next_height, err);
                 return
             }
         };

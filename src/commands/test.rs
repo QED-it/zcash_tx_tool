@@ -42,7 +42,6 @@ impl Runnable for TestCmd {
         let ivk = IssuanceValidatingKey::from(&wallet.issuance_key());
         let asset: AssetBase = AssetBase::derive(&ivk, asset_descr.as_ref());
 
-        // TODO move to E2E test
         wallet.reset();
         sync(&mut wallet, &mut rpc_client);
         issue(orchard_recipient, amount, asset_descr, &mut wallet, &mut rpc_client);

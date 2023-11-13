@@ -249,82 +249,10 @@ impl Wallet {
         true
     }
 
-    /// Returns the last checkpoint if any. If no checkpoint exists, the wallet has not
-    /// yet observed any blocks.
-    pub fn last_checkpoint(&self) -> Option<BlockHeight> {
-        self.last_block_height
-    }
-
-    /// Rewinds the note commitment tree to the given height, removes notes and spentness
-    /// information for transactions mined in the removed blocks, and returns the height to which
-    /// the tree has been rewound if successful. Returns  `RewindError` if not enough checkpoints
-    /// exist to execute the full rewind requested and the wallet has witness information that
-    /// would be invalidated by the rewind. If the requested height is greater than or equal to the
-    /// height of the latest checkpoint, this returns a successful result containing the height of
-    /// the last checkpoint.
-    ///
-    /// In the case that no checkpoints exist but the note commitment tree also records no witness
-    /// information, we allow the wallet to continue to rewind, under the assumption that the state
-    /// of the note commitment tree will be overwritten prior to the next append.
-    pub fn rewind(&mut self, to_height: BlockHeight) -> Result<BlockHeight, RewindError> {
-        if let Some(checkpoint_height) = self.last_block_height {
-            if to_height >= checkpoint_height {
-                info!("Last checkpoint is before the rewind height, nothing to do.");
-                return Ok(checkpoint_height);
-            }
-
-            info!("Rewinding note commitment tree");
-            let blocks_to_rewind: u32 = (checkpoint_height - to_height).into();
-            let checkpoint_count = self.commitment_tree.checkpoints().len();
-            for _ in 0..blocks_to_rewind  {
-                // If the rewind fails, we have no more checkpoints. This is fine in the
-                // case that we have a recently-initialized tree, so long as we have no
-                // witnessed indices. In the case that we have any witnessed notes, we
-                // have hit the maximum rewind limit, and this is an error.
-                if !self.commitment_tree.rewind() {
-                    assert!(self.commitment_tree.checkpoints().is_empty());
-                    if !self.commitment_tree.marked_indices().is_empty() {
-                        return Err(RewindError::InsufficientCheckpoints(checkpoint_count));
-                    }
-                }
-            }
-
-            // retain notes that correspond to transactions that are not "un-mined" after
-            // the rewind
-            // TODO remove mined status from transactions with height > to_height via ORM
-
-            // reset our last observed height to ensure that notes added in the future are
-            // from a new block
-            self.last_block_height = Some(to_height);
-            // TODO self.last_block_hash = get_block_hash(to_height);
-
-            self.last_block_height = if checkpoint_count as u32 > blocks_to_rewind.into() {
-                Some(to_height)
-            } else {
-                // checkpoint_count <= blocks_to_rewind
-                None
-            };
-
-            Ok(to_height)
-        } else if self.commitment_tree.marked_indices().is_empty() {
-            info!("No witnessed notes in tree, allowing rewind without checkpoints");
-
-            // If we have no witnessed notes, it's okay to keep "rewinding" even though
-            // we have no checkpoints. We then allow last_observed to assume the height
-            // to which we have reset the tree state.
-            self.last_block_height = Some(to_height);
-            // TODO self.last_block_hash = get_block_hash(to_height);
-
-            Ok(to_height)
-        } else {
-            Err(RewindError::InsufficientCheckpoints(0))
-        }
-    }
-
     /// Add note data from all V5 transactions of the block to the wallet.
     /// Versions other than V5 are ignored.
     pub fn add_notes_from_block(&mut self, block_height: BlockHeight, block_hash: BlockHash, transactions: Vec<Transaction>) -> Result<(), BundleLoadError> {
-        transactions.into_iter().for_each( |tx| /*if tx.version().header() == 5*/ {
+        transactions.into_iter().for_each( |tx| if tx.version().has_orchard() {
             self.add_notes_from_tx(tx).unwrap();
         });
 
@@ -537,15 +465,6 @@ impl Wallet {
                 .append(MerkleHashOrchard::from_cmx(commitment))
             {
                 return Err(WalletError::NoteCommitmentTreeFull);
-            } else {
-                assert_eq!(
-                    self.commitment_tree
-                        .current_leaf()
-                        .expect("This note has been marked as one of ours."),
-                    &MerkleHashOrchard::from_cmx(commitment),
-                    "Note commitment does not match the commitment tree at note_index {}",
-                    note_index
-                );
             }
 
             // for notes that are ours, mark the current state of the tree
@@ -554,16 +473,6 @@ impl Wallet {
                     info!("Witnessing Orchard note ({}, {})", txid, note_index);
                     let position: u64 = self.commitment_tree.mark().expect("tree is not empty").into();
                     self.db.update_note_position(note.id, position as i64);
-
-                    let note_cmx = read_note(&note.serialized_note[..]).unwrap().commitment();
-
-                    assert_eq!(
-                        self.commitment_tree
-                            .get_marked_leaf(Position::from(position))
-                            .expect("This note has been marked as one of ours."),
-                        &MerkleHashOrchard::from_cmx(&note_cmx.into()),
-                        "Note commitment does not match the commitment tree for recently added note.",
-                    );
                 }
                 None => {}
             }
