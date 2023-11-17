@@ -15,6 +15,7 @@ use crate::commands::issue::issue;
 use crate::commands::sync::sync;
 use crate::commands::transfer::transfer;
 use crate::components::rpc_client::mock::MockZcashNode;
+use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::rpc_client::RpcClient;
 use crate::prelude::*;
 use crate::components::wallet::Wallet;
@@ -31,7 +32,7 @@ impl Runnable for TestCmd {
     fn run(&self) {
         let config = APP.config();
 
-        let mut rpc_client = MockZcashNode::new();
+        let mut rpc_client = ReqwestRpcClient::new();
         let mut wallet = Wallet::new();
 
         let amount = 42;

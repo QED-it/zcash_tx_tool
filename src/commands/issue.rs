@@ -49,7 +49,7 @@ impl Runnable for IssueCmd {
     }
 }
 
-pub fn issue(recipient: Address, amount: u64, asset_desc: String, wallet: &mut Wallet, rpc: &mut MockZcashNode) {
+pub fn issue(recipient: Address, amount: u64, asset_desc: String, wallet: &mut Wallet, rpc: &mut dyn RpcClient) {
     info!("Issue {} asset", amount);
 
     let mut tx = Builder::new(TEST_NETWORK, /*wallet.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_421), wallet.orchard_anchor());

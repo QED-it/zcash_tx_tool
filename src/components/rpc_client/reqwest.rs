@@ -4,6 +4,7 @@ use crate::components::rpc_client::{RpcClient, NODE_URL, GetBlock};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use serde::de::DeserializeOwned;
+use zcash_client_backend::proto::service::BlockId;
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, BranchId};
 use zcash_primitives::transaction::{Transaction, TxId};
@@ -50,7 +51,7 @@ impl RpcClient for ReqwestRpcClient {
     fn get_block(&self, height: u32) -> Result<Block, Box<dyn Error>> {
         let mut params: Vec<ParamType> = Vec::new();
         params.push(ParamType::String(height.to_string())); // Height
-        params.push(ParamType::Number(2)); // Verbosity
+        params.push(ParamType::Number(1)); // Verbosity
         let block: GetBlock = self.request(&RpcRequest::new_with_params("getblock", params))?;
 
         Ok(Block {
@@ -73,11 +74,14 @@ impl RpcClient for ReqwestRpcClient {
         Ok(TxId::from_bytes(tx_hash_bytes))
     }
 
-    fn get_transaction(&self, txid: TxId) -> Result<Transaction, Box<dyn Error>> {
+    fn get_transaction(&self, txid: TxId, block_id: &BlockHash) -> Result<Transaction, Box<dyn Error>> {
         let mut params: Vec<ParamType> = Vec::new();
         params.push(ParamType::String(hex::encode(txid.as_ref())));
-        let txdata: String = self.request(&RpcRequest::new_with_params("getrawtransaction", params))?;
-        Ok(Transaction::read(txdata.as_bytes(), BranchId::Nu5).unwrap())
+        params.push(ParamType::Number(0)); // Verbosity
+        params.push(ParamType::String(hex::encode(block_id.0.as_ref())));
+        let tx_hex: String = self.request(&RpcRequest::new_with_params("getrawtransaction", params))?;
+        let tx_bytes = hex::decode(tx_hex).unwrap();
+        Ok(Transaction::read(tx_bytes.as_slice(), BranchId::Nu5).unwrap())
     }
 }
 

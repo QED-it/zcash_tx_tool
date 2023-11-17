@@ -40,7 +40,7 @@ impl Runnable for TransferCmd {
     }
 }
 
-pub fn transfer(recipient: Address, amount: u64, asset: AssetBase, wallet: &mut Wallet, rpc: &mut MockZcashNode) {
+pub fn transfer(recipient: Address, amount: u64, asset: AssetBase, wallet: &mut Wallet, rpc: &mut dyn RpcClient) {
 
     info!("Transfer {} zatoshi", amount);
 

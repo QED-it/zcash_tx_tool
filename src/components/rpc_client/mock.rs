@@ -72,7 +72,7 @@ impl RpcClient for MockZcashNode {
         Ok(txid)
     }
 
-    fn get_transaction(&self, txid: TxId) -> Result<Transaction, Box<dyn Error>> {
+    fn get_transaction(&self, txid: TxId, block_id: &BlockHash) -> Result<Transaction, Box<dyn Error>> {
         self.transactions.get(&txid).ok_or(io::Error::new(ErrorKind::NotFound, "Transaction not found").into()).map(|tx_string| {
             Transaction::read(&hex::decode(tx_string).unwrap()[..], BranchId::Nu5).unwrap()
         })

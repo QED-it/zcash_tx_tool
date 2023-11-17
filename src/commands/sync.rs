@@ -48,7 +48,7 @@ impl Runnable for SyncCmd {
     }
 }
 
-pub fn sync(wallet: &mut Wallet, rpc: &mut MockZcashNode) {
+pub fn sync(wallet: &mut Wallet, rpc: &mut dyn RpcClient) {
     info!("Starting sync");
 
     loop {
@@ -67,7 +67,8 @@ pub fn sync(wallet: &mut Wallet, rpc: &mut MockZcashNode) {
 
         if true /* block.prev_hash == wallet.last_block_hash */ {
             info!("Adding transactions from block {} at height {}", block.hash, block.height);
-            let transactions = block.tx_ids.into_iter().map(| tx_id| rpc.get_transaction(tx_id).unwrap()).collect();
+            let block_hash = block.hash.clone();
+            let transactions = block.tx_ids.into_iter().map(| tx_id| rpc.get_transaction(tx_id, &block_hash).unwrap()).collect();
             wallet.add_notes_from_block(block.height, block.hash, transactions).unwrap();
         } else {
             // TODO We have a reorg, we need to drop the block and all the blocks after it

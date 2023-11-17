@@ -37,7 +37,7 @@ impl Runnable for BurnCmd {
     }
 }
 
-pub fn burn(amount: u64, asset: AssetBase, wallet: &mut Wallet, rpc: &mut MockZcashNode) {
+pub fn burn(amount: u64, asset: AssetBase, wallet: &mut Wallet, rpc: &mut dyn RpcClient) {
     info!("Burn {} zatoshi", amount);
 
     let ovk = wallet.orchard_ovk();
