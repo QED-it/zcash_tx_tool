@@ -7,7 +7,7 @@ use rand::rngs::OsRng;
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, BranchId};
 use zcash_primitives::transaction::{Transaction, TxId};
-use crate::components::rpc_client::{RpcClient};
+use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::model::Block;
 
 
@@ -72,9 +72,17 @@ impl RpcClient for MockZcashNode {
         Ok(txid)
     }
 
-    fn get_transaction(&self, txid: TxId, block_id: &BlockHash) -> Result<Transaction, Box<dyn Error>> {
-        self.transactions.get(&txid).ok_or(io::Error::new(ErrorKind::NotFound, "Transaction not found").into()).map(|tx_string| {
+    fn get_transaction(&self, txid: &TxId, block_id: &BlockHash) -> Result<Transaction, Box<dyn Error>> {
+        self.transactions.get(txid).ok_or(io::Error::new(ErrorKind::NotFound, "Transaction not found").into()).map(|tx_string| {
             Transaction::read(&hex::decode(tx_string).unwrap()[..], BranchId::Nu5).unwrap()
         })
+    }
+
+    fn get_block_template(&self) -> Result<BlockTemplate, Box<dyn Error>> {
+        todo!()
+    }
+
+    fn submit_block(&self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
+        todo!()
     }
 }

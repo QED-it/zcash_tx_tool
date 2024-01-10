@@ -7,20 +7,26 @@ use std::convert::TryInto;
 use abscissa_core::component::AsAny;
 use abscissa_core::prelude::{error, info};
 
-use zcash_primitives::{constants, sapling::NOTE_COMMITMENT_TREE_DEPTH, transaction::{components::Amount}};
+use zcash_primitives::{constants, legacy, sapling::NOTE_COMMITMENT_TREE_DEPTH, transaction::{components::Amount}};
 
 use orchard::{bundle::Authorized, Address, Bundle, Note, Anchor};
 use orchard::issuance::{IssueBundle, Signed};
-use orchard::keys::{IssuanceAuthorizingKey, IssuanceKey, OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey};
+use orchard::keys::{IssuanceAuthorizingKey, OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey};
 use orchard::note::ExtractedNoteCommitment;
 use orchard::note_encryption_v3::OrchardDomainV3;
 use orchard::tree::{MerklePath, MerkleHashOrchard};
+use ripemd::{Digest, Ripemd160};
+use secp256k1::{Secp256k1, SecretKey};
+use sha2::{ Sha256, Digest as Sha2Digest };
+use zcash_client_backend::encoding::AddressCodec;
 
 use zcash_note_encryption::{ShieldedOutput, try_note_decryption};
 use zcash_primitives::block::BlockHash;
-use zcash_primitives::consensus::BlockHeight;
+use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
+use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::transaction::components::issuance::{read_note, write_note};
 use zcash_primitives::transaction::{Transaction, TxId};
+use zcash_primitives::zip32::AccountId;
 use crate::components::persistence::model::NoteData;
 use crate::components::persistence::sqlite::SqliteDataStorage;
 use crate::components::wallet::structs::OrderedAddress;
@@ -163,7 +169,23 @@ impl Wallet {
     }
 
     pub(crate) fn issuance_key(&self) -> IssuanceAuthorizingKey {
-        IssuanceAuthorizingKey::from(&IssuanceKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, 0).unwrap())
+        IssuanceAuthorizingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, 0).unwrap()
+    }
+
+    // Hack for claiming coinbase
+    pub fn miner_address(&mut self) -> TransparentAddress {
+        let seed: [u8; 32] = [0; 32];
+        let account = AccountId::from(0);
+        let pubkey = legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &seed, account).unwrap().derive_external_secret_key(0).unwrap().public_key(&Secp256k1::new()).serialize();
+        let hash = &Ripemd160::digest(Sha256::digest(pubkey))[..];
+        let taddr = TransparentAddress::PublicKey(hash.try_into().unwrap());
+        taddr // "tmCUAhdeyFwVxETt3xTZrrQ3Z87e1Grakc1"
+    }
+
+    pub fn miner_sk(&mut self) -> SecretKey {
+        let seed: [u8; 32] = [0; 32];
+        let account = AccountId::from(0);
+        legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &seed, account).unwrap().derive_external_secret_key(0).unwrap()
     }
 }
 

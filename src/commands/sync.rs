@@ -68,12 +68,40 @@ pub fn sync(wallet: &mut Wallet, rpc: &mut dyn RpcClient) {
         if true /* block.prev_hash == wallet.last_block_hash */ {
             info!("Adding transactions from block {} at height {}", block.hash, block.height);
             let block_hash = block.hash.clone();
-            let transactions = block.tx_ids.into_iter().map(| tx_id| rpc.get_transaction(tx_id, &block_hash).unwrap()).collect();
+            let transactions = block.tx_ids.into_iter().map(| tx_id| rpc.get_transaction(&tx_id, &block_hash).unwrap()).collect();
             wallet.add_notes_from_block(block.height, block.hash, transactions).unwrap();
         } else {
             // TODO We have a reorg, we need to drop the block and all the blocks after it
             warn!("REORG: dropping block {} at height {}", wallet.last_block_hash().unwrap(), next_height);
             wallet.reorg(next_height - 1);
+        }
+    }
+}
+
+// TODO deduplicate this function with sync()
+pub fn sync_from_height(from_height: u32, wallet: &mut Wallet, rpc: &mut dyn RpcClient) {
+    info!("Starting sync");
+
+    let mut next_height= from_height;
+
+    loop {
+        let block = match rpc.get_block(next_height) {
+            Ok(block) => block,
+            Err(err) => {
+                info!("No block at height {}: {}", next_height, err);
+                return
+            }
+        };
+
+        if true /* block.prev_hash == wallet.last_block_hash */ {
+            info!("Adding transactions from block {} at height {}", block.hash, block.height);
+            let block_hash = block.hash.clone();
+            let transactions = block.tx_ids.into_iter().map(| tx_id| rpc.get_transaction(&tx_id, &block_hash).unwrap()).collect();
+            wallet.add_notes_from_block(block.height, block.hash, transactions).unwrap();
+            next_height += 1;
+        } else {
+            // TODO We have a reorg, we need to drop the block and all the blocks after it
+            warn!("REORG: dropping block {} at height {}", wallet.last_block_hash().unwrap(), next_height);
         }
     }
 }

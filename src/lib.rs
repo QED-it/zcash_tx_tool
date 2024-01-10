@@ -21,7 +21,7 @@ pub mod error;
 pub mod prelude;
 pub mod commands;
 pub mod components;
+pub mod util;
 mod schema;
 mod model;
-mod util;
 

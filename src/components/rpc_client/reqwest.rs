@@ -1,10 +1,9 @@
 use std::convert::TryInto;
 use reqwest::blocking::Client;
-use crate::components::rpc_client::{RpcClient, NODE_URL, GetBlock};
+use crate::components::rpc_client::{RpcClient, NODE_URL, GetBlock, BlockTemplate, BlockProposal};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use serde::de::DeserializeOwned;
-use zcash_client_backend::proto::service::BlockId;
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, BranchId};
 use zcash_primitives::transaction::{Transaction, TxId};
@@ -45,7 +44,9 @@ impl RpcClient for ReqwestRpcClient {
 
     fn get_best_block_hash(&self) -> Result<BlockHash, Box<dyn Error>> {
         let hash: String = self.request(&RpcRequest::new("getbestblockhash"))?;
-        Ok(BlockHash::from_slice(hex::decode(hash).unwrap().as_slice()))
+        let mut block_hash_bytes = hex::decode(hash).unwrap();
+        block_hash_bytes.reverse();
+        Ok(BlockHash(block_hash_bytes.as_slice().try_into().unwrap()))
     }
 
     fn get_block(&self, height: u32) -> Result<Block, Box<dyn Error>> {
@@ -74,14 +75,27 @@ impl RpcClient for ReqwestRpcClient {
         Ok(TxId::from_bytes(tx_hash_bytes))
     }
 
-    fn get_transaction(&self, txid: TxId, block_id: &BlockHash) -> Result<Transaction, Box<dyn Error>> {
+    fn get_transaction(&self, txid: &TxId, block_id: &BlockHash) -> Result<Transaction, Box<dyn Error>> {
         let mut params: Vec<ParamType> = Vec::new();
         params.push(ParamType::String(hex::encode(txid.as_ref())));
         params.push(ParamType::Number(0)); // Verbosity
-        params.push(ParamType::String(hex::encode(block_id.0.as_ref())));
+        // params.push(ParamType::String(hex::encode(block_id.0.as_ref())));
         let tx_hex: String = self.request(&RpcRequest::new_with_params("getrawtransaction", params))?;
         let tx_bytes = hex::decode(tx_hex).unwrap();
         Ok(Transaction::read(tx_bytes.as_slice(), BranchId::Nu5).unwrap())
+    }
+
+    fn get_block_template(&self) -> Result<BlockTemplate, Box<dyn Error>> {
+        Ok(self.request(&RpcRequest::new("getblocktemplate"))?)
+    }
+
+    fn submit_block(&self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
+        let mut block_bytes = vec![];
+        block.write(&mut block_bytes).unwrap();
+
+        let mut params: Vec<ParamType> = Vec::new();
+        params.push(ParamType::String(hex::encode(block_bytes)));
+        Ok(self.request(&RpcRequest::new_with_params("submitblock", params))?)
     }
 }
 
