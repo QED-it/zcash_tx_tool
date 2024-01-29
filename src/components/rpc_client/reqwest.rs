@@ -95,7 +95,17 @@ impl RpcClient for ReqwestRpcClient {
 
         let mut params: Vec<ParamType> = Vec::new();
         params.push(ParamType::String(hex::encode(block_bytes)));
-        Ok(self.request(&RpcRequest::new_with_params("submitblock", params))?)
+        let result = self.request(&RpcRequest::new_with_params("submitblock", params))?;
+
+        match result {
+            None => Ok(None),
+
+            Some(result) => if result == "rejected" {
+                Err("Block rejected".into())
+            } else {
+                Ok(Some(result))
+            }
+        }
     }
 }
 

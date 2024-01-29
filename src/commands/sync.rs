@@ -80,11 +80,12 @@ pub fn sync(wallet: &mut Wallet, rpc: &mut dyn RpcClient) {
 
 // TODO deduplicate this function with sync()
 pub fn sync_from_height(from_height: u32, wallet: &mut Wallet, rpc: &mut dyn RpcClient) {
-    info!("Starting sync");
+    info!("Starting sync from height {}", from_height);
 
     let mut next_height= from_height;
 
     loop {
+        // TODO check if we have a block at this height already
         let block = match rpc.get_block(next_height) {
             Ok(block) => block,
             Err(err) => {

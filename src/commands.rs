@@ -11,10 +11,7 @@
 //! application's configuration file.
 
 mod sync;
-mod issue;
 mod transfer;
-mod burn;
-mod balance;
 mod test;
 mod mine;
 
@@ -23,9 +20,6 @@ use self::transfer::TransferCmd;
 use crate::config::ZsaWalletConfig;
 use abscissa_core::{config::Override, Command, Configurable, FrameworkError, Runnable};
 use std::path::PathBuf;
-use crate::commands::balance::GetWalletInfoCmd;
-use crate::commands::burn::BurnCmd;
-use crate::commands::issue::IssueCmd;
 use crate::commands::test::TestCmd;
 use crate::commands::mine::MineCmd;
 
@@ -37,7 +31,7 @@ pub const CONFIG_FILE: &str = "zsa_wallet.toml";
 #[derive(clap::Parser, Command, Debug, Runnable)]
 pub enum ZsaWalletCmd {
     /// Initialize the application, generate keys from seed phrase and sync with the blockchain
-    Sync(SyncCmd), Transfer(TransferCmd), Issue(IssueCmd), Burn(BurnCmd), Balance(GetWalletInfoCmd), Test(TestCmd), Mine(MineCmd),
+    Sync(SyncCmd), Transfer(TransferCmd), Test(TestCmd), Mine(MineCmd),
 }
 
 /// Entry point for the application. It needs to be a struct to allow using subcommands!

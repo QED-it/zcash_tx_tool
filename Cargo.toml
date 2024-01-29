@@ -19,7 +19,7 @@ incrementalmerkletree = "0.5.0"
 bridgetree = "0.4.0"
 byteorder = "1"
 
-orchard = { version = "0.7.0", path = "../orchard" }
+orchard = "0.6.0"
 zcash_primitives = { version = "0.13.0-rc.1", features = ["transparent-inputs"] }
 zcash_note_encryption = "0.4.0"
 zcash_encoding = "0.2.0"
@@ -30,6 +30,7 @@ zcash_proofs = "0.13.0-rc.1"
 serde_json = "1.0.105"
 hex = { version = "0.4.3", features = ["serde"] }
 rand = "0.8.5"
+blake2b_simd = "=1.0.1"
 
 # - Transparent inputs
 ripemd = { version = "0.1" }
@@ -45,9 +46,9 @@ once_cell = "1.2"
 
 [patch.crates-io]
 
-zcash_note_encryption = { version = "0.4.0", path = "../../../CLionProjects/librustzcash/components/zcash_note_encryption" }
-zcash_primitives = { version = "0.13.0-rc.1", path = "../../../CLionProjects/librustzcash/zcash_primitives" }
-zcash_address = { version = "0.3.0", path = "../../../CLionProjects/librustzcash/components/zcash_address" }
-zcash_client_backend = { version = "0.10.0-rc.1", path = "../../../CLionProjects/librustzcash/zcash_client_backend" }
-zcash_proofs = { version = "0.13.0-rc.1", path = "../../../CLionProjects/librustzcash/zcash_proofs" }
-zcash_encoding = { version = "0.2.0", path = "../../../CLionProjects/librustzcash/components/zcash_encoding" }
+zcash_note_encryption = { version = "0.4.0", git = "https://github.com/QED-it/librustzcash.git", branch = "zcash-tx-test-tool-txv5" }
+zcash_primitives = { version = "0.13.0-rc.1", git = "https://github.com/QED-it/librustzcash.git", branch = "zcash-tx-test-tool-txv5" }
+zcash_address = { version = "0.3.0", git = "https://github.com/QED-it/librustzcash.git", branch = "zcash-tx-test-tool-txv5" }
+zcash_client_backend = { version = "0.10.0-rc.1", git = "https://github.com/QED-it/librustzcash.git", branch = "zcash-tx-test-tool-txv5" }
+zcash_proofs = { version = "0.13.0-rc.1", git = "https://github.com/QED-it/librustzcash.git", branch = "zcash-tx-test-tool-txv5" }
+zcash_encoding = { version = "0.2.0", git = "https://github.com/QED-it/librustzcash.git", branch = "zcash-tx-test-tool-txv5" }

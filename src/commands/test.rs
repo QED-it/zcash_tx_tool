@@ -1,21 +1,17 @@
 //! `test` - happy e2e flow that issues, transfers and burns an asset
 
 use abscissa_core::{Command, Runnable};
-use orchard::keys::IssuanceValidatingKey;
 use orchard::keys::Scope::External;
-use orchard::note::AssetBase;
 use orchard::value::NoteValue;
 use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
 use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::transaction::builder::Builder;
 use zcash_primitives::transaction::components::{Amount, transparent, TxOut};
 use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
-use zcash_primitives::transaction::TxId;
+use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
-use crate::commands::burn::burn;
-use crate::commands::issue::issue;
 use crate::commands::sync::{sync, sync_from_height};
-use crate::commands::transfer::transfer;
+use crate::commands::transfer::create_transfer_tx;
 use crate::components::rpc_client::mock::MockZcashNode;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::rpc_client::{RpcClient, template_into_proposal};
@@ -36,57 +32,71 @@ impl Runnable for TestCmd {
         let mut rpc_client = ReqwestRpcClient::new();
         let mut wallet = Wallet::new();
 
-        let block_template = rpc_client.get_block_template().unwrap();
+        wallet.reset(); // Delete all notes from DB
 
-        let block_proposal = template_into_proposal(block_template);
-        let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
+        sync_from_height(1_060_755, &mut wallet, &mut rpc_client);
 
-        rpc_client.submit_block(block_proposal).unwrap();
+        let (block_height, coinbase_txid) = mine_100_blocks(&mut rpc_client);
 
-        shield_coinbase(coinbase_txid, &mut wallet, &mut rpc_client);
+        let shielding_tx = create_shield_coinbase_tx(coinbase_txid, &mut wallet, &mut rpc_client);
 
-        // let amount = 42;
-        //
-        // let orchard_recipient = wallet.address_for_account(0, External);
-        //
-        // let asset_descr = "ZSA".to_string();
-        //
-        // let ivk = IssuanceValidatingKey::from(&wallet.issuance_key());
-        // let asset: AssetBase = AssetBase::derive(&ivk, asset_descr.as_ref());
-        //
-        // issue(orchard_recipient, amount, asset_descr, &mut wallet, &mut rpc_client);
-        //
-        // sync_from_height(1060756, &mut wallet, &mut rpc_client);
-        //
-        // transfer(orchard_recipient, amount, asset, &mut wallet, &mut rpc_client);
-        //
-        // sync(&mut wallet, &mut rpc_client);
-        //
-        // burn(amount, asset, &mut wallet, &mut rpc_client);
-        //
-        // sync(&mut wallet, &mut rpc_client);
+        let (_, _) = mine_block(&mut rpc_client, Vec::from([shielding_tx]));
+        sync_from_height(block_height, &mut wallet, &mut rpc_client);
+
+        let transfer_tx = create_transfer_tx(wallet.address_for_account(0, External), 1, &mut wallet, &mut rpc_client);
+
+        let (block_height, _) = mine_block(&mut rpc_client, Vec::from([transfer_tx]));
+        sync_from_height(block_height, &mut wallet, &mut rpc_client);
+
+        let transfer_tx_2 = create_transfer_tx(wallet.address_for_account(0, External), 2, &mut wallet, &mut rpc_client);
+
+        let (block_height, _) = mine_block(&mut rpc_client, Vec::from([transfer_tx_2]));
+        sync_from_height(block_height, &mut wallet, &mut rpc_client);
     }
 }
 
-pub fn shield_coinbase(txid: TxId, wallet: &mut Wallet, rpc: &mut dyn RpcClient) {
+pub fn create_shield_coinbase_tx(coinbase_txid: TxId, wallet: &mut Wallet, rpc: &mut dyn RpcClient) -> Transaction {
 
-    info!("Shielding coinbase output from tx {}", txid);
+    info!("Shielding coinbase output from tx {}", coinbase_txid);
 
     let mut tx = Builder::new(TEST_NETWORK, /*wallet.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_421), wallet.orchard_anchor());
 
-    let coinbase_value = 50;
+    let coinbase_value = 500000000;
     let coinbase_amount = Amount::from_u64(coinbase_value).unwrap();
     let miner_taddr = wallet.miner_address();
 
     let sk = wallet.miner_sk();
 
-    tx.add_transparent_input(sk, transparent::OutPoint::new(txid.0, 0), TxOut { value: coinbase_amount, script_pubkey: miner_taddr.script() }).unwrap();
-    tx.add_orchard_output::<FeeError>(Some(wallet.orchard_ovk()), wallet.address_for_account(0, External), coinbase_value, AssetBase::native(), MemoBytes::empty()).unwrap();
+    tx.add_transparent_input(sk, transparent::OutPoint::new(coinbase_txid.0, 0), TxOut { value: coinbase_amount, script_pubkey: miner_taddr.script() }).unwrap();
+    tx.add_orchard_output::<FeeError>(Some(wallet.orchard_ovk()), wallet.address_for_account(0, External), coinbase_value, MemoBytes::empty()).unwrap();
 
     let fee_rule = &FeeRule::non_standard(Amount::from_u64(0).unwrap(), 20, 150, 34).unwrap();
     let prover = LocalTxProver::with_default_location().unwrap();
     let (tx, _) = tx.build(&prover, fee_rule).unwrap();
 
-    let tx_hash = rpc.send_transaction(tx).unwrap();
-    info!("TxId: {}", tx_hash);
+    //let tx_hash = rpc.send_transaction(tx).unwrap();
+    info!("TxId: {}", tx.txid());
+    tx
+}
+
+pub fn mine_block(rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) -> (u32, TxId) {
+    let block_template = rpc_client.get_block_template().unwrap();
+    let block_height = block_template.height;
+
+    let mut block_proposal = template_into_proposal(block_template, txs);
+    let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
+
+    rpc_client.submit_block(block_proposal).unwrap();
+    (block_height, coinbase_txid)
+}
+
+/// We need to mine 100 blocks to be able to spend the coinbase outputs (coinbase maturity = 100)
+pub fn mine_100_blocks(rpc_client: &mut dyn RpcClient) -> (u32, TxId) {
+    let (block_height, coinbase_txid) = mine_block(rpc_client, vec![]);
+
+    for _ in 0..99 {
+        mine_block(rpc_client, vec![]);
+    }
+
+    (block_height, coinbase_txid)
 }

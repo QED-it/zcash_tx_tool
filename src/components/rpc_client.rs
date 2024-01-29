@@ -1,13 +1,14 @@
 pub mod reqwest;
 pub mod mock;
 
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::error::Error;
 use std::io::Write;
 use std::{io, vec};
 use zcash_encoding::{CompactSize, Vector};
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
 use zcash_primitives::transaction::{Transaction, TxId};
+use crate::components::zebra_merkle::{AUTH_COMMITMENT_PLACEHOLDER, AuthDataRoot, block_commitment_from_parts, Root};
 use crate::model::Block;
 
 
@@ -259,33 +260,56 @@ impl BlockProposal {
     }
 }
 
-pub fn template_into_proposal(block_template: BlockTemplate) -> BlockProposal {
+pub fn template_into_proposal(block_template: BlockTemplate, mut txs: Vec<Transaction>) -> BlockProposal {
 
     let coinbase = Transaction::read(hex::decode(block_template.coinbase_txn.data).unwrap().as_slice(), zcash_primitives::consensus::BranchId::Nu5).unwrap();
 
-    let mut prev_block_hash_vec = hex::decode(block_template.previous_block_hash).unwrap();
-    prev_block_hash_vec.reverse();
-    let prev_block_hash_bytes: [u8; 32] = prev_block_hash_vec.try_into().unwrap();
+    let mut txs_with_coinbase = vec![coinbase];
+    txs_with_coinbase.append(&mut txs);
+    // TODO move to zebra_merkle.rs
 
-    let mut history_root_vec = hex::decode(block_template.default_roots.chain_history_root).unwrap();
-    history_root_vec.reverse();
-    let history_root_bytes: [u8; 32] = history_root_vec.try_into().unwrap();
+    let merkle_root = if txs_with_coinbase.len() == 1 {
+        // only coinbase tx is present, no need to calculate
+        decode_hex(block_template.default_roots.merkle_root)
+    } else {
+        txs_with_coinbase.iter().map(|tx| { tx.txid().0 }).collect::<Root>().0
+    };
+
+    let auth_data_root = txs_with_coinbase.iter().map(|tx| {
+        if tx.version().has_orchard() {
+            let bytes: [u8;32] = <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
+            bytes
+        } else {
+            AUTH_COMMITMENT_PLACEHOLDER
+        }
+    }).collect::<AuthDataRoot>();
+
+    let hash_block_commitments = block_commitment_from_parts(
+        decode_hex(block_template.default_roots.chain_history_root),
+        auth_data_root.0,
+    );
 
     let block_header_data = BlockHeaderData {
         version: block_template.version as i32,
-        prev_block: BlockHash(prev_block_hash_bytes),
-        merkle_root: coinbase.txid().0,
-        final_sapling_root: history_root_bytes,
+        prev_block: BlockHash(decode_hex(block_template.previous_block_hash)),
+        merkle_root: merkle_root,
+        final_sapling_root: hash_block_commitments,
         time: block_template.cur_time,
         bits: u32::from_str_radix(block_template.bits.as_str(), 16).unwrap(),
-        nonce: [2; 32],
-        solution: Vec::from([0; 1344]),
+        nonce: [2; 32], // TODO
+        solution: Vec::from([0; 1344]), // TODO
     };
 
     let header = BlockHeader::from_data(block_header_data).unwrap();
 
     BlockProposal {
         header,
-        transactions: vec![coinbase],
+        transactions: txs_with_coinbase,
     }
+}
+
+fn decode_hex(hex: String) -> [u8; 32] {
+    let mut result_vec = hex::decode(hex).unwrap();
+    result_vec.reverse();
+    result_vec.try_into().unwrap()
 }

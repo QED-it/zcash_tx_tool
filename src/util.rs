@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use orchard::Address;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_primitives::consensus::TEST_NETWORK;

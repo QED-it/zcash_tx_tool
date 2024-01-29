@@ -1,21 +1,7 @@
 //! `mine` - happy e2e flow that issues, transfers and burns an asset
 
 use abscissa_core::{Command, Runnable};
-use orchard::keys::IssuanceValidatingKey;
-use orchard::keys::Scope::External;
-use orchard::note::AssetBase;
-use orchard::value::NoteValue;
-use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
-use zcash_primitives::memo::MemoBytes;
-use zcash_primitives::transaction::builder::Builder;
-use zcash_primitives::transaction::components::{Amount, transparent, TxOut};
-use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
-use zcash_primitives::transaction::TxId;
-use zcash_proofs::prover::LocalTxProver;
-use crate::commands::burn::burn;
-use crate::commands::issue::issue;
 use crate::commands::sync::{sync, sync_from_height};
-use crate::commands::transfer::transfer;
 use crate::components::rpc_client::mock::MockZcashNode;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::rpc_client::{RpcClient, template_into_proposal};
@@ -39,7 +25,7 @@ impl Runnable for MineCmd {
         let block_template = rpc_client.get_block_template().unwrap();
         let target_height = block_template.height;
 
-        let block_proposal = template_into_proposal(block_template);
+        let block_proposal = template_into_proposal(block_template, Vec::new());
         let block_hash = block_proposal.header.hash();
 
         rpc_client.submit_block(block_proposal).unwrap();

@@ -10,10 +10,9 @@ use abscissa_core::prelude::{error, info};
 use zcash_primitives::{constants, legacy, sapling::NOTE_COMMITMENT_TREE_DEPTH, transaction::{components::Amount}};
 
 use orchard::{bundle::Authorized, Address, Bundle, Note, Anchor};
-use orchard::issuance::{IssueBundle, Signed};
-use orchard::keys::{IssuanceAuthorizingKey, OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey};
+use orchard::keys::{OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey};
 use orchard::note::ExtractedNoteCommitment;
-use orchard::note_encryption_v3::OrchardDomainV3;
+use orchard::note_encryption::OrchardDomain;
 use orchard::tree::{MerklePath, MerkleHashOrchard};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
@@ -24,7 +23,7 @@ use zcash_note_encryption::{ShieldedOutput, try_note_decryption};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
 use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::transaction::components::issuance::{read_note, write_note};
+use zcash_primitives::transaction::components::note::{read_note, write_note};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_primitives::zip32::AccountId;
 use crate::components::persistence::model::NoteData;
@@ -122,7 +121,7 @@ impl Wallet {
 
         // TODO implement more sophisticated and efficient note selection logic
 
-        let all_notes = self.db.find_notes();
+        let all_notes = self.db.find_non_spent_notes();
         let mut selected_notes = Vec::new();
         let mut total_amount_selected = 0;
 
@@ -140,7 +139,7 @@ impl Wallet {
             });
             total_amount_selected += note_value;
 
-            if total_amount_selected + note_value >= total_amount { break }
+            if total_amount_selected >= total_amount { break }
         };
         selected_notes
     }
@@ -166,10 +165,6 @@ impl Wallet {
 
     pub(crate) fn orchard_anchor(&self) -> Option<Anchor> {
         Some(Anchor::from(self.commitment_tree.root(0).unwrap()))
-    }
-
-    pub(crate) fn issuance_key(&self) -> IssuanceAuthorizingKey {
-        IssuanceAuthorizingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, 0).unwrap()
     }
 
     // Hack for claiming coinbase
@@ -298,12 +293,7 @@ impl Wallet {
             self.mark_potential_spends(&tx.txid(), orchard_bundle);
         };
 
-        // Add notes from Issue bundle
-        if let Some(issue_bundle) = tx.issue_bundle() {
-            self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, issued_notes_offset);
-        };
-
-        self.add_note_commitments(&tx.txid(), tx.orchard_bundle(), tx.issue_bundle()).unwrap();
+        self.add_note_commitments(&tx.txid(), tx.orchard_bundle()).unwrap();
 
         Ok(())
     }
@@ -326,6 +316,7 @@ impl Wallet {
             .collect::<Vec<_>>();
 
         for (action_idx, ivk, note, recipient, memo) in self.decrypt_outputs_with_keys(&bundle, &keys) {
+            info!("Store note");
             self.store_note(txid, action_idx, ivk.clone(), note, recipient, memo).unwrap();
         }
     }
@@ -347,36 +338,13 @@ impl Wallet {
             .iter()
             .enumerate()
             .filter_map(|(idx, action)| {
-                let domain = OrchardDomainV3::for_action(&action);
+                let domain = OrchardDomain::for_action(&action);
                 prepared_keys.iter().find_map(|(ivk, prepared_ivk)| {
                     try_note_decryption(&domain, prepared_ivk, action)
                         .map(|(n, a, m)| (idx, (*ivk).clone(), n, a, m))
                 })
             })
             .collect()
-    }
-
-    /// Add note data to the wallet, and return a a data structure that describes
-    /// the actions that are involved with this wallet.
-    fn add_notes_from_issue_bundle(
-        &mut self,
-        txid: &TxId,
-        bundle: &IssueBundle<Signed>,
-        note_index_offset: usize,
-    ) {
-        for (note_index, note) in bundle.actions().iter().flat_map(|a| a.notes()).enumerate() {
-            if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
-                let note_index = note_index + note_index_offset;
-                self.store_note(
-                    txid,
-                    note_index,
-                    ivk.clone(),
-                    *note,
-                    note.recipient(),
-                    [0; 512],
-                ).unwrap();
-            }
-        }
     }
 
     fn store_note(
@@ -400,7 +368,7 @@ impl Wallet {
             let note_data = NoteData {
                 id: 0,
                 amount: note.value().inner() as i64,
-                asset: note.asset().to_bytes().to_vec(),
+                asset: Vec::new(),
                 tx_id: txid.as_ref().to_vec(),
                 action_index: action_index as i32,
                 position: -1,
@@ -426,7 +394,7 @@ impl Wallet {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             match self.db.find_by_nullifier(action.nullifier()) {
                 Some(note) => {
-                    info!("Adding potential spend of nullifier {:?}", action.nullifier());
+                    info!("Adding spend of nullifier {:?}", action.nullifier());
                     self.db.mark_as_potentially_spent(note.id, txid, action_index as i32);
                 },
                 None => {}
@@ -448,7 +416,6 @@ impl Wallet {
         &mut self,
         txid: &TxId,
         orchard_bundle_opt: Option<&Bundle<Authorized, Amount>>,
-        issue_bundle_opt: Option<&IssueBundle<Signed>>,
     ) -> Result<(), WalletError> {
         // TODO Check that the wallet is in the correct state to update the note commitment tree with new outputs.
 
@@ -465,20 +432,6 @@ impl Wallet {
         } else {
             Vec::new()
         };
-
-        let mut issued_note_commitments: Vec<ExtractedNoteCommitment> =
-            if let Some(issue_bundle) = issue_bundle_opt {
-                issue_bundle
-                    .actions()
-                    .iter()
-                    .flat_map(|a| a.notes())
-                    .map(|note| note.commitment().into())
-                    .collect()
-            } else {
-                Vec::new()
-            };
-
-        note_commitments.append(&mut issued_note_commitments);
 
         for (note_index, commitment) in note_commitments.iter().enumerate() {
             // append the note commitment for each action to the note commitment tree
