@@ -19,8 +19,8 @@ impl Runnable for MineCmd {
     fn run(&self) {
         let config = APP.config();
 
-        let mut rpc_client = ReqwestRpcClient::new();
-        let mut wallet = Wallet::new();
+        let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
+        let mut wallet = Wallet::new(&config.wallet.seed_phrase);
 
         let block_template = rpc_client.get_block_template().unwrap();
         let target_height = block_template.height;

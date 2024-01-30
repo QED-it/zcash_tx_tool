@@ -14,24 +14,24 @@ mod sync;
 mod transfer;
 mod test;
 mod mine;
+mod test_config;
 
 use self::sync::SyncCmd;
 use self::transfer::TransferCmd;
-use crate::config::ZsaWalletConfig;
+use crate::config::AppConfig;
 use abscissa_core::{config::Override, Command, Configurable, FrameworkError, Runnable};
 use std::path::PathBuf;
 use crate::commands::test::TestCmd;
 use crate::commands::mine::MineCmd;
+use crate::commands::test_config::TestConfig;
 
-/// ZsaWallet Configuration Filename
-pub const CONFIG_FILE: &str = "zsa_wallet.toml";
+/// Application Configuration Filename
+pub const CONFIG_FILE: &str = "config.toml";
 
-/// ZsaWallet Subcommands
-/// Subcommands need to be listed in an enum.
+/// Application subcommands need to be listed in an enum.
 #[derive(clap::Parser, Command, Debug, Runnable)]
 pub enum ZsaWalletCmd {
-    /// Initialize the application, generate keys from seed phrase and sync with the blockchain
-    Sync(SyncCmd), Transfer(TransferCmd), Test(TestCmd), Mine(MineCmd),
+    Sync(SyncCmd), Transfer(TransferCmd), Test(TestCmd), Mine(MineCmd), TestConfig(TestConfig)
 }
 
 /// Entry point for the application. It needs to be a struct to allow using subcommands!
@@ -57,7 +57,7 @@ impl Runnable for EntryPoint {
 }
 
 /// This trait allows you to define how application configuration is loaded.
-impl Configurable<ZsaWalletConfig> for EntryPoint {
+impl Configurable<AppConfig> for EntryPoint {
     /// Location of the configuration file
     fn config_path(&self) -> Option<PathBuf> {
         // Check if the config file exists, and if it does not, ignore it.
@@ -83,10 +83,10 @@ impl Configurable<ZsaWalletConfig> for EntryPoint {
     /// settings from command-line options.
     fn process_config(
         &self,
-        config: ZsaWalletConfig,
-    ) -> Result<ZsaWalletConfig, FrameworkError> {
+        config: AppConfig,
+    ) -> Result<AppConfig, FrameworkError> {
         match &self.cmd {
-            ZsaWalletCmd::Sync(cmd) => cmd.override_config(config),
+            // ZsaWalletCmd::UnconventionalCommand(cmd) => cmd.override_config(config),
             // If you don't need special overrides for some
             // subcommands, you can just use a catch all
             _ => Ok(config),

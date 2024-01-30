@@ -11,9 +11,6 @@ use zcash_primitives::transaction::{Transaction, TxId};
 use crate::components::zebra_merkle::{AUTH_COMMITMENT_PLACEHOLDER, AuthDataRoot, block_commitment_from_parts, Root};
 use crate::model::Block;
 
-
-pub const NODE_URL: &str = "http://127.0.0.1:18232/"; // TODO get from config
-
 pub trait RpcClient {
     fn get_best_block_hash(&self) -> Result<BlockHash, Box<dyn Error>>;
     fn get_block(&self, height: u32) -> Result<Block, Box<dyn Error>>;

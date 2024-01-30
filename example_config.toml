@@ -1,0 +1,10 @@
+[wallet]
+seed_phrase="fabric dilemma shift time border road fork license among uniform early laundry caution deer stamp"
+
+[network]
+node_address="127.0.0.1"
+node_port=18232
+protocol="http"
+
+[chain]
+nu5_activation_height=1_060_755

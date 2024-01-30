@@ -31,7 +31,7 @@ impl Runnable for TransferCmd {
         let config = APP.config();
 
         let mut rpc_client = MockZcashNode::new();
-        let mut wallet = Wallet::new();
+        let mut wallet = Wallet::new(&config.wallet.seed_phrase);
 
         let orchard_recipient = orchard_address_from_ua(&self.dest_address);
 

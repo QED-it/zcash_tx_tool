@@ -1,6 +1,6 @@
 use std::convert::TryInto;
 use reqwest::blocking::Client;
-use crate::components::rpc_client::{RpcClient, NODE_URL, GetBlock, BlockTemplate, BlockProposal};
+use crate::components::rpc_client::{RpcClient, GetBlock, BlockTemplate, BlockProposal};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use serde::de::DeserializeOwned;
@@ -11,13 +11,15 @@ use crate::model::Block;
 use crate::prelude::info;
 
 pub struct ReqwestRpcClient {
-    client: Client
+    client: Client,
+    node_url: String,
 }
 
 impl ReqwestRpcClient {
-    pub fn new() -> Self {
+    pub fn new(node_url: String) -> Self {
         Self {
-            client: Client::new()
+            client: Client::new(),
+            node_url,
         }
     }
 
@@ -25,7 +27,7 @@ impl ReqwestRpcClient {
         where T: DeserializeOwned
     {
         let binding = self.client.post(
-            NODE_URL
+            &self.node_url
         )
             .body(serde_json::to_string(request)?)
             .send()?

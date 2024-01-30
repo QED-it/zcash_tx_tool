@@ -26,6 +26,7 @@ use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::transaction::components::note::{read_note, write_note};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_primitives::zip32::AccountId;
+use zcash_primitives::zip339::Mnemonic;
 use crate::components::persistence::model::NoteData;
 use crate::components::persistence::sqlite::SqliteDataStorage;
 use crate::components::wallet::structs::OrderedAddress;
@@ -100,7 +101,7 @@ pub struct Wallet {
     /// The block hash at which the last checkpoint was created, if any.
     last_block_hash: Option<BlockHash>,
     /// The seed used to derive the wallet's keys. TODO better seed handling
-    seed: [u8; 32]
+    seed: [u8; 64]
 }
 
 impl Wallet {
@@ -169,18 +170,16 @@ impl Wallet {
 
     // Hack for claiming coinbase
     pub fn miner_address(&mut self) -> TransparentAddress {
-        let seed: [u8; 32] = [0; 32];
         let account = AccountId::from(0);
-        let pubkey = legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &seed, account).unwrap().derive_external_secret_key(0).unwrap().public_key(&Secp256k1::new()).serialize();
+        let pubkey = legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(0).unwrap().public_key(&Secp256k1::new()).serialize();
         let hash = &Ripemd160::digest(Sha256::digest(pubkey))[..];
         let taddr = TransparentAddress::PublicKey(hash.try_into().unwrap());
-        taddr // "tmCUAhdeyFwVxETt3xTZrrQ3Z87e1Grakc1"
+        taddr
     }
 
     pub fn miner_sk(&mut self) -> SecretKey {
-        let seed: [u8; 32] = [0; 32];
         let account = AccountId::from(0);
-        legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &seed, account).unwrap().derive_external_secret_key(0).unwrap()
+        legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(0).unwrap()
     }
 }
 
@@ -216,14 +215,14 @@ pub enum BundleLoadError {
 }
 
 impl Wallet {
-    pub fn new() -> Self {
+    pub fn new(seed_phrase: &String) -> Self {
         Wallet {
             db: SqliteDataStorage::new(),
             key_store: KeyStore::empty(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
             last_block_height: None,
             last_block_hash: None,
-            seed: [0; 32]
+            seed: Mnemonic::from_phrase(seed_phrase).unwrap().to_seed("")
         }
     }
 

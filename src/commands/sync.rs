@@ -1,7 +1,7 @@
 //! `sync` subcommand - initialize the application, generate keys from seed phrase and sync with the blockchain
 
 use crate::prelude::*;
-use crate::config::ZsaWalletConfig;
+use crate::config::AppConfig;
 use abscissa_core::{config, Command, FrameworkError, Runnable};
 use zcash_primitives::consensus::BlockHeight;
 use crate::components::rpc_client::mock::MockZcashNode;
@@ -15,14 +15,14 @@ pub struct SyncCmd {
     seed_phrase: Vec<String>,
 }
 
-impl config::Override<ZsaWalletConfig> for SyncCmd {
+impl config::Override<AppConfig> for SyncCmd {
     // Process the given command line options, overriding settings from
     // a configuration file using explicit flags taken from command-line
     // arguments.
     fn override_config(
         &self,
-        mut config: ZsaWalletConfig,
-    ) -> Result<ZsaWalletConfig, FrameworkError> {
+        mut config: AppConfig,
+    ) -> Result<AppConfig, FrameworkError> {
         if self.seed_phrase.is_empty() {
             // Generate a random seed phrase
             // TODO make it as bit more random
@@ -42,7 +42,7 @@ impl Runnable for SyncCmd {
         info!("Seed phrase: {}", &config.wallet.seed_phrase);
 
         let mut rpc = MockZcashNode::new();
-        let mut wallet = Wallet::new();
+        let mut wallet = Wallet::new(&config.wallet.seed_phrase);
 
         sync(&mut wallet, &mut rpc)
     }

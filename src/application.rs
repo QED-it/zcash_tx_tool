@@ -1,6 +1,6 @@
 //! ZsaWallet Abscissa Application
 
-use crate::{commands::EntryPoint, config::ZsaWalletConfig};
+use crate::{commands::EntryPoint, config::AppConfig};
 use abscissa_core::{
     application::{self, AppCell},
     config::{self, CfgCell},
@@ -14,7 +14,7 @@ pub static APP: AppCell<ZsaWalletApp> = AppCell::new();
 #[derive(Debug)]
 pub struct ZsaWalletApp {
     /// Application configuration.
-    config: CfgCell<ZsaWalletConfig>,
+    config: CfgCell<AppConfig>,
 
     /// Application state.
     state: application::State<Self>,
@@ -38,13 +38,13 @@ impl Application for ZsaWalletApp {
     type Cmd = EntryPoint;
 
     /// Application configuration.
-    type Cfg = ZsaWalletConfig;
+    type Cfg = AppConfig;
 
     /// Paths to resources within the application.
     type Paths = StandardPaths;
 
     /// Accessor for application configuration.
-    fn config(&self) -> config::Reader<ZsaWalletConfig> {
+    fn config(&self) -> config::Reader<AppConfig> {
         self.config.read()
     }
 

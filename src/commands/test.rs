@@ -2,7 +2,6 @@
 
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
-use orchard::value::NoteValue;
 use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
 use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::transaction::builder::Builder;
@@ -10,9 +9,8 @@ use zcash_primitives::transaction::components::{Amount, transparent, TxOut};
 use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
-use crate::commands::sync::{sync, sync_from_height};
+use crate::commands::sync::sync_from_height;
 use crate::commands::transfer::create_transfer_tx;
-use crate::components::rpc_client::mock::MockZcashNode;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::rpc_client::{RpcClient, template_into_proposal};
 use crate::prelude::*;
@@ -29,12 +27,12 @@ impl Runnable for TestCmd {
     fn run(&self) {
         let config = APP.config();
 
-        let mut rpc_client = ReqwestRpcClient::new();
-        let mut wallet = Wallet::new();
+        let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
+        let mut wallet = Wallet::new(&config.wallet.seed_phrase);
 
         wallet.reset(); // Delete all notes from DB
 
-        sync_from_height(1_060_755, &mut wallet, &mut rpc_client);
+        sync_from_height(config.chain.nu5_activation_height, &mut wallet, &mut rpc_client);
 
         let (block_height, coinbase_txid) = mine_100_blocks(&mut rpc_client);
 

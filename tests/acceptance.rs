@@ -19,7 +19,7 @@
 )]
 
 use abscissa_core::testing::prelude::*;
-use zsa_wallet::config::ZsaWalletConfig;
+use zsa_wallet::config::AppConfig;
 use once_cell::sync::Lazy;
 
 /// Executes your application binary via `cargo run`.
@@ -55,7 +55,7 @@ fn start_with_args() {
 /// Use configured value
 #[test]
 fn start_with_config_no_args() {
-    let mut config = ZsaWalletConfig::default();
+    let mut config = AppConfig::default();
     config.wallet.seed_phrase = "configured recipient".to_owned();
     let expected_line = format!("Hello, {}!", &config.wallet.seed_phrase);
 
@@ -68,7 +68,7 @@ fn start_with_config_no_args() {
 /// Override configured value with command-line argument
 #[test]
 fn start_with_config_and_args() {
-    let mut config = ZsaWalletConfig::default();
+    let mut config = AppConfig::default();
     config.wallet.seed_phrase = "configured recipient".to_owned();
 
     let mut runner = RUNNER.clone();
