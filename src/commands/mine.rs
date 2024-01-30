@@ -1,8 +1,5 @@
-//! `mine` - happy e2e flow that issues, transfers and burns an asset
-
 use abscissa_core::{Command, Runnable};
-use crate::commands::sync::{sync, sync_from_height};
-use crate::components::rpc_client::mock::MockZcashNode;
+use zcash_primitives::transaction::{Transaction, TxId};
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::rpc_client::{RpcClient, template_into_proposal};
 use crate::prelude::*;
@@ -12,36 +9,46 @@ use crate::components::wallet::Wallet;
 /// `mine` subcommand
 #[derive(clap::Parser, Command, Debug)]
 pub struct MineCmd {
+    num_blocks: Option<u32>
 }
 
 impl Runnable for MineCmd {
-    /// Run the `mine` subcommand.
     fn run(&self) {
         let config = APP.config();
 
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
         let mut wallet = Wallet::new(&config.wallet.seed_phrase);
 
-        let block_template = rpc_client.get_block_template().unwrap();
-        let target_height = block_template.height;
+        let num_blocks = self.num_blocks.unwrap_or(1);
 
-        let block_proposal = template_into_proposal(block_template, Vec::new());
-        let block_hash = block_proposal.header.hash();
-
-        rpc_client.submit_block(block_proposal).unwrap();
-
-        sync_from_height(target_height, &mut wallet, &mut rpc_client);
-
-        let best_block_hash = rpc_client.get_best_block_hash().unwrap();
-
-        assert_eq!(best_block_hash, block_hash);
-
-        let block = rpc_client.get_block(target_height).unwrap();
-
-        let tx = rpc_client.get_transaction(block.tx_ids.first().unwrap(), &block_hash).unwrap();
-
-        let transparent_out = &tx.transparent_bundle().unwrap().vout;
-
-        // TODO check that transparent receiver is our address
+        let (_, coinbase_txid) = mine_empty_blocks(num_blocks, &mut rpc_client);
     }
+}
+
+pub fn mine_block(rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) -> (u32, TxId) {
+    let block_template = rpc_client.get_block_template().unwrap();
+    let block_height = block_template.height;
+
+    let mut block_proposal = template_into_proposal(block_template, txs);
+    let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
+
+    rpc_client.submit_block(block_proposal).unwrap();
+
+    // TODO store coinbase txid in wallet
+
+    (block_height, coinbase_txid)
+}
+
+
+pub fn mine_empty_blocks(num_blocks: u32, mut rpc_client: &mut dyn RpcClient) -> (u32, TxId) {
+
+    if num_blocks <= 0 { panic!("num_blocks must be greater than 0") }
+
+    let (block_height, coinbase_txid) = mine_block(rpc_client, vec![]);
+
+    for _ in 1..num_blocks {
+        mine_block(rpc_client, vec![]);
+    };
+
+    (block_height, coinbase_txid)
 }

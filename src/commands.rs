@@ -15,6 +15,7 @@ mod transfer;
 mod test;
 mod mine;
 mod test_config;
+mod shield;
 
 use self::sync::SyncCmd;
 use self::transfer::TransferCmd;
