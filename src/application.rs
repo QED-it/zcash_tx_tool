@@ -1,4 +1,4 @@
-//! ZsaWallet Abscissa Application
+//! ZcashTxTool Abscissa Application
 
 use crate::{commands::EntryPoint, config::AppConfig};
 use abscissa_core::{
@@ -8,11 +8,11 @@ use abscissa_core::{
 };
 
 /// Application state
-pub static APP: AppCell<ZsaWalletApp> = AppCell::new();
+pub static APP: AppCell<ZcashTxToolApp> = AppCell::new();
 
-/// ZsaWallet Application
+/// ZcashTxTool Application
 #[derive(Debug)]
-pub struct ZsaWalletApp {
+pub struct ZcashTxToolApp {
     /// Application configuration.
     config: CfgCell<AppConfig>,
 
@@ -24,7 +24,7 @@ pub struct ZsaWalletApp {
 ///
 /// By default no configuration is loaded, and the framework state is
 /// initialized to a default, empty state (no components, threads, etc).
-impl Default for ZsaWalletApp {
+impl Default for ZcashTxToolApp {
     fn default() -> Self {
         Self {
             config: CfgCell::default(),
@@ -33,7 +33,7 @@ impl Default for ZsaWalletApp {
     }
 }
 
-impl Application for ZsaWalletApp {
+impl Application for ZcashTxToolApp {
     /// Entrypoint command for this application.
     type Cmd = EntryPoint;
 

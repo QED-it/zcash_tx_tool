@@ -1,4 +1,4 @@
-//! ZsaWallet Subcommands
+//! Application Subcommands
 //!
 //! This is where you specify the subcommands of your application.
 //!
@@ -29,7 +29,7 @@ pub const CONFIG_FILE: &str = "config.toml";
 
 /// Application subcommands need to be listed in an enum.
 #[derive(clap::Parser, Command, Debug, Runnable)]
-pub enum ZsaWalletCmd {
+pub enum AppCmd {
     Test(TestCmd)
 }
 
@@ -38,7 +38,7 @@ pub enum ZsaWalletCmd {
 #[command(author, about, version)]
 pub struct EntryPoint {
     #[command(subcommand)]
-    cmd: ZsaWalletCmd,
+    cmd: AppCmd,
 
     /// Enable verbose logging
     #[arg(short, long)]
@@ -85,7 +85,7 @@ impl Configurable<AppConfig> for EntryPoint {
         config: AppConfig,
     ) -> Result<AppConfig, FrameworkError> {
         match &self.cmd {
-            // ZsaWalletCmd::UnconventionalCommand(cmd) => cmd.override_config(config),
+            // AppCmd::UnconventionalCommand(cmd) => cmd.override_config(config),
             // If you don't need special overrides for some
             // subcommands, you can just use a catch all
             _ => Ok(config),

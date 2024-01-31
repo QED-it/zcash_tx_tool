@@ -19,7 +19,7 @@
 )]
 
 use abscissa_core::testing::prelude::*;
-use zsa_wallet::config::AppConfig;
+use zcash_tx_tool::config::AppConfig;
 use once_cell::sync::Lazy;
 
 /// Executes your application binary via `cargo run`.
@@ -30,7 +30,7 @@ use once_cell::sync::Lazy;
 /// invocations as `cargo test` executes tests in parallel by default.
 pub static RUNNER: Lazy<CmdRunner> = Lazy::new(|| CmdRunner::default());
 
-/// Use `ZsaWalletConfig::default()` value if no config or args
+/// Use `AppConfig::default()` value if no config or args
 #[test]
 fn start_no_args() {
     let mut runner = RUNNER.clone();

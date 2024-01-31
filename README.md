@@ -1,4 +1,4 @@
-# ZsaWallet
+# Zcash transaction tool
 
 
 # Prerequisites 
@@ -31,4 +31,4 @@ Example configuration file with default values can be found in `example_config.t
 
 # Main test scenario
 
-zsa_wallet test
+zcash_tx_tool test

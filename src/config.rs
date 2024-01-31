@@ -18,7 +18,7 @@ pub struct AppConfig {
 /// Default configuration settings.
 ///
 /// Note: if your needs are as simple as below, you can
-/// use `#[derive(Default)]` on ZsaWalletConfig instead.
+/// use `#[derive(Default)]` on AppConfig instead.
 impl Default for AppConfig {
     fn default() -> Self {
         Self {

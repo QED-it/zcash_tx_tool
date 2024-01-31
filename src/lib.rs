@@ -1,4 +1,4 @@
-//! ZsaWallet
+//! Zcash Tx Tool
 //!
 //! Application based on the [Abscissa] framework.
 //!

@@ -131,7 +131,7 @@ impl RpcRequest {
     fn new(method: &'static str) -> RpcRequest {
         Self {
             jsonrpc: "1.0",
-            id: "zsa-wallet",
+            id: "zcash-tx-tool",
             method: method,
             params: Vec::new()
         }
@@ -140,7 +140,7 @@ impl RpcRequest {
     fn new_with_params(method: &'static str, params: Vec<ParamType>) -> RpcRequest {
         Self {
             jsonrpc: "1.0",
-            id: "zsa-wallet",
+            id: "zcash-tx-tool",
             method: method,
             params: params
         }

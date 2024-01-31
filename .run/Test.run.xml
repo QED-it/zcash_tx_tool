@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Test" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package zsa_wallet --bin zsa_wallet test" />
+    <option name="command" value="run --package zcash_tx_tool --bin zcash_tx_tool test" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="emulateTerminal" value="true" />
     <option name="channel" value="DEFAULT" />
