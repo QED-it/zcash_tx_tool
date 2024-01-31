@@ -14,7 +14,6 @@ mod sync;
 mod transfer;
 mod test;
 mod mine;
-mod test_config;
 mod shield;
 
 use self::sync::SyncCmd;
@@ -24,7 +23,6 @@ use abscissa_core::{config::Override, Command, Configurable, FrameworkError, Run
 use std::path::PathBuf;
 use crate::commands::test::TestCmd;
 use crate::commands::mine::MineCmd;
-use crate::commands::test_config::TestConfig;
 
 /// Application Configuration Filename
 pub const CONFIG_FILE: &str = "config.toml";
@@ -32,7 +30,7 @@ pub const CONFIG_FILE: &str = "config.toml";
 /// Application subcommands need to be listed in an enum.
 #[derive(clap::Parser, Command, Debug, Runnable)]
 pub enum ZsaWalletCmd {
-    Sync(SyncCmd), Transfer(TransferCmd), Test(TestCmd), Mine(MineCmd), TestConfig(TestConfig)
+    Test(TestCmd)
 }
 
 /// Entry point for the application. It needs to be a struct to allow using subcommands!

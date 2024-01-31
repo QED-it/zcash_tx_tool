@@ -11,7 +11,7 @@ use crate::prelude::*;
 use crate::components::wallet::Wallet;
 
 
-/// `test` subcommand
+/// Run the E2E test
 #[derive(clap::Parser, Command, Debug)]
 pub struct TestCmd {
 }
