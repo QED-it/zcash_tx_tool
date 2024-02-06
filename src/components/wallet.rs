@@ -17,7 +17,7 @@ use orchard::note_encryption::OrchardDomain;
 use orchard::tree::{MerklePath, MerkleHashOrchard};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
-use sha2::{ Sha256, Digest as Sha2Digest };
+use sha2::Sha256;
 
 
 use zcash_note_encryption::{try_note_decryption};
@@ -254,11 +254,8 @@ impl Wallet {
     /// the actions that are involved with this wallet.
     pub fn add_notes_from_tx(&mut self, tx: Transaction) -> Result<(), BundleLoadError> {
 
-        let mut issued_notes_offset = 0;
-
          // Add note from Orchard bundle
         if let Some(orchard_bundle) = tx.orchard_bundle() {
-            issued_notes_offset = orchard_bundle.actions().len();
             self.add_notes_from_orchard_bundle(&tx.txid(), orchard_bundle);
             self.mark_potential_spends(&tx.txid(), orchard_bundle);
         };

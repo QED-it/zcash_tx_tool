@@ -77,7 +77,7 @@ impl Runnable for TestCmd {
         mine(&mut wallet, &mut rpc_client, Vec::from([ transfer_tx_1 ]));
 
         let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);
-        balances = check_balances("=== Balances after transfer ===", balances, expected_delta, &mut wallet);
+        check_balances("=== Balances after transfer ===", balances, expected_delta, &mut wallet);
     }
 }
 

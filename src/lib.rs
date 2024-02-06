@@ -8,11 +8,9 @@
 
 #![forbid(unsafe_code)]
 #![warn(
-    missing_docs,
     rust_2018_idioms,
     trivial_casts,
     unused_lifetimes,
-    unused_qualifications
 )]
 
 pub mod application;
@@ -21,7 +19,6 @@ pub mod error;
 pub mod prelude;
 pub mod commands;
 pub mod components;
-pub mod util;
 mod schema;
 mod model;
 

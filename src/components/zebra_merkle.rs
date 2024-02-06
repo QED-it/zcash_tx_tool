@@ -1,6 +1,6 @@
 /// Partially copied from `zebra/zebra-chain/src/block/merkle.rs`
 use std::{fmt, iter};
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 use std::iter::FromIterator;
 
 use hex::{FromHex, ToHex};
@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 pub struct Root(pub [u8; 32]);
 
 impl fmt::Debug for Root {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Root").field(&hex::encode(self.0)).finish()
     }
 }
@@ -145,7 +145,7 @@ fn auth_data_hash(h1: &[u8; 32], h2: &[u8; 32]) -> [u8; 32] {
 pub struct AuthDataRoot(pub(crate) [u8; 32]);
 
 impl fmt::Debug for AuthDataRoot {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("AuthRoot")
             .field(&hex::encode(self.0))
             .finish()

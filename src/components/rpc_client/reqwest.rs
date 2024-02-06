@@ -149,6 +149,5 @@ impl RpcRequest {
 
 #[derive(Deserialize)]
 struct RpcResponse<T> {
-    id: Box<str>,
     result: T
 }
