@@ -5,7 +5,7 @@ use bridgetree::{self, BridgeTree};
 use incrementalmerkletree::Position;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
-use abscissa_core::component::AsAny;
+
 use abscissa_core::prelude::info;
 
 use zcash_primitives::{constants, legacy, sapling::NOTE_COMMITMENT_TREE_DEPTH, transaction::{components::Amount}};
@@ -18,9 +18,9 @@ use orchard::tree::{MerklePath, MerkleHashOrchard};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
 use sha2::{ Sha256, Digest as Sha2Digest };
-use zcash_client_backend::encoding::AddressCodec;
 
-use zcash_note_encryption::{ShieldedOutput, try_note_decryption};
+
+use zcash_note_encryption::{try_note_decryption};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
 use zcash_primitives::legacy::TransparentAddress;
@@ -384,7 +384,7 @@ impl Wallet {
         let my_notes_for_tx: Vec<NoteData> = self.db.find_notes_for_tx(txid);
 
         // Process note commitments
-        let mut note_commitments: Vec<ExtractedNoteCommitment> = if let Some(bundle) = orchard_bundle_opt {
+        let note_commitments: Vec<ExtractedNoteCommitment> = if let Some(bundle) = orchard_bundle_opt {
             bundle
                 .actions()
                 .iter()

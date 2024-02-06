@@ -26,7 +26,7 @@ struct TestBalances {
 }
 
 impl TestBalances {
-    fn new(miner: i64, alice: i64, bob: i64) -> Self {
+    fn new(miner: i64, alice: i64) -> Self {
         TestBalances {
             miner,
             alice,
@@ -55,7 +55,6 @@ impl Runnable for TestCmd {
 
         let miner = wallet.address_for_account(0, External);
         let alice = wallet.address_for_account(1, External);
-        let bob = wallet.address_for_account(2, External);
 
         let coinbase_txid = prepare_test(&config, &mut wallet, &mut rpc_client);
 
@@ -67,7 +66,7 @@ impl Runnable for TestCmd {
         let shielding_tx = create_shield_coinbase_tx(miner, coinbase_txid, &mut wallet);
         mine(&mut wallet, &mut rpc_client, Vec::from([ shielding_tx ]));
 
-        let expected_delta = TestBalances::new(500000000 /*coinbase_reward*/, 0, 0);
+        let expected_delta = TestBalances::new(500000000 /*coinbase_reward*/, 0);
         balances = check_balances("=== Balances after shielding ===", balances, expected_delta, &mut wallet);
 
         // --------------------- Create transfer ---------------------
@@ -77,7 +76,7 @@ impl Runnable for TestCmd {
         let transfer_tx_1 = create_transfer_tx(miner, alice, amount_to_transfer_1 as u64, &mut wallet, &mut rpc_client);
         mine(&mut wallet, &mut rpc_client, Vec::from([ transfer_tx_1 ]));
 
-        let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1, 0);
+        let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);
         balances = check_balances("=== Balances after transfer ===", balances, expected_delta, &mut wallet);
     }
 }

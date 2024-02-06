@@ -81,7 +81,7 @@ impl FromHex for Root {
     }
 }
 
-impl std::iter::FromIterator<[u8; 32]> for Root {
+impl FromIterator<[u8; 32]> for Root {
     /// # Panics
     ///
     /// When there are no transactions in the iterator.
@@ -230,7 +230,7 @@ impl FromHex for AuthDataRoot {
 /// <https://zips.z.cash/zip-0244#authorizing-data-commitment>
 pub const AUTH_COMMITMENT_PLACEHOLDER: [u8; 32] = [0xFFu8; 32];
 
-impl std::iter::FromIterator<[u8; 32]> for AuthDataRoot {
+impl FromIterator<[u8; 32]> for AuthDataRoot {
     fn from_iter<I>(hashes: I) -> Self
     where
         I: IntoIterator<Item = [u8; 32]>,

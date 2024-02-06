@@ -11,7 +11,7 @@ use zcash_proofs::prover::LocalTxProver;
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::components::wallet::Wallet;
 use crate::components::zebra_merkle::{AUTH_COMMITMENT_PLACEHOLDER, AuthDataRoot, block_commitment_from_parts, Root};
-use crate::prelude::{error, info, warn};
+use crate::prelude::{error, info};
 
 pub fn mine(wallet: &mut Wallet, rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) {
     let (block_height, _) = mine_block(rpc_client, txs);
@@ -22,7 +22,7 @@ pub fn mine_block(rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) -> (u32
     let block_template = rpc_client.get_block_template().unwrap();
     let block_height = block_template.height;
 
-    let mut block_proposal = template_into_proposal(block_template, txs);
+    let block_proposal = template_into_proposal(block_template, txs);
     let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
 
     rpc_client.submit_block(block_proposal).unwrap();
@@ -96,7 +96,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut Wallet, rpc: &mut dyn Rpc
         if true /* block.prev_hash == wallet.last_block_hash */ {
             info!("Adding transactions from block {} at height {}", block.hash, block.height);
             let block_hash = block.hash.clone();
-            let transactions = block.tx_ids.into_iter().map(| tx_id| rpc.get_transaction(&tx_id, &block_hash).unwrap()).collect();
+            let transactions = block.tx_ids.into_iter().map(| tx_id| rpc.get_transaction(&tx_id).unwrap()).collect();
             wallet.add_notes_from_block(block.height, block.hash, transactions).unwrap();
             next_height += 1;
         } else {
@@ -107,7 +107,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut Wallet, rpc: &mut dyn Rpc
 }
 
 
-pub fn create_transfer_tx(sender: Address, recipient: Address, amount: u64, wallet: &mut Wallet, rpc: &mut dyn RpcClient) -> Transaction {
+pub fn create_transfer_tx(sender: Address, recipient: Address, amount: u64, wallet: &mut Wallet) -> Transaction {
 
     info!("Transfer {} zatoshi", amount);
 
@@ -129,7 +129,7 @@ pub fn create_transfer_tx(sender: Address, recipient: Address, amount: u64, wall
     // Add change output
     let change_amount = total_inputs_amount - amount;
 
-    if (change_amount != 0) {
+    if change_amount != 0 {
         tx.add_orchard_output::<FeeError>(Some(ovk), sender, change_amount, MemoBytes::empty()).unwrap();
     }
 

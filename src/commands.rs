@@ -13,7 +13,7 @@
 mod test;
 
 use crate::config::AppConfig;
-use abscissa_core::{config::Override, Command, Configurable, FrameworkError, Runnable};
+use abscissa_core::{Command, Configurable, FrameworkError, Runnable};
 use std::path::PathBuf;
 use crate::commands::test::TestCmd;
 

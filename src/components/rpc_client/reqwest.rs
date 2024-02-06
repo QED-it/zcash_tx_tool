@@ -77,7 +77,7 @@ impl RpcClient for ReqwestRpcClient {
         Ok(TxId::from_bytes(tx_hash_bytes))
     }
 
-    fn get_transaction(&self, txid: &TxId, block_id: &BlockHash) -> Result<Transaction, Box<dyn Error>> {
+    fn get_transaction(&self, txid: &TxId) -> Result<Transaction, Box<dyn Error>> {
         let mut params: Vec<ParamType> = Vec::new();
         params.push(ParamType::String(hex::encode(txid.as_ref())));
         params.push(ParamType::Number(0)); // Verbosity

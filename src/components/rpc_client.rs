@@ -1,26 +1,26 @@
 pub mod reqwest;
 pub mod mock;
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::{TryInto};
 use std::error::Error;
 use std::io::Write;
-use std::{io, vec};
+use std::{io};
 use zcash_encoding::{CompactSize, Vector};
-use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
+use zcash_primitives::block::{BlockHash, BlockHeader};
 use zcash_primitives::transaction::{Transaction, TxId};
-use crate::components::zebra_merkle::{AUTH_COMMITMENT_PLACEHOLDER, AuthDataRoot, block_commitment_from_parts, Root};
+
 use crate::model::Block;
 
 pub trait RpcClient {
     fn get_best_block_hash(&self) -> Result<BlockHash, Box<dyn Error>>;
     fn get_block(&self, height: u32) -> Result<Block, Box<dyn Error>>;
     fn send_transaction(&mut self, tx: Transaction) -> Result<TxId, Box<dyn Error>>;
-    fn get_transaction(&self, txid: &TxId, block_id: &BlockHash) -> Result<Transaction, Box<dyn Error>>;
+    fn get_transaction(&self, txid: &TxId) -> Result<Transaction, Box<dyn Error>>;
     fn get_block_template(&self) -> Result<BlockTemplate, Box<dyn Error>>;
     fn submit_block(&self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>>;
 }
 
-/// =========================== Messages ===========================
+/// =========================== Messages (copied fom Zebra RPC) ===========================
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct GetBlock {
