@@ -10,19 +10,12 @@
 //! See the `impl Configurable` below for how to specify the path to the
 //! application's configuration file.
 
-mod sync;
-mod transfer;
 mod test;
-mod mine;
-mod shield;
 
-use self::sync::SyncCmd;
-use self::transfer::TransferCmd;
 use crate::config::AppConfig;
 use abscissa_core::{config::Override, Command, Configurable, FrameworkError, Runnable};
 use std::path::PathBuf;
 use crate::commands::test::TestCmd;
-use crate::commands::mine::MineCmd;
 
 /// Application Configuration Filename
 pub const CONFIG_FILE: &str = "config.toml";

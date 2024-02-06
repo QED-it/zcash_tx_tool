@@ -12,7 +12,7 @@ use crate::model::Block;
 
 
 pub struct MockZcashNode {
-    blockchain: Vec<Block>, // TODO forks
+    blockchain: Vec<Block>,
     transactions: BTreeMap<TxId, String>
 }
 
@@ -59,7 +59,7 @@ impl RpcClient for MockZcashNode {
         tx.write(&mut tx_bytes).unwrap();
         self.transactions.insert(txid, hex::encode(tx_bytes));
         // We create block per transaction for now
-        let mut block_hash: [u8; 32] = [0; 32]; // TODO use real hash
+        let mut block_hash: [u8; 32] = [0; 32];
         OsRng::default().fill_bytes(block_hash.as_mut_slice());
 
         self.blockchain.push(Block {

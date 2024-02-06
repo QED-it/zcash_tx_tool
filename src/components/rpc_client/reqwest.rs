@@ -62,7 +62,7 @@ impl RpcClient for ReqwestRpcClient {
             height: BlockHeight::from_u32(block.height.unwrap()),
             confirmations: block.confirmations,
             tx_ids: block.tx.iter().map(|tx_id_str| TxId::from_bytes(hex::decode(tx_id_str).unwrap().as_slice().try_into().unwrap())).collect(),
-            previous_block_hash: BlockHash([0; 32]), // TODO add previous block hash to Getblock RPC
+            previous_block_hash: BlockHash([0; 32]), // Previous block hash is not yet implemented in Zebra
         })
     }
 

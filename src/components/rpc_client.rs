@@ -36,8 +36,6 @@ pub struct GetBlock {
         height: Option<u32>,
 
         /// List of transaction IDs in block order, hex-encoded.
-        //
-        // TODO: use a typed Vec<transaction::Hash> here
         tx: Vec<String>
 }
 
@@ -135,7 +133,6 @@ pub struct BlockTemplate {
     pub bits: String,
 
     /// The height of the next block in the best chain.
-    // Optional TODO: use Height type, but check that deserialized heights are within Height::MAX
     pub height: u32,
 
     /// > the maximum time allowed
@@ -257,55 +254,7 @@ impl BlockProposal {
     }
 }
 
-pub fn template_into_proposal(block_template: BlockTemplate, mut txs: Vec<Transaction>) -> BlockProposal {
-
-    let coinbase = Transaction::read(hex::decode(block_template.coinbase_txn.data).unwrap().as_slice(), zcash_primitives::consensus::BranchId::Nu5).unwrap();
-
-    let mut txs_with_coinbase = vec![coinbase];
-    txs_with_coinbase.append(&mut txs);
-    // TODO move to zebra_merkle.rs
-
-    let merkle_root = if txs_with_coinbase.len() == 1 {
-        // only coinbase tx is present, no need to calculate
-        decode_hex(block_template.default_roots.merkle_root)
-    } else {
-        txs_with_coinbase.iter().map(|tx| { tx.txid().0 }).collect::<Root>().0
-    };
-
-    let auth_data_root = txs_with_coinbase.iter().map(|tx| {
-        if tx.version().has_orchard() {
-            let bytes: [u8;32] = <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
-            bytes
-        } else {
-            AUTH_COMMITMENT_PLACEHOLDER
-        }
-    }).collect::<AuthDataRoot>();
-
-    let hash_block_commitments = block_commitment_from_parts(
-        decode_hex(block_template.default_roots.chain_history_root),
-        auth_data_root.0,
-    );
-
-    let block_header_data = BlockHeaderData {
-        version: block_template.version as i32,
-        prev_block: BlockHash(decode_hex(block_template.previous_block_hash)),
-        merkle_root: merkle_root,
-        final_sapling_root: hash_block_commitments,
-        time: block_template.cur_time,
-        bits: u32::from_str_radix(block_template.bits.as_str(), 16).unwrap(),
-        nonce: [2; 32], // TODO
-        solution: Vec::from([0; 1344]), // TODO
-    };
-
-    let header = BlockHeader::from_data(block_header_data).unwrap();
-
-    BlockProposal {
-        header,
-        transactions: txs_with_coinbase,
-    }
-}
-
-fn decode_hex(hex: String) -> [u8; 32] {
+pub(crate) fn decode_hex(hex: String) -> [u8; 32] {
     let mut result_vec = hex::decode(hex).unwrap();
     result_vec.reverse();
     result_vec.try_into().unwrap()
