@@ -73,7 +73,7 @@ impl Runnable for TestCmd {
 
         let amount_to_transfer_1: i64 = 2;
 
-        let transfer_tx_1 = create_transfer_tx(miner, alice, amount_to_transfer_1 as u64, &mut wallet, &mut rpc_client);
+        let transfer_tx_1 = create_transfer_tx(miner, alice, amount_to_transfer_1 as u64, &mut wallet);
         mine(&mut wallet, &mut rpc_client, Vec::from([ transfer_tx_1 ]));
 
         let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);
