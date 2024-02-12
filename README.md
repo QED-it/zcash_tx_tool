@@ -14,7 +14,7 @@ Core components include:
 
 
 
-## Zebra node 
+### Zebra node 
 
 Before testing, we need to bring up the desired node and ensure that V5 transactions are activated (NU5 is active).
 
