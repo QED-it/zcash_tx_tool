@@ -66,7 +66,7 @@ impl Runnable for TestCmd {
         let shielding_tx = create_shield_coinbase_tx(miner, coinbase_txid, &mut wallet);
         mine(&mut wallet, &mut rpc_client, Vec::from([ shielding_tx ]));
 
-        let expected_delta = TestBalances::new(500000000 /*coinbase_reward*/, 0);
+        let expected_delta = TestBalances::new(500_000_000 /*coinbase_reward*/, 0);
         balances = check_balances("=== Balances after shielding ===", balances, expected_delta, &mut wallet);
 
         // --------------------- Create transfer ---------------------

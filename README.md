@@ -13,20 +13,12 @@ Core external building blocks are:
 3) librustzcash (https://github.com/zcash/librustzcash) for transaction creation and serialization
 
 
-# Installation
 
-To set the Diesel database up:
-
-1) Install diesel_cli: `cargo install diesel_cli --no-default-features --features sqlite`
-
-2) Run migrations: `diesel migration run`
-
-
-# Zebra docker 
+# Zebra node 
 
 In our Zebra build there are several changes compared to normal operation:
 
-- Activation height is set to 1_060_755
+- Activation height is set to 1.060.755
 
 - PoW is disabled 
 
@@ -52,6 +44,12 @@ Example configuration file with default values can be found in `example_config.t
 
 # Build instructions
 
+To set the Diesel database up:
+
+1) Install diesel_cli: `cargo install diesel_cli --no-default-features --features sqlite`
+
+2) Run migrations: `diesel migration run`
+
 To build the application, simply run:
 
 `cargo build`
@@ -73,6 +71,6 @@ To run the test scenario:
 
 `cargo run --package zcash_tx_tool --bin zcash_tx_tool test`
 
-or simply 
+with optional, but recommended `--release` flag, or simply 
 
 `zcash_tx_tool test`
