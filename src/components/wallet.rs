@@ -1,32 +1,33 @@
+/// Partially copied from `zebra/zebra-chain/src/block/merkle.rs`
 mod structs;
 
 use bridgetree::{self, BridgeTree};
 use incrementalmerkletree::Position;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
-use abscissa_core::component::AsAny;
-use abscissa_core::prelude::{error, info};
+
+use abscissa_core::prelude::info;
 
 use zcash_primitives::{constants, legacy, sapling::NOTE_COMMITMENT_TREE_DEPTH, transaction::{components::Amount}};
 
 use orchard::{bundle::Authorized, Address, Bundle, Note, Anchor};
-use orchard::issuance::{IssueBundle, Signed};
-use orchard::keys::{IssuanceAuthorizingKey, OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey};
+use orchard::keys::{OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey};
 use orchard::note::ExtractedNoteCommitment;
-use orchard::note_encryption_v3::OrchardDomainV3;
+use orchard::note_encryption::OrchardDomain;
 use orchard::tree::{MerklePath, MerkleHashOrchard};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
-use sha2::{ Sha256, Digest as Sha2Digest };
-use zcash_client_backend::encoding::AddressCodec;
+use sha2::Sha256;
 
-use zcash_note_encryption::{ShieldedOutput, try_note_decryption};
+
+use zcash_note_encryption::{try_note_decryption};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
 use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::transaction::components::issuance::{read_note, write_note};
+use zcash_primitives::transaction::components::note::{read_note, write_note};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_primitives::zip32::AccountId;
+use zcash_primitives::zip339::Mnemonic;
 use crate::components::persistence::model::NoteData;
 use crate::components::persistence::sqlite::SqliteDataStorage;
 use crate::components::wallet::structs::OrderedAddress;
@@ -41,6 +42,7 @@ pub struct NoteSpendMetadata {
 }
 
 struct KeyStore {
+    accounts: BTreeMap<u32, Address>,
     payment_addresses: BTreeMap<OrderedAddress, IncomingViewingKey>,
     viewing_keys: BTreeMap<IncomingViewingKey, FullViewingKey>,
     spending_keys: BTreeMap<FullViewingKey, SpendingKey>,
@@ -49,6 +51,7 @@ struct KeyStore {
 impl KeyStore {
     pub fn empty() -> Self {
         KeyStore {
+            accounts: BTreeMap::new(),
             payment_addresses: BTreeMap::new(),
             viewing_keys: BTreeMap::new(),
             spending_keys: BTreeMap::new(),
@@ -90,6 +93,7 @@ impl KeyStore {
 }
 
 pub struct Wallet {
+    /// The database used to store the wallet's state.
     db: SqliteDataStorage,
     /// The in-memory index of keys and addresses known to the wallet.
     key_store: KeyStore,
@@ -100,8 +104,8 @@ pub struct Wallet {
     last_block_height: Option<BlockHeight>,
     /// The block hash at which the last checkpoint was created, if any.
     last_block_hash: Option<BlockHash>,
-    /// The seed used to derive the wallet's keys. TODO better seed handling
-    seed: [u8; 32]
+    /// The seed used to derive the wallet's keys.
+    seed: [u8; 64]
 }
 
 impl Wallet {
@@ -114,15 +118,9 @@ impl Wallet {
         self.last_block_height
     }
 
-    pub(crate) fn reorg(&self, height: BlockHeight) {
-        todo!()
-    }
+    pub(crate) fn select_spendable_notes(&mut self, address: Address, total_amount: u64) -> Vec<NoteSpendMetadata> {
 
-    pub(crate) fn select_spendable_notes(&mut self, total_amount: u64) -> Vec<NoteSpendMetadata> {
-
-        // TODO implement more sophisticated and efficient note selection logic
-
-        let all_notes = self.db.find_notes();
+        let all_notes = self.db.find_non_spent_notes(address);
         let mut selected_notes = Vec::new();
         let mut total_amount_selected = 0;
 
@@ -140,23 +138,25 @@ impl Wallet {
             });
             total_amount_selected += note_value;
 
-            if total_amount_selected + note_value >= total_amount { break }
+            if total_amount_selected >= total_amount { break }
         };
         selected_notes
     }
 
     pub fn address_for_account(&mut self, account: u32, scope: Scope) -> Address {
-        let sk = SpendingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, account).unwrap();
-        let fvk = FullViewingKey::from(&sk);
-        let address = fvk.address_at(0u32, scope);
-        self.key_store.add_raw_address(address, fvk.to_ivk(scope));
-        self.key_store.add_full_viewing_key(fvk);
-        self.key_store.add_spending_key(sk);
-        address
-    }
-
-    pub(crate) fn change_address(&mut self) -> Address {
-        self.address_for_account(0, Scope::Internal)
+        match self.key_store.accounts.get(&account) {
+            Some(addr) => addr.clone(),
+            None => {
+                let sk = SpendingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, account).unwrap();
+                let fvk = FullViewingKey::from(&sk);
+                let address = fvk.address_at(0u32, scope);
+                self.key_store.add_raw_address(address, fvk.to_ivk(scope));
+                self.key_store.add_full_viewing_key(fvk);
+                self.key_store.add_spending_key(sk);
+                self.key_store.accounts.insert(account, address);
+                address
+            }
+        }
     }
 
     pub(crate) fn orchard_ovk(&self) -> OutgoingViewingKey {
@@ -168,24 +168,27 @@ impl Wallet {
         Some(Anchor::from(self.commitment_tree.root(0).unwrap()))
     }
 
-    pub(crate) fn issuance_key(&self) -> IssuanceAuthorizingKey {
-        IssuanceAuthorizingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, 0).unwrap()
-    }
-
-    // Hack for claiming coinbase
     pub fn miner_address(&mut self) -> TransparentAddress {
-        let seed: [u8; 32] = [0; 32];
         let account = AccountId::from(0);
-        let pubkey = legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &seed, account).unwrap().derive_external_secret_key(0).unwrap().public_key(&Secp256k1::new()).serialize();
+        let pubkey = legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(0).unwrap().public_key(&Secp256k1::new()).serialize();
         let hash = &Ripemd160::digest(Sha256::digest(pubkey))[..];
         let taddr = TransparentAddress::PublicKey(hash.try_into().unwrap());
-        taddr // "tmCUAhdeyFwVxETt3xTZrrQ3Z87e1Grakc1"
+        taddr
     }
 
     pub fn miner_sk(&mut self) -> SecretKey {
-        let seed: [u8; 32] = [0; 32];
         let account = AccountId::from(0);
-        legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &seed, account).unwrap().derive_external_secret_key(0).unwrap()
+        legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(0).unwrap()
+    }
+
+    pub fn balance(&mut self, address: Address) -> u64 {
+        let all_notes = self.db.find_non_spent_notes(address);
+        let mut total_amount: i64 = 0;
+
+        for note_data in all_notes {
+            total_amount += note_data.amount;
+        };
+        total_amount as u64
     }
 }
 
@@ -193,15 +196,6 @@ impl Wallet {
 pub enum WalletError {
     OutOfOrder(BlockHeight, usize),
     NoteCommitmentTreeFull
-}
-
-#[derive(Debug, Clone)]
-pub enum RewindError {
-    /// The note commitment tree does not contain enough checkpoints to
-    /// rewind to the requested height. The number of blocks that
-    /// it is possible to rewind is returned as the payload of
-    /// this error.
-    InsufficientCheckpoints(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -221,14 +215,14 @@ pub enum BundleLoadError {
 }
 
 impl Wallet {
-    pub fn new() -> Self {
+    pub fn new(seed_phrase: &String) -> Self {
         Wallet {
             db: SqliteDataStorage::new(),
             key_store: KeyStore::empty(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
             last_block_height: None,
             last_block_hash: None,
-            seed: [0; 32]
+            seed: Mnemonic::from_phrase(seed_phrase).unwrap().to_seed("")
         }
     }
 
@@ -241,34 +235,7 @@ impl Wallet {
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
-        // TODO clean keystore
         self.db.delete_all_notes();
-    }
-
-    /// Checkpoints the note commitment tree. This returns `false` and leaves the note
-    /// commitment tree unmodified if the block height does not immediately succeed
-    /// the last checkpointed block height (unless the note commitment tree is empty,
-    /// in which case it unconditionally succeeds). This must be called exactly once
-    /// per block.
-    fn checkpoint(&mut self, block_height: BlockHeight) -> bool {
-        // checkpoints must be in order of sequential block height and every
-        // block must be checkpointed
-        if let Some(last_height) = self.last_block_height {
-            let expected_height = last_height + 1;
-
-            if block_height != expected_height {
-                error!(
-                    "Expected checkpoint height {}, given {}",
-                    expected_height,
-                    block_height
-                );
-                return false;
-            }
-        }
-
-        let block_height: u32 = block_height.into();
-        self.commitment_tree.checkpoint(block_height);
-        true
     }
 
     /// Add note data from all V5 transactions of the block to the wallet.
@@ -278,39 +245,29 @@ impl Wallet {
             self.add_notes_from_tx(tx).unwrap();
         });
 
-        self.checkpoint(block_height);
-
         self.last_block_hash = Some(block_hash);
         self.last_block_height = Some(block_height);
         Ok(())
     }
 
-    /// Add note data to the wallet, and return a a data structure that describes
+    /// Add note data to the wallet, and return a data structure that describes
     /// the actions that are involved with this wallet.
     pub fn add_notes_from_tx(&mut self, tx: Transaction) -> Result<(), BundleLoadError> {
 
-        let mut issued_notes_offset = 0;
-
          // Add note from Orchard bundle
         if let Some(orchard_bundle) = tx.orchard_bundle() {
-            issued_notes_offset = orchard_bundle.actions().len();
             self.add_notes_from_orchard_bundle(&tx.txid(), orchard_bundle);
             self.mark_potential_spends(&tx.txid(), orchard_bundle);
         };
 
-        // Add notes from Issue bundle
-        if let Some(issue_bundle) = tx.issue_bundle() {
-            self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, issued_notes_offset);
-        };
-
-        self.add_note_commitments(&tx.txid(), tx.orchard_bundle(), tx.issue_bundle()).unwrap();
+        self.add_note_commitments(&tx.txid(), tx.orchard_bundle()).unwrap();
 
         Ok(())
     }
 
 
     /// Add note data for those notes that are decryptable with one of this wallet's
-    /// incoming viewing keys to the wallet, and return a a data structure that describes
+    /// incoming viewing keys to the wallet, and return a data structure that describes
     /// the actions that are involved with this wallet, either spending notes belonging
     /// to this wallet or creating new notes owned by this wallet.
     fn add_notes_from_orchard_bundle(
@@ -326,6 +283,7 @@ impl Wallet {
             .collect::<Vec<_>>();
 
         for (action_idx, ivk, note, recipient, memo) in self.decrypt_outputs_with_keys(&bundle, &keys) {
+            info!("Store note");
             self.store_note(txid, action_idx, ivk.clone(), note, recipient, memo).unwrap();
         }
     }
@@ -347,36 +305,13 @@ impl Wallet {
             .iter()
             .enumerate()
             .filter_map(|(idx, action)| {
-                let domain = OrchardDomainV3::for_action(&action);
+                let domain = OrchardDomain::for_action(&action);
                 prepared_keys.iter().find_map(|(ivk, prepared_ivk)| {
                     try_note_decryption(&domain, prepared_ivk, action)
                         .map(|(n, a, m)| (idx, (*ivk).clone(), n, a, m))
                 })
             })
             .collect()
-    }
-
-    /// Add note data to the wallet, and return a a data structure that describes
-    /// the actions that are involved with this wallet.
-    fn add_notes_from_issue_bundle(
-        &mut self,
-        txid: &TxId,
-        bundle: &IssueBundle<Signed>,
-        note_index_offset: usize,
-    ) {
-        for (note_index, note) in bundle.actions().iter().flat_map(|a| a.notes()).enumerate() {
-            if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
-                let note_index = note_index + note_index_offset;
-                self.store_note(
-                    txid,
-                    note_index,
-                    ivk.clone(),
-                    *note,
-                    note.recipient(),
-                    [0; 512],
-                ).unwrap();
-            }
-        }
     }
 
     fn store_note(
@@ -391,7 +326,6 @@ impl Wallet {
         if let Some(fvk) = self.key_store.viewing_keys.get(&ivk) {
             info!("Adding decrypted note to the wallet");
 
-            // TODO do we want to store nullifier separately?
             let nf = note.nullifier(fvk);
 
             let mut note_bytes = vec![];
@@ -400,13 +334,14 @@ impl Wallet {
             let note_data = NoteData {
                 id: 0,
                 amount: note.value().inner() as i64,
-                asset: note.asset().to_bytes().to_vec(),
+                asset: Vec::new(),
                 tx_id: txid.as_ref().to_vec(),
                 action_index: action_index as i32,
                 position: -1,
                 serialized_note: note_bytes,
                 memo: memo_bytes.to_vec(),
                 nullifier: nf.to_bytes().to_vec(),
+                recipient_address: recipient.to_raw_address_bytes().to_vec(),
                 spend_tx_id: None,
                 spend_action_index: -1
             };
@@ -426,7 +361,7 @@ impl Wallet {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             match self.db.find_by_nullifier(action.nullifier()) {
                 Some(note) => {
-                    info!("Adding potential spend of nullifier {:?}", action.nullifier());
+                    info!("Adding spend of nullifier {:?}", action.nullifier());
                     self.db.mark_as_potentially_spent(note.id, txid, action_index as i32);
                 },
                 None => {}
@@ -437,26 +372,16 @@ impl Wallet {
     /// Add note commitments for the Orchard components of a transaction to the note
     /// commitment tree, and mark the tree at the notes decryptable by this wallet so that
     /// in the future we can produce authentication paths to those notes.
-    ///
-    /// * `block_height` - Height of the block containing the transaction that provided
-    ///   this bundle.
-    /// * `block_tx_idx` - Index of the transaction within the block
-    /// * `txid` - Identifier of the transaction.
-    /// * `bundle_opt` - Orchard component of the transaction (may be null for issue-only tx).
-    /// * `issue_bundle_opt` - IssueBundle component of the transaction  (may be null for transfer-only tx).
     pub fn add_note_commitments(
         &mut self,
         txid: &TxId,
         orchard_bundle_opt: Option<&Bundle<Authorized, Amount>>,
-        issue_bundle_opt: Option<&IssueBundle<Signed>>,
     ) -> Result<(), WalletError> {
-        // TODO Check that the wallet is in the correct state to update the note commitment tree with new outputs.
-
         // update the block height recorded for the transaction
         let my_notes_for_tx: Vec<NoteData> = self.db.find_notes_for_tx(txid);
 
         // Process note commitments
-        let mut note_commitments: Vec<ExtractedNoteCommitment> = if let Some(bundle) = orchard_bundle_opt {
+        let note_commitments: Vec<ExtractedNoteCommitment> = if let Some(bundle) = orchard_bundle_opt {
             bundle
                 .actions()
                 .iter()
@@ -465,20 +390,6 @@ impl Wallet {
         } else {
             Vec::new()
         };
-
-        let mut issued_note_commitments: Vec<ExtractedNoteCommitment> =
-            if let Some(issue_bundle) = issue_bundle_opt {
-                issue_bundle
-                    .actions()
-                    .iter()
-                    .flat_map(|a| a.notes())
-                    .map(|note| note.commitment().into())
-                    .collect()
-            } else {
-                Vec::new()
-            };
-
-        note_commitments.append(&mut issued_note_commitments);
 
         for (note_index, commitment) in note_commitments.iter().enumerate() {
             // append the note commitment for each action to the note commitment tree

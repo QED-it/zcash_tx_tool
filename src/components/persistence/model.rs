@@ -13,6 +13,7 @@ pub struct NoteData {
     pub serialized_note: Vec<u8>,
     pub memo: Vec<u8>,
     pub nullifier: Vec<u8>,
+    pub recipient_address: Vec<u8>,
     pub spend_tx_id: Option<Vec<u8>>,
     pub spend_action_index: i32,
 }
@@ -29,6 +30,7 @@ pub struct InsertableNoteData {
     pub serialized_note: Vec<u8>,
     pub memo: Vec<u8>,
     pub nullifier: Vec<u8>,
+    pub recipient_address: Vec<u8>,
     pub spend_tx_id: Option<Vec<u8>>,
     pub spend_action_index: i32,
 }
@@ -44,6 +46,7 @@ impl InsertableNoteData {
             serialized_note: note.serialized_note,
             memo: note.memo,
             nullifier: note.nullifier,
+            recipient_address: note.recipient_address,
             spend_tx_id: note.spend_tx_id,
             spend_action_index: note.spend_action_index,
         }

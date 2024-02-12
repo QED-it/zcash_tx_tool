@@ -12,7 +12,7 @@ use crate::model::Block;
 
 
 pub struct MockZcashNode {
-    blockchain: Vec<Block>, // TODO forks
+    blockchain: Vec<Block>,
     transactions: BTreeMap<TxId, String>
 }
 
@@ -59,7 +59,7 @@ impl RpcClient for MockZcashNode {
         tx.write(&mut tx_bytes).unwrap();
         self.transactions.insert(txid, hex::encode(tx_bytes));
         // We create block per transaction for now
-        let mut block_hash: [u8; 32] = [0; 32]; // TODO use real hash
+        let mut block_hash: [u8; 32] = [0; 32];
         OsRng::default().fill_bytes(block_hash.as_mut_slice());
 
         self.blockchain.push(Block {
@@ -72,7 +72,7 @@ impl RpcClient for MockZcashNode {
         Ok(txid)
     }
 
-    fn get_transaction(&self, txid: &TxId, block_id: &BlockHash) -> Result<Transaction, Box<dyn Error>> {
+    fn get_transaction(&self, txid: &TxId) -> Result<Transaction, Box<dyn Error>> {
         self.transactions.get(txid).ok_or(io::Error::new(ErrorKind::NotFound, "Transaction not found").into()).map(|tx_string| {
             Transaction::read(&hex::decode(tx_string).unwrap()[..], BranchId::Nu5).unwrap()
         })
@@ -82,7 +82,7 @@ impl RpcClient for MockZcashNode {
         todo!()
     }
 
-    fn submit_block(&self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
+    fn submit_block(&self, _block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
         todo!()
     }
 }

@@ -1,92 +1,103 @@
 //! `test` - happy e2e flow that issues, transfers and burns an asset
 
 use abscissa_core::{Command, Runnable};
-use orchard::keys::IssuanceValidatingKey;
+use abscissa_core::config::Reader;
 use orchard::keys::Scope::External;
-use orchard::note::AssetBase;
-use orchard::value::NoteValue;
-use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
-use zcash_primitives::memo::MemoBytes;
-use zcash_primitives::transaction::builder::Builder;
-use zcash_primitives::transaction::components::{Amount, transparent, TxOut};
-use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
 use zcash_primitives::transaction::TxId;
-use zcash_proofs::prover::LocalTxProver;
-use crate::commands::burn::burn;
-use crate::commands::issue::issue;
-use crate::commands::sync::{sync, sync_from_height};
-use crate::commands::transfer::transfer;
-use crate::components::rpc_client::mock::MockZcashNode;
+use crate::components::transactions::{mine, mine_empty_blocks};
+use crate::components::transactions::create_shield_coinbase_tx;
+use crate::components::transactions::sync_from_height;
+use crate::components::transactions::create_transfer_tx;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::rpc_client::{RpcClient, template_into_proposal};
 use crate::prelude::*;
 use crate::components::wallet::Wallet;
+use crate::config::AppConfig;
 
 
-/// `test` subcommand
+/// Run the E2E test
 #[derive(clap::Parser, Command, Debug)]
 pub struct TestCmd {
+}
+
+#[derive(Debug, Copy, Clone)]
+struct TestBalances {
+    miner: i64,
+    alice: i64,
+}
+
+impl TestBalances {
+    fn new(miner: i64, alice: i64) -> Self {
+        TestBalances {
+            miner,
+            alice,
+        }
+    }
+
+    fn get(wallet: &mut Wallet) -> TestBalances {
+
+        let miner = wallet.address_for_account(0, External);
+        let alice = wallet.address_for_account(1, External);
+
+        TestBalances {
+            miner: wallet.balance(miner) as i64,
+            alice: wallet.balance(alice) as i64,
+        }
+    }
+
 }
 
 impl Runnable for TestCmd {
     /// Run the `test` subcommand.
     fn run(&self) {
         let config = APP.config();
+        let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
+        let mut wallet = Wallet::new(&config.wallet.seed_phrase);
 
-        let mut rpc_client = ReqwestRpcClient::new();
-        let mut wallet = Wallet::new();
+        let miner = wallet.address_for_account(0, External);
+        let alice = wallet.address_for_account(1, External);
 
-        let block_template = rpc_client.get_block_template().unwrap();
+        let coinbase_txid = prepare_test(&config, &mut wallet, &mut rpc_client);
 
-        let block_proposal = template_into_proposal(block_template);
-        let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
+        let mut balances = TestBalances::get(&mut wallet);
+        print_balances("=== Initial balances ===", balances);
 
-        rpc_client.submit_block(block_proposal).unwrap();
+        // --------------------- Shield miner's reward ---------------------
 
-        shield_coinbase(coinbase_txid, &mut wallet, &mut rpc_client);
+        let shielding_tx = create_shield_coinbase_tx(miner, coinbase_txid, &mut wallet);
+        mine(&mut wallet, &mut rpc_client, Vec::from([ shielding_tx ]));
 
-        // let amount = 42;
-        //
-        // let orchard_recipient = wallet.address_for_account(0, External);
-        //
-        // let asset_descr = "ZSA".to_string();
-        //
-        // let ivk = IssuanceValidatingKey::from(&wallet.issuance_key());
-        // let asset: AssetBase = AssetBase::derive(&ivk, asset_descr.as_ref());
-        //
-        // issue(orchard_recipient, amount, asset_descr, &mut wallet, &mut rpc_client);
-        //
-        // sync_from_height(1060756, &mut wallet, &mut rpc_client);
-        //
-        // transfer(orchard_recipient, amount, asset, &mut wallet, &mut rpc_client);
-        //
-        // sync(&mut wallet, &mut rpc_client);
-        //
-        // burn(amount, asset, &mut wallet, &mut rpc_client);
-        //
-        // sync(&mut wallet, &mut rpc_client);
+        let expected_delta = TestBalances::new(500_000_000 /*coinbase_reward*/, 0);
+        balances = check_balances("=== Balances after shielding ===", balances, expected_delta, &mut wallet);
+
+        // --------------------- Create transfer ---------------------
+
+        let amount_to_transfer_1: i64 = 2;
+
+        let transfer_tx_1 = create_transfer_tx(miner, alice, amount_to_transfer_1 as u64, &mut wallet);
+        mine(&mut wallet, &mut rpc_client, Vec::from([ transfer_tx_1 ]));
+
+        let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);
+        check_balances("=== Balances after transfer ===", balances, expected_delta, &mut wallet);
     }
 }
 
-pub fn shield_coinbase(txid: TxId, wallet: &mut Wallet, rpc: &mut dyn RpcClient) {
+fn prepare_test(config: &Reader<AppConfig>, wallet: &mut Wallet, rpc_client: &mut ReqwestRpcClient) -> TxId {
+    wallet.reset();
+    sync_from_height(config.chain.nu5_activation_height, wallet, rpc_client);
+    let (_, coinbase_txid) = mine_empty_blocks(100, rpc_client); // coinbase maturity = 100
+    coinbase_txid
+}
 
-    info!("Shielding coinbase output from tx {}", txid);
+fn check_balances(header: &str, initial: TestBalances, expected_delta: TestBalances, wallet: &mut Wallet) -> TestBalances{
+    let actual_balances = TestBalances::get(wallet);
+    print_balances(header, actual_balances);
+    assert_eq!(actual_balances.miner, initial.miner + expected_delta.miner);
+    assert_eq!(actual_balances.alice, initial.alice + expected_delta.alice);
+    actual_balances
+}
 
-    let mut tx = Builder::new(TEST_NETWORK, /*wallet.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_421), wallet.orchard_anchor());
-
-    let coinbase_value = 50;
-    let coinbase_amount = Amount::from_u64(coinbase_value).unwrap();
-    let miner_taddr = wallet.miner_address();
-
-    let sk = wallet.miner_sk();
-
-    tx.add_transparent_input(sk, transparent::OutPoint::new(txid.0, 0), TxOut { value: coinbase_amount, script_pubkey: miner_taddr.script() }).unwrap();
-    tx.add_orchard_output::<FeeError>(Some(wallet.orchard_ovk()), wallet.address_for_account(0, External), coinbase_value, AssetBase::native(), MemoBytes::empty()).unwrap();
-
-    let fee_rule = &FeeRule::non_standard(Amount::from_u64(0).unwrap(), 20, 150, 34).unwrap();
-    let prover = LocalTxProver::with_default_location().unwrap();
-    let (tx, _) = tx.build(&prover, fee_rule).unwrap();
-
-    let tx_hash = rpc.send_transaction(tx).unwrap();
-    info!("TxId: {}", tx_hash);
+fn print_balances(header: &str, balances: TestBalances) {
+    info!("{}", header);
+    info!("Miner's balance: {}", balances.miner);
+    info!("Alice's balance: {}", balances.alice);
 }

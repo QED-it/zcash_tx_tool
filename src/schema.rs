@@ -11,6 +11,7 @@ diesel::table! {
         serialized_note -> Binary,
         memo -> Binary,
         nullifier -> Binary,
+        recipient_address -> Binary,
         spend_tx_id -> Nullable<Binary>,
         spend_action_index -> Integer,
     }

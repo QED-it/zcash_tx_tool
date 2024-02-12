@@ -1,4 +1,4 @@
-//! ZsaWallet Subcommands
+//! Application Subcommands
 //!
 //! This is where you specify the subcommands of your application.
 //!
@@ -10,34 +10,20 @@
 //! See the `impl Configurable` below for how to specify the path to the
 //! application's configuration file.
 
-mod sync;
-mod issue;
-mod transfer;
-mod burn;
-mod balance;
 mod test;
-mod mine;
 
-use self::sync::SyncCmd;
-use self::transfer::TransferCmd;
-use crate::config::ZsaWalletConfig;
-use abscissa_core::{config::Override, Command, Configurable, FrameworkError, Runnable};
+use crate::config::AppConfig;
+use abscissa_core::{Command, Configurable, FrameworkError, Runnable};
 use std::path::PathBuf;
-use crate::commands::balance::GetWalletInfoCmd;
-use crate::commands::burn::BurnCmd;
-use crate::commands::issue::IssueCmd;
 use crate::commands::test::TestCmd;
-use crate::commands::mine::MineCmd;
 
-/// ZsaWallet Configuration Filename
-pub const CONFIG_FILE: &str = "zsa_wallet.toml";
+/// Application Configuration Filename
+pub const CONFIG_FILE: &str = "config.toml";
 
-/// ZsaWallet Subcommands
-/// Subcommands need to be listed in an enum.
+/// Application subcommands need to be listed in an enum.
 #[derive(clap::Parser, Command, Debug, Runnable)]
-pub enum ZsaWalletCmd {
-    /// Initialize the application, generate keys from seed phrase and sync with the blockchain
-    Sync(SyncCmd), Transfer(TransferCmd), Issue(IssueCmd), Burn(BurnCmd), Balance(GetWalletInfoCmd), Test(TestCmd), Mine(MineCmd),
+pub enum AppCmd {
+    Test(TestCmd)
 }
 
 /// Entry point for the application. It needs to be a struct to allow using subcommands!
@@ -45,7 +31,7 @@ pub enum ZsaWalletCmd {
 #[command(author, about, version)]
 pub struct EntryPoint {
     #[command(subcommand)]
-    cmd: ZsaWalletCmd,
+    cmd: AppCmd,
 
     /// Enable verbose logging
     #[arg(short, long)]
@@ -63,7 +49,7 @@ impl Runnable for EntryPoint {
 }
 
 /// This trait allows you to define how application configuration is loaded.
-impl Configurable<ZsaWalletConfig> for EntryPoint {
+impl Configurable<AppConfig> for EntryPoint {
     /// Location of the configuration file
     fn config_path(&self) -> Option<PathBuf> {
         // Check if the config file exists, and if it does not, ignore it.
@@ -89,10 +75,10 @@ impl Configurable<ZsaWalletConfig> for EntryPoint {
     /// settings from command-line options.
     fn process_config(
         &self,
-        config: ZsaWalletConfig,
-    ) -> Result<ZsaWalletConfig, FrameworkError> {
+        config: AppConfig,
+    ) -> Result<AppConfig, FrameworkError> {
         match &self.cmd {
-            ZsaWalletCmd::Sync(cmd) => cmd.override_config(config),
+            // AppCmd::UnconventionalCommand(cmd) => cmd.override_config(config),
             // If you don't need special overrides for some
             // subcommands, you can just use a catch all
             _ => Ok(config),

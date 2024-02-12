@@ -1,11 +1,11 @@
-//! Main entry point for ZsaWallet
+//! Main entry point for the application
 
 #![deny(warnings, missing_docs, trivial_casts, unused_qualifications)]
 #![forbid(unsafe_code)]
 
-use zsa_wallet::application::APP;
+use zcash_tx_tool::application::APP;
 
-/// Boot ZsaWallet
+/// Boot the application
 fn main() {
     abscissa_core::boot(&APP);
 }

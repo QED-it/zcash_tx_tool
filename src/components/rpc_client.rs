@@ -1,28 +1,26 @@
 pub mod reqwest;
 pub mod mock;
 
-use std::convert::TryInto;
+use std::convert::{TryInto};
 use std::error::Error;
 use std::io::Write;
-use std::{io, vec};
+use std::{io};
 use zcash_encoding::{CompactSize, Vector};
-use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
+use zcash_primitives::block::{BlockHash, BlockHeader};
 use zcash_primitives::transaction::{Transaction, TxId};
+
 use crate::model::Block;
-
-
-pub const NODE_URL: &str = "http://127.0.0.1:18232/"; // TODO get from config
 
 pub trait RpcClient {
     fn get_best_block_hash(&self) -> Result<BlockHash, Box<dyn Error>>;
     fn get_block(&self, height: u32) -> Result<Block, Box<dyn Error>>;
     fn send_transaction(&mut self, tx: Transaction) -> Result<TxId, Box<dyn Error>>;
-    fn get_transaction(&self, txid: &TxId, block_id: &BlockHash) -> Result<Transaction, Box<dyn Error>>;
+    fn get_transaction(&self, txid: &TxId) -> Result<Transaction, Box<dyn Error>>;
     fn get_block_template(&self) -> Result<BlockTemplate, Box<dyn Error>>;
     fn submit_block(&self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>>;
 }
 
-/// =========================== Messages ===========================
+/// =========================== Messages (copied fom Zebra RPC) ===========================
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct GetBlock {
@@ -38,8 +36,6 @@ pub struct GetBlock {
         height: Option<u32>,
 
         /// List of transaction IDs in block order, hex-encoded.
-        //
-        // TODO: use a typed Vec<transaction::Hash> here
         tx: Vec<String>
 }
 
@@ -137,7 +133,6 @@ pub struct BlockTemplate {
     pub bits: String,
 
     /// The height of the next block in the best chain.
-    // Optional TODO: use Height type, but check that deserialized heights are within Height::MAX
     pub height: u32,
 
     /// > the maximum time allowed
@@ -259,33 +254,8 @@ impl BlockProposal {
     }
 }
 
-pub fn template_into_proposal(block_template: BlockTemplate) -> BlockProposal {
-
-    let coinbase = Transaction::read(hex::decode(block_template.coinbase_txn.data).unwrap().as_slice(), zcash_primitives::consensus::BranchId::Nu5).unwrap();
-
-    let mut prev_block_hash_vec = hex::decode(block_template.previous_block_hash).unwrap();
-    prev_block_hash_vec.reverse();
-    let prev_block_hash_bytes: [u8; 32] = prev_block_hash_vec.try_into().unwrap();
-
-    let mut history_root_vec = hex::decode(block_template.default_roots.chain_history_root).unwrap();
-    history_root_vec.reverse();
-    let history_root_bytes: [u8; 32] = history_root_vec.try_into().unwrap();
-
-    let block_header_data = BlockHeaderData {
-        version: block_template.version as i32,
-        prev_block: BlockHash(prev_block_hash_bytes),
-        merkle_root: coinbase.txid().0,
-        final_sapling_root: history_root_bytes,
-        time: block_template.cur_time,
-        bits: u32::from_str_radix(block_template.bits.as_str(), 16).unwrap(),
-        nonce: [2; 32],
-        solution: Vec::from([0; 1344]),
-    };
-
-    let header = BlockHeader::from_data(block_header_data).unwrap();
-
-    BlockProposal {
-        header,
-        transactions: vec![coinbase],
-    }
+pub(crate) fn decode_hex(hex: String) -> [u8; 32] {
+    let mut result_vec = hex::decode(hex).unwrap();
+    result_vec.reverse();
+    result_vec.try_into().unwrap()
 }

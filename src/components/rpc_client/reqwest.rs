@@ -1,6 +1,6 @@
 use std::convert::TryInto;
 use reqwest::blocking::Client;
-use crate::components::rpc_client::{RpcClient, NODE_URL, GetBlock, BlockTemplate, BlockProposal};
+use crate::components::rpc_client::{RpcClient, GetBlock, BlockTemplate, BlockProposal};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use serde::de::DeserializeOwned;
@@ -11,13 +11,15 @@ use crate::model::Block;
 use crate::prelude::info;
 
 pub struct ReqwestRpcClient {
-    client: Client
+    client: Client,
+    node_url: String,
 }
 
 impl ReqwestRpcClient {
-    pub fn new() -> Self {
+    pub fn new(node_url: String) -> Self {
         Self {
-            client: Client::new()
+            client: Client::new(),
+            node_url,
         }
     }
 
@@ -25,7 +27,7 @@ impl ReqwestRpcClient {
         where T: DeserializeOwned
     {
         let binding = self.client.post(
-            NODE_URL
+            &self.node_url
         )
             .body(serde_json::to_string(request)?)
             .send()?
@@ -60,7 +62,7 @@ impl RpcClient for ReqwestRpcClient {
             height: BlockHeight::from_u32(block.height.unwrap()),
             confirmations: block.confirmations,
             tx_ids: block.tx.iter().map(|tx_id_str| TxId::from_bytes(hex::decode(tx_id_str).unwrap().as_slice().try_into().unwrap())).collect(),
-            previous_block_hash: BlockHash([0; 32]), // TODO add previous block hash to Getblock RPC
+            previous_block_hash: BlockHash([0; 32]), // Previous block hash is not yet implemented in Zebra
         })
     }
 
@@ -75,7 +77,7 @@ impl RpcClient for ReqwestRpcClient {
         Ok(TxId::from_bytes(tx_hash_bytes))
     }
 
-    fn get_transaction(&self, txid: &TxId, block_id: &BlockHash) -> Result<Transaction, Box<dyn Error>> {
+    fn get_transaction(&self, txid: &TxId) -> Result<Transaction, Box<dyn Error>> {
         let mut params: Vec<ParamType> = Vec::new();
         params.push(ParamType::String(hex::encode(txid.as_ref())));
         params.push(ParamType::Number(0)); // Verbosity
@@ -95,7 +97,17 @@ impl RpcClient for ReqwestRpcClient {
 
         let mut params: Vec<ParamType> = Vec::new();
         params.push(ParamType::String(hex::encode(block_bytes)));
-        Ok(self.request(&RpcRequest::new_with_params("submitblock", params))?)
+        let result = self.request(&RpcRequest::new_with_params("submitblock", params))?;
+
+        match result {
+            None => Ok(None),
+
+            Some(result) => if result == "rejected" {
+                Err("Block rejected".into())
+            } else {
+                Ok(Some(result))
+            }
+        }
     }
 }
 
@@ -119,7 +131,7 @@ impl RpcRequest {
     fn new(method: &'static str) -> RpcRequest {
         Self {
             jsonrpc: "1.0",
-            id: "zsa-wallet",
+            id: "zcash-tx-tool",
             method: method,
             params: Vec::new()
         }
@@ -128,7 +140,7 @@ impl RpcRequest {
     fn new_with_params(method: &'static str, params: Vec<ParamType>) -> RpcRequest {
         Self {
             jsonrpc: "1.0",
-            id: "zsa-wallet",
+            id: "zcash-tx-tool",
             method: method,
             params: params
         }
@@ -137,6 +149,5 @@ impl RpcRequest {
 
 #[derive(Deserialize)]
 struct RpcResponse<T> {
-    id: Box<str>,
     result: T
 }

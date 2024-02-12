@@ -1,6 +1,6 @@
-//! ZsaWallet Abscissa Application
+//! ZcashTxTool Abscissa Application
 
-use crate::{commands::EntryPoint, config::ZsaWalletConfig};
+use crate::{commands::EntryPoint, config::AppConfig};
 use abscissa_core::{
     application::{self, AppCell},
     config::{self, CfgCell},
@@ -8,13 +8,13 @@ use abscissa_core::{
 };
 
 /// Application state
-pub static APP: AppCell<ZsaWalletApp> = AppCell::new();
+pub static APP: AppCell<ZcashTxToolApp> = AppCell::new();
 
-/// ZsaWallet Application
+/// ZcashTxTool Application
 #[derive(Debug)]
-pub struct ZsaWalletApp {
+pub struct ZcashTxToolApp {
     /// Application configuration.
-    config: CfgCell<ZsaWalletConfig>,
+    config: CfgCell<AppConfig>,
 
     /// Application state.
     state: application::State<Self>,
@@ -24,7 +24,7 @@ pub struct ZsaWalletApp {
 ///
 /// By default no configuration is loaded, and the framework state is
 /// initialized to a default, empty state (no components, threads, etc).
-impl Default for ZsaWalletApp {
+impl Default for ZcashTxToolApp {
     fn default() -> Self {
         Self {
             config: CfgCell::default(),
@@ -33,18 +33,18 @@ impl Default for ZsaWalletApp {
     }
 }
 
-impl Application for ZsaWalletApp {
+impl Application for ZcashTxToolApp {
     /// Entrypoint command for this application.
     type Cmd = EntryPoint;
 
     /// Application configuration.
-    type Cfg = ZsaWalletConfig;
+    type Cfg = AppConfig;
 
     /// Paths to resources within the application.
     type Paths = StandardPaths;
 
     /// Accessor for application configuration.
-    fn config(&self) -> config::Reader<ZsaWalletConfig> {
+    fn config(&self) -> config::Reader<AppConfig> {
         self.config.read()
     }
 
