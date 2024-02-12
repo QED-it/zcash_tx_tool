@@ -19,7 +19,6 @@
 )]
 
 use abscissa_core::testing::prelude::*;
-use zcash_tx_tool::config::AppConfig;
 use once_cell::sync::Lazy;
 
 /// Executes your application binary via `cargo run`.
@@ -29,58 +28,6 @@ use once_cell::sync::Lazy;
 /// exit statuses, serializing what would otherwise be multithreaded
 /// invocations as `cargo test` executes tests in parallel by default.
 pub static RUNNER: Lazy<CmdRunner> = Lazy::new(|| CmdRunner::default());
-
-/// Use `AppConfig::default()` value if no config or args
-#[test]
-fn start_no_args() {
-    let mut runner = RUNNER.clone();
-    let mut cmd = runner.arg("start").capture_stdout().run();
-    cmd.stdout().expect_line("Hello, world!");
-    cmd.wait().unwrap().expect_success();
-}
-
-/// Use command-line argument value
-#[test]
-fn start_with_args() {
-    let mut runner = RUNNER.clone();
-    let mut cmd = runner
-        .args(&["start", "acceptance", "test"])
-        .capture_stdout()
-        .run();
-
-    cmd.stdout().expect_line("Hello, acceptance test!");
-    cmd.wait().unwrap().expect_success();
-}
-
-/// Use configured value
-#[test]
-fn start_with_config_no_args() {
-    let mut config = AppConfig::default();
-    config.wallet.seed_phrase = "configured recipient".to_owned();
-    let expected_line = format!("Hello, {}!", &config.wallet.seed_phrase);
-
-    let mut runner = RUNNER.clone();
-    let mut cmd = runner.config(&config).arg("start").capture_stdout().run();
-    cmd.stdout().expect_line(&expected_line);
-    cmd.wait().unwrap().expect_success();
-}
-
-/// Override configured value with command-line argument
-#[test]
-fn start_with_config_and_args() {
-    let mut config = AppConfig::default();
-    config.wallet.seed_phrase = "configured recipient".to_owned();
-
-    let mut runner = RUNNER.clone();
-    let mut cmd = runner
-        .config(&config)
-        .args(&["start", "acceptance", "test"])
-        .capture_stdout()
-        .run();
-
-    cmd.stdout().expect_line("Hello, acceptance test!");
-    cmd.wait().unwrap().expect_success();
-}
 
 /// Example of a test which matches a regular expression
 #[test]
