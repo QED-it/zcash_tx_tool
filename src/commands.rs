@@ -11,6 +11,8 @@
 //! application's configuration file.
 
 mod test;
+mod burn;
+mod issue;
 
 use crate::config::AppConfig;
 use abscissa_core::{Command, Configurable, FrameworkError, Runnable};

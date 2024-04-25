@@ -11,9 +11,11 @@ use abscissa_core::prelude::info;
 use zcash_primitives::{constants, legacy, sapling::NOTE_COMMITMENT_TREE_DEPTH, transaction::{components::Amount}};
 
 use orchard::{bundle::Authorized, Address, Bundle, Note, Anchor};
-use orchard::keys::{OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey};
+use orchard::issuance::{IssueBundle, Signed};
+use orchard::keys::{OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey, IssuanceAuthorizingKey};
 use orchard::note::ExtractedNoteCommitment;
-use orchard::note_encryption::OrchardDomain;
+use orchard::note_encryption::{OrchardDomain, OrchardDomainBase};
+use orchard::orchard_flavor::{OrchardVanilla, OrchardZSA};
 use orchard::tree::{MerklePath, MerkleHashOrchard};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
@@ -24,7 +26,7 @@ use zcash_note_encryption::{try_note_decryption};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
 use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::transaction::components::note::{read_note, write_note};
+use zcash_primitives::transaction::components::issuance::{read_note, write_note};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_primitives::zip32::AccountId;
 use zcash_primitives::zip339::Mnemonic;
@@ -168,6 +170,11 @@ impl Wallet {
         Some(Anchor::from(self.commitment_tree.root(0).unwrap()))
     }
 
+    pub(crate) fn issuance_key(&self) -> IssuanceAuthorizingKey {
+        IssuanceAuthorizingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, 0).unwrap()
+    }
+
+    // Hack for claiming coinbase
     pub fn miner_address(&mut self) -> TransparentAddress {
         let account = AccountId::from(0);
         let pubkey = legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(0).unwrap().public_key(&Secp256k1::new()).serialize();
@@ -254,13 +261,28 @@ impl Wallet {
     /// the actions that are involved with this wallet.
     pub fn add_notes_from_tx(&mut self, tx: Transaction) -> Result<(), BundleLoadError> {
 
-         // Add note from Orchard bundle
+        let mut issued_notes_offset = 0;
+
+         // Add notes from Orchard bundle
         if let Some(orchard_bundle) = tx.orchard_bundle() {
+            issued_notes_offset = orchard_bundle.actions().len();
             self.add_notes_from_orchard_bundle(&tx.txid(), orchard_bundle);
             self.mark_potential_spends(&tx.txid(), orchard_bundle);
         };
 
-        self.add_note_commitments(&tx.txid(), tx.orchard_bundle()).unwrap();
+        // Add notes from Orchard ZSA bundle
+        if let Some(orchard_zsa_bundle) = tx.orchard_zsa_bundle() {
+            issued_notes_offset = orchard_bundle.actions().len(); // TODO handle offset
+            self.add_notes_from_orchard_bundle(&tx.txid(), orchard_zsa_bundle, offset);
+            self.mark_potential_spends(&tx.txid(), orchard_zsa_bundle);
+        };
+
+        // Add notes from Issue bundle
+        if let Some(issue_bundle) = tx.issue_bundle() {
+            self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, issued_notes_offset);
+        };
+
+        self.add_note_commitments(&tx.txid(), tx.orchard_bundle(), tx.orchard_zsa_bundle(), tx.issue_bundle()).unwrap();
 
         Ok(())
     }
@@ -273,7 +295,7 @@ impl Wallet {
     fn add_notes_from_orchard_bundle(
         &mut self,
         txid: &TxId,
-        bundle: &Bundle<Authorized, Amount>,
+        bundle: &Bundle<Authorized, Amount, OrchardVanilla>,
     ) {
         let keys = self
             .key_store
@@ -294,7 +316,7 @@ impl Wallet {
     /// was derived.
     fn decrypt_outputs_with_keys(
         &self,
-        bundle: &Bundle<Authorized, Amount>,
+        bundle: &Bundle<Authorized, Amount, OrchardVanilla>,
         keys: &[IncomingViewingKey],
     ) -> Vec<(usize, IncomingViewingKey, Note, Address, [u8; 512])> {
         let prepared_keys: Vec<_> = keys
@@ -305,13 +327,36 @@ impl Wallet {
             .iter()
             .enumerate()
             .filter_map(|(idx, action)| {
-                let domain = OrchardDomain::for_action(&action);
+                let domain = OrchardDomainBase::for_action(&action);
                 prepared_keys.iter().find_map(|(ivk, prepared_ivk)| {
                     try_note_decryption(&domain, prepared_ivk, action)
                         .map(|(n, a, m)| (idx, (*ivk).clone(), n, a, m))
                 })
             })
             .collect()
+    }
+
+    /// Add note data to the wallet, and return a a data structure that describes
+    /// the actions that are involved with this wallet.
+    fn add_notes_from_issue_bundle(
+        &mut self,
+        txid: &TxId,
+        bundle: &IssueBundle<Signed>,
+        note_index_offset: usize,
+    ) {
+        for (note_index, note) in bundle.actions().iter().flat_map(|a| a.notes()).enumerate() {
+            if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
+                let note_index = note_index + note_index_offset;
+                self.store_note(
+                    txid,
+                    note_index,
+                    ivk.clone(),
+                    *note,
+                    note.recipient(),
+                    [0; 512],
+                ).unwrap();
+            }
+        }
     }
 
     fn store_note(
@@ -334,7 +379,7 @@ impl Wallet {
             let note_data = NoteData {
                 id: 0,
                 amount: note.value().inner() as i64,
-                asset: Vec::new(),
+                asset: note.asset().to_bytes().to_vec(),
                 tx_id: txid.as_ref().to_vec(),
                 action_index: action_index as i32,
                 position: -1,
@@ -357,7 +402,7 @@ impl Wallet {
         }
     }
 
-    fn mark_potential_spends(&mut self, txid: &TxId, orchard_bundle: &Bundle<Authorized, Amount>) {
+    fn mark_potential_spends(&mut self, txid: &TxId, orchard_bundle: &Bundle<Authorized, Amount, OrchardVanilla>) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             match self.db.find_by_nullifier(action.nullifier()) {
                 Some(note) => {
@@ -375,13 +420,15 @@ impl Wallet {
     pub fn add_note_commitments(
         &mut self,
         txid: &TxId,
-        orchard_bundle_opt: Option<&Bundle<Authorized, Amount>>,
+        orchard_bundle_opt: Option<&Bundle<Authorized, Amount, OrchardVanilla>>,
+        orchard_zsa_bundle_opt: Option<&Bundle<Authorized, Amount, OrchardZSA>>,
+        issue_bundle_opt: Option<&IssueBundle<Signed>>,
     ) -> Result<(), WalletError> {
         // update the block height recorded for the transaction
         let my_notes_for_tx: Vec<NoteData> = self.db.find_notes_for_tx(txid);
 
         // Process note commitments
-        let note_commitments: Vec<ExtractedNoteCommitment> = if let Some(bundle) = orchard_bundle_opt {
+        let mut note_commitments: Vec<ExtractedNoteCommitment> = if let Some(bundle) = orchard_bundle_opt {
             bundle
                 .actions()
                 .iter()
@@ -390,6 +437,22 @@ impl Wallet {
         } else {
             Vec::new()
         };
+
+        TODO add ZSA commitments
+
+        let mut issued_note_commitments: Vec<ExtractedNoteCommitment> =
+            if let Some(issue_bundle) = issue_bundle_opt {
+                issue_bundle
+                    .actions()
+                    .iter()
+                    .flat_map(|a| a.notes())
+                    .map(|note| note.commitment().into())
+                    .collect()
+            } else {
+                Vec::new()
+            };
+
+        note_commitments.append(&mut issued_note_commitments);
 
         for (note_index, commitment) in note_commitments.iter().enumerate() {
             // append the note commitment for each action to the note commitment tree
