@@ -3,7 +3,7 @@ use diesel::associations::HasTable;
 use diesel::prelude::*;
 use dotenvy::dotenv;
 use orchard::Address;
-use orchard::note::Nullifier;
+use orchard::note::{AssetBase, Nullifier};
 use zcash_primitives::transaction::TxId;
 use crate::components::persistence::model::{InsertableNoteData, NoteData};
 use crate::schema::notes::*;
@@ -29,13 +29,18 @@ impl SqliteDataStorage {
             .expect("Error loading notes")
     }
 
-    pub fn find_non_spent_notes(&mut self, recipient: Address) -> Vec<NoteData> {
+    pub fn find_non_spent_notes(&mut self, recipient: Address, asset_base: Option<AssetBase>) -> Vec<NoteData> {
+
+        let mut criteria = spend_tx_id.is_null().and(
+            recipient_address.eq(recipient.to_raw_address_bytes().to_vec())
+        );
+
+        if asset.is_some() {
+            criteria = criteria.and(asset.eq(asset_base.unwrap().to_bytes().to_vec()));
+        }
+
         notes
-            .filter(
-                spend_tx_id.is_null().and(
-                    recipient_address.eq(recipient.to_raw_address_bytes().to_vec())
-                )
-            )
+            .filter(criteria)
             .select(NoteData::as_select())
             .load(&mut self.connection)
             .expect("Error loading notes")

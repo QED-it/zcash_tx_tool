@@ -13,7 +13,7 @@ use zcash_primitives::{constants, legacy, sapling::NOTE_COMMITMENT_TREE_DEPTH, t
 use orchard::{bundle::Authorized, Address, Bundle, Note, Anchor};
 use orchard::issuance::{IssueBundle, Signed};
 use orchard::keys::{OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey, IssuanceAuthorizingKey};
-use orchard::note::ExtractedNoteCommitment;
+use orchard::note::{AssetBase, ExtractedNoteCommitment};
 use orchard::note_encryption::{OrchardDomain, OrchardDomainBase};
 use orchard::orchard_flavor::{OrchardVanilla, OrchardZSA};
 use orchard::tree::{MerklePath, MerkleHashOrchard};
@@ -120,9 +120,9 @@ impl Wallet {
         self.last_block_height
     }
 
-    pub(crate) fn select_spendable_notes(&mut self, address: Address, total_amount: u64) -> Vec<NoteSpendMetadata> {
+    pub(crate) fn select_spendable_notes(&mut self, address: Address, total_amount: u64, asset: Option<AssetBase>) -> Vec<NoteSpendMetadata> {
 
-        let all_notes = self.db.find_non_spent_notes(address);
+        let all_notes = self.db.find_non_spent_notes(address, asset);
         let mut selected_notes = Vec::new();
         let mut total_amount_selected = 0;
 
