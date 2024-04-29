@@ -54,7 +54,7 @@ pub fn create_shield_coinbase_tx(recipient: Address, coinbase_txid: TxId, wallet
 
     info!("Shielding coinbase output from tx {}", coinbase_txid);
 
-    let mut tx = Builder::new(TEST_NETWORK, /*wallet.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_421), wallet.orchard_anchor());
+    let mut tx = create_tx(wallet);
 
     let coinbase_value = 500000000;
     let coinbase_amount = Amount::from_u64(coinbase_value).unwrap();
@@ -65,12 +65,7 @@ pub fn create_shield_coinbase_tx(recipient: Address, coinbase_txid: TxId, wallet
     tx.add_transparent_input(sk, transparent::OutPoint::new(coinbase_txid.0, 0), TxOut { value: coinbase_amount, script_pubkey: miner_taddr.script() }).unwrap();
     tx.add_orchard_output::<FeeError>(Some(wallet.orchard_ovk()), recipient, coinbase_value, MemoBytes::empty()).unwrap();
 
-    let fee_rule = &FeeRule::non_standard(Amount::from_u64(0).unwrap(), 20, 150, 34).unwrap();
-    let prover = LocalTxProver::with_default_location().unwrap();  // TODO warn on missing params
-    let (tx, _) = tx.build(&prover, fee_rule).unwrap();
-
-    info!("TxId: {}", tx.txid());
-    tx
+    build_tx(tx)
 }
 
 /// Sync the wallet with the node
@@ -262,8 +257,16 @@ fn create_tx(wallet: &Wallet) -> Builder<TestNetwork, OsRng> {
 
 fn build_tx(tx: Builder<TestNetwork, OsRng>) -> Transaction {
     let fee_rule = &FeeRule::non_standard(Amount::from_u64(0).unwrap(), 20, 150, 34).unwrap();
-    let prover = LocalTxProver::with_default_location().unwrap();
-    let (tx, _) = tx.build(&prover, fee_rule).unwrap();
-    info!("Build tx: {}", tx.txid());
-    tx
+    let prover = LocalTxProver::with_default_location();
+    match prover {
+        None => {
+            panic!("Zcash parameters not found. Please run `zcutil/fetch-params.sh`")
+        }
+        Some(prover) => {
+            let (tx, _) = tx.build(&prover, fee_rule).unwrap();
+            info!("Build tx: {}", tx.txid());
+            tx
+        }
+    }
+
 }
