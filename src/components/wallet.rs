@@ -252,8 +252,8 @@ impl Wallet {
     /// Add note data from all V5 transactions of the block to the wallet.
     /// Versions other than V5 are ignored.
     pub fn add_notes_from_block(&mut self, block_height: BlockHeight, block_hash: BlockHash, transactions: Vec<Transaction>) -> Result<(), BundleLoadError> {
-        transactions.into_iter().for_each( |tx| if tx.version().has_orchard() {
-            self.add_notes_from_tx(tx).unwrap();
+        transactions.into_iter().for_each( |tx| if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
+            self.add_notes_from_tx(tx)?;
         });
 
         self.last_block_hash = Some(block_hash);
@@ -438,7 +438,7 @@ impl Wallet {
                 .iter()
                 .map(|action| *action.cmx())
                 .collect()
-        } else if let Some(zsa_bundle) = orchard_bundle_opt {
+        } else if let Some(zsa_bundle) = orchard_zsa_bundle_opt {
             zsa_bundle
                 .actions()
                 .iter()

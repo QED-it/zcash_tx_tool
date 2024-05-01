@@ -194,7 +194,7 @@ pub fn create_burn_transaction(arsonist: Address, amount: u64, asset: AssetBase,
 }
 
 /// Create a transaction that issues a new asset
-pub fn create_issue_transaction(recipient: Address, amount: u64, asset_desc: String, wallet: &mut Wallet, rpc: &mut dyn RpcClient)  -> Transaction {
+pub fn create_issue_transaction(recipient: Address, amount: u64, asset_desc: String, wallet: &mut Wallet)  -> Transaction {
     info!("Issue {} asset", amount);
     let mut tx = create_tx(wallet);
     tx.init_issue_bundle::<FeeError>(wallet.issuance_key(), asset_desc, recipient, NoteValue::from_raw(amount)).unwrap();
@@ -218,7 +218,7 @@ pub fn template_into_proposal(block_template: BlockTemplate, mut txs: Vec<Transa
     };
 
     let auth_data_root = txs_with_coinbase.iter().map(|tx| {
-        if tx.version().has_orchard() {
+        if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
             let bytes: [u8;32] = <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
             bytes
         } else {
