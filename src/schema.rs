@@ -8,7 +8,6 @@ diesel::table! {
         tx_id -> Binary,
         action_index -> Integer,
         position -> BigInt,
-        serialized_note -> Binary,
         memo -> Binary,
         nullifier -> Binary,
         recipient_address -> Binary,

@@ -13,10 +13,11 @@ use zcash_primitives::{constants, legacy, sapling::NOTE_COMMITMENT_TREE_DEPTH, t
 use orchard::{bundle::Authorized, Address, Bundle, Note, Anchor};
 use orchard::issuance::{IssueBundle, Signed};
 use orchard::keys::{OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey, IssuanceAuthorizingKey};
-use orchard::note::{AssetBase, ExtractedNoteCommitment};
+use orchard::note::{AssetBase, ExtractedNoteCommitment, Nullifier, RandomSeed};
 use orchard::note_encryption::{OrchardDomain, OrchardDomainBase};
 use orchard::orchard_flavor::{OrchardVanilla, OrchardZSA};
 use orchard::tree::{MerklePath, MerkleHashOrchard};
+use orchard::value::NoteValue;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
 use sha2::Sha256;
@@ -127,7 +128,16 @@ impl Wallet {
         let mut total_amount_selected = 0;
 
         for note_data in all_notes {
-            let note = read_note(&note_data.serialized_note[..]).unwrap();
+
+            let nullifier = Nullifier::from_bytes(note_data.nullifier.as_slice().try_into().unwrap()).unwrap();
+            let note = Note::from_parts(
+                note_data.recipient_address.try_into().unwrap(),
+                NoteValue::from_raw(note_data.amount as u64),
+                AssetBase::from_bytes(note_data.asset.as_slice().try_into().unwrap()).unwrap(),
+                nullifier,
+                RandomSeed::from_bytes(note_data.rseed.as_slice().try_into().unwrap(), &nullifier).unwrap(),
+            ).unwrap();
+
             let note_value = note.value().inner();
             let sk = self.key_store.spending_key_for_ivk(self.key_store.ivk_for_address(&note.recipient()).expect("IVK not found for address")).expect("SpendingKey not found for IVK");
 
@@ -387,9 +397,9 @@ impl Wallet {
                 tx_id: txid.as_ref().to_vec(),
                 action_index: action_index as i32,
                 position: -1,
-                serialized_note: note_bytes,
                 memo: memo_bytes.to_vec(),
                 nullifier: nf.to_bytes().to_vec(),
+                rseed: note.rseed().to_bytes().to_vec(),
                 recipient_address: recipient.to_raw_address_bytes().to_vec(),
                 spend_tx_id: None,
                 spend_action_index: -1
