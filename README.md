@@ -67,7 +67,7 @@ Although release build is highly recommended for performance reasons:
 
 ## Main test scenario
 
-Main test scenario ([src/commands/test.rs](src/commands/test.rs)) consists of the following steps:
+Main test scenario ([src/commands/test.rs](src/commands/test_v5)) consists of the following steps:
 
 1) Mine 100 empty blocks to be able to use transparent coinbase output
 2) Create and mine a new shielding transaction with a transparent input and a shielded output

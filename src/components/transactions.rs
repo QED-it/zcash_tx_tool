@@ -50,7 +50,7 @@ pub fn mine_empty_blocks(num_blocks: u32, rpc_client: &mut dyn RpcClient) -> (u3
 }
 
 /// Create a shielded coinbase transaction
-pub fn create_shield_coinbase_tx(recipient: Address, coinbase_txid: TxId, wallet: &mut Wallet) -> Transaction {
+pub fn create_shield_coinbase_transaction(recipient: Address, coinbase_txid: TxId, wallet: &mut Wallet) -> Transaction {
 
     info!("Shielding coinbase output from tx {}", coinbase_txid);
 
@@ -107,7 +107,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut Wallet, rpc: &mut dyn Rpc
 }
 
 /// Create a vanilla Orchard transfer transaction
-pub fn create_transfer_tx(sender: Address, recipient: Address, amount: u64, wallet: &mut Wallet) -> Transaction {
+pub fn create_transfer_transaction(sender: Address, recipient: Address, amount: u64, wallet: &mut Wallet) -> Transaction {
 
     info!("Transfer {} zatoshi", amount);
 
@@ -137,7 +137,7 @@ pub fn create_transfer_tx(sender: Address, recipient: Address, amount: u64, wall
 }
 
 /// Create a transfer transaction
-pub fn create_transfer_zsa_tx(sender: Address, recipient: Address, amount: u64, asset: AssetBase, wallet: &mut Wallet) -> Transaction {
+pub fn create_transfer_zsa_transaction(sender: Address, recipient: Address, amount: u64, asset: AssetBase, wallet: &mut Wallet) -> Transaction {
 
     info!("Transfer {} zatoshi", amount);
 
@@ -194,7 +194,7 @@ pub fn create_burn_transaction(arsonist: Address, amount: u64, asset: AssetBase,
 }
 
 /// Create a transaction that issues a new asset
-pub fn create_issue_transaction(recipient: Address, amount: u64, asset_desc: String, wallet: &mut Wallet)  -> Transaction {
+pub fn create_issue_transaction(recipient: Address, amount: u64, asset_desc: String, wallet: &mut Wallet) -> Transaction {
     info!("Issue {} asset", amount);
     let mut tx = create_tx(wallet);
     tx.init_issue_bundle::<FeeError>(wallet.issuance_key(), asset_desc, recipient, NoteValue::from_raw(amount)).unwrap();

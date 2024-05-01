@@ -72,12 +72,14 @@ impl NetworkConfig {
 #[serde(deny_unknown_fields, default)]
 pub struct ChainConfig {
     pub nu5_activation_height: u32,
+    pub v6_activation_height: u32,
 }
 
 impl Default for ChainConfig {
     fn default() -> Self {
         Self {
             nu5_activation_height: 1_060_755, // NU5 activation height for shorter chain, should be in sync with node's chain params
+            v6_activation_height: 1_060_755, // V6 activation height for shorter chain, should be in sync with node's chain params
         }
     }
 }
