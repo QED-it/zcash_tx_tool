@@ -188,8 +188,12 @@ impl Wallet {
         legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(0).unwrap()
     }
 
-    pub fn balance(&mut self, address: Address) -> u64 {
-        let all_notes = self.db.find_non_spent_notes(address);
+    pub fn balance_zec(&mut self, address: Address) -> u64 {
+        self.balance(address, AssetBase::native())
+    }
+
+    pub fn balance(&mut self, address: Address, asset: AssetBase) -> u64 {
+        let all_notes = self.db.find_non_spent_notes(address, Some(asset));
         let mut total_amount: i64 = 0;
 
         for note_data in all_notes {
@@ -263,17 +267,17 @@ impl Wallet {
 
         let mut issued_notes_offset = 0;
 
-         // Add notes from Orchard bundle
+        assert!(tx.orchard_bundle().is_none() || tx.orchard_zsa_bundle().is_none(), "Error: Both Orchard and Orchard ZSA bundles are present in the transaction");
+
         if let Some(orchard_bundle) = tx.orchard_bundle() {
+            // Add notes from Orchard bundle
             issued_notes_offset = orchard_bundle.actions().len();
             self.add_notes_from_orchard_bundle(&tx.txid(), orchard_bundle);
             self.mark_potential_spends(&tx.txid(), orchard_bundle);
-        };
-
-        // Add notes from Orchard ZSA bundle
-        if let Some(orchard_zsa_bundle) = tx.orchard_zsa_bundle() {
-            issued_notes_offset = orchard_bundle.actions().len(); // TODO handle offset
-            self.add_notes_from_orchard_bundle(&tx.txid(), orchard_zsa_bundle, offset);
+        } else if let Some(orchard_zsa_bundle) = tx.orchard_zsa_bundle() {
+            // Add notes from Orchard ZSA bundle
+            issued_notes_offset = orchard_zsa_bundle.actions().len();
+            self.add_notes_from_orchard_bundle(&tx.txid(), orchard_zsa_bundle);
             self.mark_potential_spends(&tx.txid(), orchard_zsa_bundle);
         };
 
@@ -292,10 +296,10 @@ impl Wallet {
     /// incoming viewing keys to the wallet, and return a data structure that describes
     /// the actions that are involved with this wallet, either spending notes belonging
     /// to this wallet or creating new notes owned by this wallet.
-    fn add_notes_from_orchard_bundle(
+    fn add_notes_from_orchard_bundle<O: OrchardDomain>(
         &mut self,
         txid: &TxId,
-        bundle: &Bundle<Authorized, Amount, OrchardVanilla>,
+        bundle: &Bundle<Authorized, Amount, O>,
     ) {
         let keys = self
             .key_store
@@ -402,7 +406,7 @@ impl Wallet {
         }
     }
 
-    fn mark_potential_spends(&mut self, txid: &TxId, orchard_bundle: &Bundle<Authorized, Amount, OrchardVanilla>) {
+    fn mark_potential_spends<O: OrchardDomain>(&mut self, txid: &TxId, orchard_bundle: &Bundle<Authorized, Amount, O>) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             match self.db.find_by_nullifier(action.nullifier()) {
                 Some(note) => {
@@ -434,11 +438,15 @@ impl Wallet {
                 .iter()
                 .map(|action| *action.cmx())
                 .collect()
+        } else if let Some(zsa_bundle) = orchard_bundle_opt {
+            zsa_bundle
+                .actions()
+                .iter()
+                .map(|action| *action.cmx())
+                .collect()
         } else {
             Vec::new()
         };
-
-        TODO add ZSA commitments
 
         let mut issued_note_commitments: Vec<ExtractedNoteCommitment> =
             if let Some(issue_bundle) = issue_bundle_opt {

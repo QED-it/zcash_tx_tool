@@ -39,8 +39,8 @@ impl TestBalances {
         let alice = wallet.address_for_account(1, External);
 
         TestBalances {
-            miner: wallet.balance(miner) as i64,
-            alice: wallet.balance(alice) as i64,
+            miner: wallet.balance_zec(miner) as i64,
+            alice: wallet.balance_zec(alice) as i64,
         }
     }
 
