@@ -10,6 +10,7 @@ diesel::table! {
         position -> BigInt,
         memo -> Binary,
         nullifier -> Binary,
+        rseed -> Binary,
         recipient_address -> Binary,
         spend_tx_id -> Nullable<Binary>,
         spend_action_index -> Integer,

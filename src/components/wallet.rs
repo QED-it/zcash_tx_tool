@@ -4,16 +4,16 @@ mod structs;
 use bridgetree::{self, BridgeTree};
 use incrementalmerkletree::Position;
 use std::collections::BTreeMap;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 
 use abscissa_core::prelude::info;
 
-use zcash_primitives::{constants, legacy, sapling::NOTE_COMMITMENT_TREE_DEPTH, transaction::{components::Amount}};
+use zcash_primitives::{constants, legacy, transaction::{components::Amount}};
 
 use orchard::{bundle::Authorized, Address, Bundle, Note, Anchor};
 use orchard::issuance::{IssueBundle, Signed};
 use orchard::keys::{OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey, IssuanceAuthorizingKey};
-use orchard::note::{AssetBase, ExtractedNoteCommitment, Nullifier, RandomSeed};
+use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
 use orchard::note_encryption::{OrchardDomain, OrchardDomainBase};
 use orchard::orchard_flavor::{OrchardVanilla, OrchardZSA};
 use orchard::tree::{MerklePath, MerkleHashOrchard};
@@ -26,8 +26,9 @@ use sha2::Sha256;
 use zcash_note_encryption::{try_note_decryption};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
+use zcash_primitives::legacy::keys::NonHardenedChildIndex;
 use zcash_primitives::legacy::TransparentAddress;
-use zcash_primitives::transaction::components::issuance::{read_note, write_note};
+use zcash_primitives::transaction::components::issuance::{write_note};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_primitives::zip32::AccountId;
 use zcash_primitives::zip339::Mnemonic;
@@ -36,6 +37,7 @@ use crate::components::persistence::sqlite::SqliteDataStorage;
 use crate::components::wallet::structs::OrderedAddress;
 
 pub const MAX_CHECKPOINTS: usize = 100;
+pub const NOTE_COMMITMENT_TREE_DEPTH: u8 = 32;
 
 #[derive(Debug)]
 pub struct NoteSpendMetadata {
@@ -121,17 +123,17 @@ impl Wallet {
         self.last_block_height
     }
 
-    pub(crate) fn select_spendable_notes(&mut self, address: Address, total_amount: u64, asset: Option<AssetBase>) -> Vec<NoteSpendMetadata> {
+    pub(crate) fn select_spendable_notes(&mut self, address: Address, total_amount: u64, _asset: Option<AssetBase>) -> Vec<NoteSpendMetadata> {
 
-        let all_notes = self.db.find_non_spent_notes(address, asset);
+        let all_notes = self.db.find_non_spent_notes(address);
         let mut selected_notes = Vec::new();
         let mut total_amount_selected = 0;
 
         for note_data in all_notes {
 
-            let nullifier = Nullifier::from_bytes(note_data.nullifier.as_slice().try_into().unwrap()).unwrap();
+            let nullifier = Rho::from_bytes(note_data.nullifier.as_slice().try_into().unwrap()).unwrap();
             let note = Note::from_parts(
-                note_data.recipient_address.try_into().unwrap(),
+                Address::from_raw_address_bytes(note_data.recipient_address.as_slice().try_into().unwrap()).unwrap(),
                 NoteValue::from_raw(note_data.amount as u64),
                 AssetBase::from_bytes(note_data.asset.as_slice().try_into().unwrap()).unwrap(),
                 nullifier,
@@ -159,7 +161,7 @@ impl Wallet {
         match self.key_store.accounts.get(&account) {
             Some(addr) => addr.clone(),
             None => {
-                let sk = SpendingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, account).unwrap();
+                let sk = SpendingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, AccountId::try_from(account).unwrap()).unwrap();
                 let fvk = FullViewingKey::from(&sk);
                 let address = fvk.address_at(0u32, scope);
                 self.key_store.add_raw_address(address, fvk.to_ivk(scope));
@@ -172,7 +174,7 @@ impl Wallet {
     }
 
     pub(crate) fn orchard_ovk(&self) -> OutgoingViewingKey {
-        let sk = SpendingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, 0).unwrap();
+        let sk = SpendingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, AccountId::try_from(0).unwrap()).unwrap();
         FullViewingKey::from(&sk).to_ovk(Scope::External)
     }
 
@@ -186,24 +188,24 @@ impl Wallet {
 
     // Hack for claiming coinbase
     pub fn miner_address(&mut self) -> TransparentAddress {
-        let account = AccountId::from(0);
-        let pubkey = legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(0).unwrap().public_key(&Secp256k1::new()).serialize();
+        let account = AccountId::try_from(0).unwrap();
+        let pubkey = legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(NonHardenedChildIndex::ZERO).unwrap().public_key(&Secp256k1::new()).serialize();
         let hash = &Ripemd160::digest(Sha256::digest(pubkey))[..];
-        let taddr = TransparentAddress::PublicKey(hash.try_into().unwrap());
+        let taddr = TransparentAddress::PublicKeyHash(hash.try_into().unwrap());
         taddr
     }
 
     pub fn miner_sk(&mut self) -> SecretKey {
-        let account = AccountId::from(0);
-        legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(0).unwrap()
+        let account = AccountId::try_from(0).unwrap();
+        legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(NonHardenedChildIndex::ZERO).unwrap()
     }
 
     pub fn balance_zec(&mut self, address: Address) -> u64 {
         self.balance(address, AssetBase::native())
     }
 
-    pub fn balance(&mut self, address: Address, asset: AssetBase) -> u64 {
-        let all_notes = self.db.find_non_spent_notes(address, Some(asset));
+    pub fn balance(&mut self, address: Address, _asset: AssetBase) -> u64 {
+        let all_notes = self.db.find_non_spent_notes(address);
         let mut total_amount: i64 = 0;
 
         for note_data in all_notes {
@@ -262,9 +264,9 @@ impl Wallet {
     /// Add note data from all V5 transactions of the block to the wallet.
     /// Versions other than V5 are ignored.
     pub fn add_notes_from_block(&mut self, block_height: BlockHeight, block_hash: BlockHash, transactions: Vec<Transaction>) -> Result<(), BundleLoadError> {
-        transactions.into_iter().for_each( |tx| if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
+        transactions.into_iter().try_for_each(|tx| Ok(if tx.version().has_orchard() || tx.version().has_zsa() {
             self.add_notes_from_tx(tx)?;
-        });
+        }))?;
 
         self.last_block_hash = Some(block_hash);
         self.last_block_height = Some(block_height);
@@ -328,9 +330,9 @@ impl Wallet {
     /// specified incoming viewing keys, and returns a vector of each decrypted
     /// note plaintext contents along with the index of the action from which it
     /// was derived.
-    fn decrypt_outputs_with_keys(
+    fn decrypt_outputs_with_keys<O: OrchardDomain>(
         &self,
-        bundle: &Bundle<Authorized, Amount, OrchardVanilla>,
+        bundle: &Bundle<Authorized, Amount, O>,
         keys: &[IncomingViewingKey],
     ) -> Vec<(usize, IncomingViewingKey, Note, Address, [u8; 512])> {
         let prepared_keys: Vec<_> = keys
@@ -350,7 +352,7 @@ impl Wallet {
             .collect()
     }
 
-    /// Add note data to the wallet, and return a a data structure that describes
+    /// Add note data to the wallet, and return a data structure that describes
     /// the actions that are involved with this wallet.
     fn add_notes_from_issue_bundle(
         &mut self,
@@ -399,7 +401,7 @@ impl Wallet {
                 position: -1,
                 memo: memo_bytes.to_vec(),
                 nullifier: nf.to_bytes().to_vec(),
-                rseed: note.rseed().to_bytes().to_vec(),
+                rseed: note.rseed().as_bytes().to_vec(),
                 recipient_address: recipient.to_raw_address_bytes().to_vec(),
                 spend_tx_id: None,
                 spend_action_index: -1

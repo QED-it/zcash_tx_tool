@@ -29,15 +29,11 @@ impl SqliteDataStorage {
             .expect("Error loading notes")
     }
 
-    pub fn find_non_spent_notes(&mut self, recipient: Address, asset_base: Option<AssetBase>) -> Vec<NoteData> {
+    pub fn find_non_spent_notes(&mut self, recipient: Address) -> Vec<NoteData> {
 
-        let mut criteria = spend_tx_id.is_null().and(
+        let criteria = spend_tx_id.is_null().and(
             recipient_address.eq(recipient.to_raw_address_bytes().to_vec())
         );
-
-        if asset.is_some() {
-            criteria = criteria.and(asset.eq(asset_base.unwrap().to_bytes().to_vec()));
-        }
 
         notes
             .filter(criteria)

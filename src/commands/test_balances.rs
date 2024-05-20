@@ -1,8 +1,5 @@
 use orchard::keys::Scope::External;
 use orchard::note::AssetBase;
-use zcash_primitives::transaction::TxId;
-use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{mine_empty_blocks, sync_from_height};
 use crate::components::wallet::Wallet;
 use crate::prelude::info;
 
@@ -13,6 +10,11 @@ pub(crate) struct TestBalances {
 }
 
 impl TestBalances {
+
+    pub(crate) fn new(account0: i64, account1: i64) -> Self {
+        TestBalances { account0, account1 }
+    }
+
     pub(crate) fn get_zec(wallet: &mut Wallet) -> TestBalances {
         Self::get_asset(AssetBase::native(), wallet)
     }
