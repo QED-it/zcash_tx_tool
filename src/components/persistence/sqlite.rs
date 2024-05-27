@@ -3,7 +3,7 @@ use diesel::associations::HasTable;
 use diesel::prelude::*;
 use dotenvy::dotenv;
 use orchard::Address;
-use orchard::note::{AssetBase, Nullifier};
+use orchard::note::Nullifier;
 use zcash_primitives::transaction::TxId;
 use crate::components::persistence::model::{InsertableNoteData, NoteData};
 use crate::schema::notes::*;

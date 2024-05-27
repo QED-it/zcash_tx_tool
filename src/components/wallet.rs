@@ -12,9 +12,9 @@ use zcash_primitives::{constants, legacy, transaction::{components::Amount}};
 
 use orchard::{bundle::Authorized, Address, Bundle, Note, Anchor};
 use orchard::issuance::{IssueBundle, Signed};
-use orchard::keys::{OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, PreparedIncomingViewingKey, IssuanceAuthorizingKey};
+use orchard::keys::{OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, IssuanceAuthorizingKey};
 use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
-use orchard::note_encryption::{OrchardDomain, OrchardDomainBase};
+use orchard::note_encryption::OrchardDomain;
 use orchard::orchard_flavor::{OrchardVanilla, OrchardZSA};
 use orchard::tree::{MerklePath, MerkleHashOrchard};
 use orchard::value::NoteValue;
@@ -22,8 +22,6 @@ use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
 use sha2::Sha256;
 
-
-use zcash_note_encryption::{try_note_decryption};
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
 use zcash_primitives::legacy::keys::NonHardenedChildIndex;
@@ -187,7 +185,7 @@ impl Wallet {
     }
 
     // Hack for claiming coinbase
-    pub fn miner_address(&mut self) -> TransparentAddress {
+    pub fn miner_address(&self) -> TransparentAddress {
         let account = AccountId::try_from(0).unwrap();
         let pubkey = legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(NonHardenedChildIndex::ZERO).unwrap().public_key(&Secp256k1::new()).serialize();
         let hash = &Ripemd160::digest(Sha256::digest(pubkey))[..];
@@ -195,7 +193,7 @@ impl Wallet {
         taddr
     }
 
-    pub fn miner_sk(&mut self) -> SecretKey {
+    pub fn miner_sk(&self) -> SecretKey {
         let account = AccountId::try_from(0).unwrap();
         legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(NonHardenedChildIndex::ZERO).unwrap()
     }
@@ -320,36 +318,10 @@ impl Wallet {
             .cloned()
             .collect::<Vec<_>>();
 
-        for (action_idx, ivk, note, recipient, memo) in self.decrypt_outputs_with_keys(&bundle, &keys) {
+        for (action_idx, ivk, note, recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
             info!("Store note");
             self.store_note(txid, action_idx, ivk.clone(), note, recipient, memo).unwrap();
         }
-    }
-
-    /// Performs trial decryption of each action in the bundle with each of the
-    /// specified incoming viewing keys, and returns a vector of each decrypted
-    /// note plaintext contents along with the index of the action from which it
-    /// was derived.
-    fn decrypt_outputs_with_keys<O: OrchardDomain>(
-        &self,
-        bundle: &Bundle<Authorized, Amount, O>,
-        keys: &[IncomingViewingKey],
-    ) -> Vec<(usize, IncomingViewingKey, Note, Address, [u8; 512])> {
-        let prepared_keys: Vec<_> = keys
-            .iter()
-            .map(|ivk| (ivk, PreparedIncomingViewingKey::new(ivk)))
-            .collect();
-        bundle.actions()
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, action)| {
-                let domain = OrchardDomainBase::for_action(&action);
-                prepared_keys.iter().find_map(|(ivk, prepared_ivk)| {
-                    try_note_decryption(&domain, prepared_ivk, action)
-                        .map(|(n, a, m)| (idx, (*ivk).clone(), n, a, m))
-                })
-            })
-            .collect()
     }
 
     /// Add note data to the wallet, and return a data structure that describes

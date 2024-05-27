@@ -54,11 +54,11 @@ To set the Diesel database up:
 
 1) Install diesel_cli: `cargo install diesel_cli --no-default-features --features sqlite`
 
-2) Run migrations: `diesel migration run`
+2) Set up database: `diesel setup`
 
 To build the application, run:
 
-```cargo build```
+`cargo build`
 
 Although release build is highly recommended for performance reasons:
 

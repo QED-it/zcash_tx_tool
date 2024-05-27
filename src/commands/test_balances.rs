@@ -20,9 +20,16 @@ impl TestBalances {
     }
 
     pub(crate) fn get_asset(asset: AssetBase, wallet: &mut Wallet) -> TestBalances {
+
+        let address0 = wallet.address_for_account(0, External);
+        let address1 = wallet.address_for_account(1, External);
+
+        let balance0 = wallet.balance(address0, asset) as i64;
+        let balance1 = wallet.balance(address1, asset) as i64;
+
         TestBalances {
-            account0: wallet.balance(wallet.address_for_account(0, External), asset) as i64,
-            account1: wallet.balance(wallet.address_for_account(1, External), asset) as i64,
+            account0: balance0,
+            account1: balance1,
         }
     }
 }

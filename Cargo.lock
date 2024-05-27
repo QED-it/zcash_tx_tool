@@ -452,7 +452,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 2.0.65",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -624,7 +624,7 @@ dependencies = [
  "diesel_table_macro_syntax",
  "proc-macro2",
  "quote",
- "syn 2.0.65",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -633,7 +633,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc5557efc453706fed5e4fa85006fe9817c224c3f480a34c7e5959fd700921c5"
 dependencies = [
- "syn 2.0.65",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -714,7 +714,7 @@ dependencies = [
 [[package]]
 name = "equihash"
 version = "0.2.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#2b2589510815f57ba266b6159d4acd31e5c43e76"
+source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#a6c50f8bdfd54bd7cd51c587486f925e63f6e9e7"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -749,7 +749,7 @@ dependencies = [
 [[package]]
 name = "f4jumble"
 version = "0.1.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#2b2589510815f57ba266b6159d4acd31e5c43e76"
+source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#a6c50f8bdfd54bd7cd51c587486f925e63f6e9e7"
 dependencies = [
  "blake2b_simd",
 ]
@@ -1499,7 +1499,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.65",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -1682,14 +1682,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f12335488a2f3b0a83b14edad48dca9879ce89b2edd10e80237e4e852dd645e"
 dependencies = [
  "proc-macro2",
- "syn 2.0.65",
+ "syn 2.0.66",
 ]
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.83"
+version = "1.0.84"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b33eb56c327dec362a9e55b3ad14f9d2f0904fb5a5b03b513ab5465399e9f43"
+checksum = "ec96c6a92621310b51366f1e28d05ef11489516e93be030060e5fc12024a49d6"
 dependencies = [
  "unicode-ident",
 ]
@@ -1741,7 +1741,7 @@ dependencies = [
  "prost",
  "prost-types",
  "regex",
- "syn 2.0.65",
+ "syn 2.0.66",
  "tempfile",
 ]
 
@@ -1755,7 +1755,7 @@ dependencies = [
  "itertools",
  "proc-macro2",
  "quote",
- "syn 2.0.65",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -2158,22 +2158,22 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.202"
+version = "1.0.203"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "226b61a0d411b2ba5ff6d7f73a476ac4f8bb900373459cd00fab8512828ba395"
+checksum = "7253ab4de971e72fb7be983802300c30b5a7f0c2e56fab8abfc6a214307c0094"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.202"
+version = "1.0.203"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6048858004bcff69094cd972ed40a32500f153bd3be9f716b2eed2e8217c4838"
+checksum = "500cbc0ebeb6f46627f50f3f5811ccf6bf00643be300b4c3eabc0ef55dc5b5ba"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.65",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -2313,9 +2313,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.65"
+version = "2.0.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2863d96a84c6439701d7a38f9de935ec562c8832cc55d1dde0f513b52fad106"
+checksum = "c42f3f41a2de00b01c0aaad383c5a45241efc8b2d1eda5661812fda5f3cdcff5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2405,7 +2405,7 @@ checksum = "46c3384250002a6d5af4d114f2845d37b57521033f30d5c3f46c4d70e1197533"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.65",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -2521,7 +2521,7 @@ dependencies = [
  "proc-macro2",
  "prost-build",
  "quote",
- "syn 2.0.65",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -2549,7 +2549,7 @@ checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.65",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -2755,7 +2755,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.65",
+ "syn 2.0.66",
  "wasm-bindgen-shared",
 ]
 
@@ -2789,7 +2789,7 @@ checksum = "e94f17b526d0a461a191c78ea52bbce64071ed5c04c9ffe424dcb38f74171bb7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.65",
+ "syn 2.0.66",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -3020,7 +3020,7 @@ checksum = "213b7324336b53d2414b2db8537e56544d981803139155afa84f76eeebb7a546"
 [[package]]
 name = "zcash_address"
 version = "0.3.2"
-source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#2b2589510815f57ba266b6159d4acd31e5c43e76"
+source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#a6c50f8bdfd54bd7cd51c587486f925e63f6e9e7"
 dependencies = [
  "bech32",
  "bs58",
@@ -3032,7 +3032,7 @@ dependencies = [
 [[package]]
 name = "zcash_client_backend"
 version = "0.12.1"
-source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#2b2589510815f57ba266b6159d4acd31e5c43e76"
+source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#a6c50f8bdfd54bd7cd51c587486f925e63f6e9e7"
 dependencies = [
  "base64",
  "bech32",
@@ -3071,7 +3071,7 @@ dependencies = [
 [[package]]
 name = "zcash_encoding"
 version = "0.2.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#2b2589510815f57ba266b6159d4acd31e5c43e76"
+source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#a6c50f8bdfd54bd7cd51c587486f925e63f6e9e7"
 dependencies = [
  "byteorder",
  "nonempty",
@@ -3080,7 +3080,7 @@ dependencies = [
 [[package]]
 name = "zcash_keys"
 version = "0.2.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#2b2589510815f57ba266b6159d4acd31e5c43e76"
+source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#a6c50f8bdfd54bd7cd51c587486f925e63f6e9e7"
 dependencies = [
  "bech32",
  "blake2b_simd",
@@ -3129,7 +3129,7 @@ dependencies = [
 [[package]]
 name = "zcash_primitives"
 version = "0.15.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#2b2589510815f57ba266b6159d4acd31e5c43e76"
+source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#a6c50f8bdfd54bd7cd51c587486f925e63f6e9e7"
 dependencies = [
  "aes",
  "bip0039",
@@ -3167,7 +3167,7 @@ dependencies = [
 [[package]]
 name = "zcash_proofs"
 version = "0.15.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#2b2589510815f57ba266b6159d4acd31e5c43e76"
+source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#a6c50f8bdfd54bd7cd51c587486f925e63f6e9e7"
 dependencies = [
  "bellman",
  "blake2b_simd",
@@ -3189,7 +3189,7 @@ dependencies = [
 [[package]]
 name = "zcash_protocol"
 version = "0.1.1"
-source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#2b2589510815f57ba266b6159d4acd31e5c43e76"
+source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#a6c50f8bdfd54bd7cd51c587486f925e63f6e9e7"
 dependencies = [
  "document-features",
  "incrementalmerkletree",
@@ -3239,9 +3239,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.7.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "525b4ec142c6b68a2d10f01f7bbf6755599ca3f81ea53b8431b7dd348f5fdb2d"
+checksum = "ced3678a2879b30306d323f4542626697a464a97c0a07c9aebf7ebca65cd4dde"
 dependencies = [
  "zeroize_derive",
 ]
@@ -3254,7 +3254,7 @@ checksum = "ce36e65b0d2999d2aafac989fb249189a141aee1f53c612c1f37d72631959f69"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.65",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -3271,7 +3271,7 @@ dependencies = [
 [[package]]
 name = "zip321"
 version = "0.0.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#2b2589510815f57ba266b6159d4acd31e5c43e76"
+source = "git+https://github.com/QED-it/librustzcash?branch=txv6-separate-bundles-rebased#a6c50f8bdfd54bd7cd51c587486f925e63f6e9e7"
 dependencies = [
  "base64",
  "nom",
