@@ -129,13 +129,13 @@ impl Wallet {
 
         for note_data in all_notes {
 
-            let nullifier = Rho::from_bytes(note_data.nullifier.as_slice().try_into().unwrap()).unwrap();
+            let rho = Rho::from_bytes(note_data.rho.as_slice().try_into().unwrap()).unwrap();
             let note = Note::from_parts(
                 Address::from_raw_address_bytes(note_data.recipient_address.as_slice().try_into().unwrap()).unwrap(),
                 NoteValue::from_raw(note_data.amount as u64),
                 AssetBase::from_bytes(note_data.asset.as_slice().try_into().unwrap()).unwrap(),
-                nullifier,
-                RandomSeed::from_bytes(note_data.rseed.as_slice().try_into().unwrap(), &nullifier).unwrap(),
+                rho,
+                RandomSeed::from_bytes(note_data.rseed.as_slice().try_into().unwrap(), &rho).unwrap(),
             ).unwrap();
 
             let note_value = note.value().inner();
@@ -372,7 +372,7 @@ impl Wallet {
                 action_index: action_index as i32,
                 position: -1,
                 memo: memo_bytes.to_vec(),
-                nullifier: nf.to_bytes().to_vec(),
+                rho: nf.to_bytes().to_vec(),
                 rseed: note.rseed().as_bytes().to_vec(),
                 recipient_address: recipient.to_raw_address_bytes().to_vec(),
                 spend_tx_id: None,
@@ -392,7 +392,7 @@ impl Wallet {
 
     fn mark_potential_spends<O: OrchardDomain>(&mut self, txid: &TxId, orchard_bundle: &Bundle<Authorized, Amount, O>) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
-            match self.db.find_by_nullifier(action.nullifier()) {
+            match self.db.find_by_rho(&action.rho()) {
                 Some(note) => {
                     info!("Adding spend of nullifier {:?}", action.nullifier());
                     self.db.mark_as_potentially_spent(note.id, txid, action_index as i32);
@@ -447,6 +447,7 @@ impl Wallet {
         note_commitments.append(&mut issued_note_commitments);
 
         for (note_index, commitment) in note_commitments.iter().enumerate() {
+            info!("Adding note commitment ({}, {})", txid, note_index);
             // append the note commitment for each action to the note commitment tree
             if !self
                 .commitment_tree

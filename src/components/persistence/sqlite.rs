@@ -3,7 +3,7 @@ use diesel::associations::HasTable;
 use diesel::prelude::*;
 use dotenvy::dotenv;
 use orchard::Address;
-use orchard::note::Nullifier;
+use orchard::note::Rho;
 use zcash_primitives::transaction::TxId;
 use crate::components::persistence::model::{InsertableNoteData, NoteData};
 use crate::schema::notes::*;
@@ -50,9 +50,9 @@ impl SqliteDataStorage {
             .expect("Error loading notes")
     }
 
-    pub fn find_by_nullifier(&mut self, nf: &Nullifier) -> Option<NoteData> {
+    pub fn find_by_rho(&mut self, nf: &Rho) -> Option<NoteData> {
         notes
-            .filter(nullifier.eq(nf.to_bytes().to_vec()))
+            .filter(rho.eq(nf.to_bytes().to_vec()))
             .select(NoteData::as_select())
             .limit(1)
             .load(&mut self.connection)
