@@ -359,8 +359,6 @@ impl Wallet {
         if let Some(fvk) = self.key_store.viewing_keys.get(&ivk) {
             info!("Adding decrypted note to the wallet");
 
-            let nf = note.nullifier(fvk);
-
             let mut note_bytes = vec![];
             write_note(&note, &mut note_bytes).unwrap();
 
@@ -372,7 +370,8 @@ impl Wallet {
                 action_index: action_index as i32,
                 position: -1,
                 memo: memo_bytes.to_vec(),
-                rho: nf.to_bytes().to_vec(),
+                rho: note.rho().to_bytes().to_vec(),
+                nullifier: note.nullifier(fvk).to_bytes().to_vec(),
                 rseed: note.rseed().as_bytes().to_vec(),
                 recipient_address: recipient.to_raw_address_bytes().to_vec(),
                 spend_tx_id: None,
@@ -392,7 +391,7 @@ impl Wallet {
 
     fn mark_potential_spends<O: OrchardDomain>(&mut self, txid: &TxId, orchard_bundle: &Bundle<Authorized, Amount, O>) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
-            match self.db.find_by_rho(&action.rho()) {
+            match self.db.find_by_nullifier(&action.nullifier()) {
                 Some(note) => {
                     info!("Adding spend of nullifier {:?}", action.nullifier());
                     self.db.mark_as_potentially_spent(note.id, txid, action_index as i32);
