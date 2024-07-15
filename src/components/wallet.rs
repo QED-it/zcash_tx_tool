@@ -15,7 +15,7 @@ use orchard::issuance::{IssueBundle, Signed};
 use orchard::keys::{OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, IssuanceAuthorizingKey};
 use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
 use orchard::note_encryption::OrchardDomain;
-use orchard::orchard_flavor::{OrchardVanilla, OrchardZSA};
+use orchard::orchard_flavors::{OrchardVanilla, OrchardZSA};
 use orchard::tree::{MerklePath, MerkleHashOrchard};
 use orchard::value::NoteValue;
 use ripemd::{Digest, Ripemd160};
