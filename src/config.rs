@@ -5,6 +5,7 @@
 //! for specifying it.
 
 use serde::{Deserialize, Serialize};
+use std::env;
 
 /// Application Configuration
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -55,9 +56,14 @@ pub struct NetworkConfig {
 impl Default for NetworkConfig {
     fn default() -> Self {
         Self {
-            node_address: "127.0.0.1".to_string(),
-            node_port: 18232,
-            protocol: "http".to_string(),
+            node_address: env::var("ZCASH_NODE_ADDRESS")
+                .unwrap_or_else(|_| "127.0.0.1".to_string()),
+            node_port: env::var("ZCASH_NODE_PORT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(18232),
+            protocol: env::var("ZCASH_NODE_PROTOCOL")
+                .unwrap_or_else(|_| "http".to_string()),
         }
     }
 }
