@@ -30,7 +30,7 @@ Currently, we use a custom Zebra build. There are several changes compared to th
 
 - Blocks up to new activation height are pre-mined and stored in the database that is built into the docker image to avoid long initial sync time
 
-To build and run the docker image run:
+To build and run the docker image:
 
 ```bash
 docker build -t qedit/zebra-singlenode-txv5 .
