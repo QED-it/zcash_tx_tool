@@ -30,17 +30,12 @@ Currently, we use a custom Zebra build. There are several changes compared to th
 
 - Blocks up to new activation height are pre-mined and stored in the database that is built into the docker image to avoid long initial sync time
 
-To build and run the docker image, make sure you create the network first:
-```bash
-docker network create zcash-network
-``` 
-
-After that run
+To build and run the docker image run:
 
 ```bash
 docker build -t qedit/zebra-singlenode-txv5 .
 
-docker run --name zebra-node --network zcash-network -p 18232:18232 qedit/zebra-singlenode-txv5
+docker run --name zebra-node -p 18232:18232 qedit/zebra-singlenode-txv5
 ``` 
 
 More details on how the docker file is created and synced: [Link](https://github.com/QED-it/zcash_tx_tool/blob/main/Dockerfile)
@@ -98,13 +93,23 @@ docker build -t zcash_tx_tool -f Dockerfile-demo .
 ```
 
 And after that run the image itself.
-The default connection parameters are set to connect to the zebra-node running on the machine itself (12.0.0.1)
+The default connection parameters are set to connect to the zebra-node running on the machine itself (127.0.0.1)
 If you ran the node in a docker container with the command above, you named that container "zebra-node", so you should use that as the ZCASH_NODE_ADDRESS.
-If the node is running on the ECS server, you can connect to it by setting the ZCASH_NODE_ADDRESS=dev.zebra.qedit-solana.net.
-Here are the 3 options (No parameters will default to the first one)
+If the node is running on the ECS server, you can connect to it by setting the ZCASH_NODE_ADDRESS=<Domain>.
+
+First, make sure you created the network:
+```bash
+docker network create zcash-network
+```
+And started the node with the network argument, like this
+```bash
+docker run --name zebra-node --network zcash-network -p 18232:18232 qedit/zebra-singlenode-txv5
+```
+
+Here are the 3 options (No parameters will default to the first configuration)
 
 ```bash
 docker run --network zcash-network -e ZCASH_NODE_ADDRESS=127.0.0.1 -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool
 docker run --network zcash-network -e ZCASH_NODE_ADDRESS=zebra-node -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool
-docker run --network zcash-network -e ZCASH_NODE_ADDRESS=dev.zebra.qedit-solana.net -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool
+docker run --network zcash-network -e ZCASH_NODE_ADDRESS=<Domain> -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool
 ```
