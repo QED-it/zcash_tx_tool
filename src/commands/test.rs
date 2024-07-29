@@ -12,6 +12,7 @@ use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::prelude::*;
 use crate::components::wallet::Wallet;
 use crate::config::AppConfig;
+use std::io::{self, Write};
 
 
 /// Run the E2E test
@@ -61,6 +62,8 @@ impl Runnable for TestCmd {
         let mut balances = TestBalances::get(&mut wallet);
         print_balances("=== Initial balances ===", balances);
 
+        pause();
+
         // --------------------- Shield miner's reward ---------------------
 
         let shielding_tx = create_shield_coinbase_tx(miner, coinbase_txid, &mut wallet);
@@ -68,6 +71,8 @@ impl Runnable for TestCmd {
 
         let expected_delta = TestBalances::new(500_000_000 /*coinbase_reward*/, 0);
         balances = check_balances("=== Balances after shielding ===", balances, expected_delta, &mut wallet);
+
+        pause();
 
         // --------------------- Create transfer ---------------------
 
@@ -78,7 +83,16 @@ impl Runnable for TestCmd {
 
         let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);
         check_balances("=== Balances after transfer ===", balances, expected_delta, &mut wallet);
+
+        pause();
     }
+}
+
+fn pause() {
+    print!("Press Enter to continue the demo...");
+    io::stdout().flush().unwrap();
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
 }
 
 fn prepare_test(config: &Reader<AppConfig>, wallet: &mut Wallet, rpc_client: &mut ReqwestRpcClient) -> TxId {
