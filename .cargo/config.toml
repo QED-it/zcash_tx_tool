@@ -1,2 +1,2 @@
 [build]
-rustflags = ["--cfg", 'zcash_unstable="nu7"']
+rustflags = ["--cfg", 'zcash_unstable="nu6"']

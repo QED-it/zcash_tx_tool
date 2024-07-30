@@ -14,8 +14,8 @@ use orchard::{bundle::Authorized, Address, Bundle, Note, Anchor};
 use orchard::issuance::{IssueBundle, Signed};
 use orchard::keys::{OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, IssuanceAuthorizingKey};
 use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
-use orchard::note_encryption::OrchardDomain;
-use orchard::orchard_flavors::{OrchardVanilla, OrchardZSA};
+use orchard::note_encryption::OrchardDomainCommon;
+use orchard::orchard_flavor::{OrchardVanilla, OrchardZSA};
 use orchard::tree::{MerklePath, MerkleHashOrchard};
 use orchard::value::NoteValue;
 use ripemd::{Digest, Ripemd160};
@@ -257,6 +257,7 @@ impl Wallet {
         self.last_block_height = None;
         self.last_block_hash = None;
         self.db.delete_all_notes();
+        self.db.delete_all_issuance_data();
     }
 
     /// Add note data from all V5 transactions of the block to the wallet.
@@ -289,11 +290,13 @@ impl Wallet {
             issued_notes_offset = orchard_zsa_bundle.actions().len();
             self.add_notes_from_orchard_bundle(&tx.txid(), orchard_zsa_bundle);
             self.mark_potential_spends(&tx.txid(), orchard_zsa_bundle);
+            self.process_burnt_assets(orchard_zsa_bundle.burn());
         };
 
         // Add notes from Issue bundle
         if let Some(issue_bundle) = tx.issue_bundle() {
             self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, issued_notes_offset);
+            self.add_issuance_data(issue_bundle);
         };
 
         self.add_note_commitments(&tx.txid(), tx.orchard_bundle(), tx.orchard_zsa_bundle(), tx.issue_bundle()).unwrap();
@@ -306,7 +309,7 @@ impl Wallet {
     /// incoming viewing keys to the wallet, and return a data structure that describes
     /// the actions that are involved with this wallet, either spending notes belonging
     /// to this wallet or creating new notes owned by this wallet.
-    fn add_notes_from_orchard_bundle<O: OrchardDomain>(
+    fn add_notes_from_orchard_bundle<O: OrchardDomainCommon>(
         &mut self,
         txid: &TxId,
         bundle: &Bundle<Authorized, Amount, O>,
@@ -343,6 +346,35 @@ impl Wallet {
                     note.recipient(),
                     [0; 512],
                 ).unwrap();
+            }
+        }
+    }
+
+    fn process_burnt_assets(&mut self, burnt_assets: &Vec<(AssetBase, NoteValue)>) {
+        for (asset, amount) in burnt_assets {
+            let issuance_data = self.db.find_issuance_data_for_asset(asset).unwrap();
+            let new_amount = issuance_data.amount - amount.inner() as i64;
+            assert!(new_amount >= 0, "Error: Burnt amount is greater than issuance amount");
+            self.db.update_issuance_data(issuance_data.id, new_amount, issuance_data.finalized);
+        }
+    }
+
+    fn add_issuance_data(&mut self, bundle: &IssueBundle<Signed>) {
+        for action in bundle.actions() {
+            let asset = AssetBase::derive(bundle.ik(), action.asset_desc());
+            let previously_issued = self.db.find_issuance_data_for_asset(&asset);
+
+            let amount: u64 = action.notes().iter().map(| note| note.value().inner()).sum();
+
+            match previously_issued {
+                Some(previously_issued) => {
+                    let new_amount = previously_issued.amount.checked_add_unsigned(amount).unwrap();
+                    assert_eq!(previously_issued.finalized, 0, "Error: Attempting to issue more of a finalized asset");
+                    self.db.update_issuance_data(previously_issued.id, new_amount, action.is_finalized() as i32);
+                },
+                None => {
+                    self.db.insert_issuance_data(&asset, amount as i64, action.is_finalized() as i32);
+                }
             }
         }
     }
@@ -389,7 +421,7 @@ impl Wallet {
         }
     }
 
-    fn mark_potential_spends<O: OrchardDomain>(&mut self, txid: &TxId, orchard_bundle: &Bundle<Authorized, Amount, O>) {
+    fn mark_potential_spends<O: OrchardDomainCommon>(&mut self, txid: &TxId, orchard_bundle: &Bundle<Authorized, Amount, O>) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             match self.db.find_by_nullifier(&action.nullifier()) {
                 Some(note) => {

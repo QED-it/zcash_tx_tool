@@ -12,4 +12,11 @@ CREATE TABLE notes (
     recipient_address BINARY(43) NOT NULL,
     spend_tx_id BINARY(32),
     spend_action_index INTEGER NOT NULL
-)
+);
+
+CREATE TABLE issuance_data (
+    id INTEGER PRIMARY KEY NOT NULL,
+    asset BINARY(32) NOT NULL,
+    amount BigInt NOT NULL,
+    finalized INTEGER NOT NULL
+);

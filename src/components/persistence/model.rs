@@ -1,5 +1,7 @@
 use diesel::prelude::*;
 
+// Note data
+
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::notes)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
@@ -54,4 +56,25 @@ impl InsertableNoteData {
             spend_action_index: note.spend_action_index,
         }
     }
+}
+
+// Issued asset data
+
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = crate::schema::issuance_data)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct IssuanceData {
+    pub id: i32,
+    pub amount: i64, // in real wallet we should be careful with sign here, but that's ok for test tool
+    pub asset: Vec<u8>,
+    pub finalized: i32,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::issuance_data)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct InsertableIssuanceData {
+    pub amount: i64,
+    pub asset: Vec<u8>,
+    pub finalized: i32,
 }
