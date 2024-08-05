@@ -4,7 +4,7 @@ use abscissa_core::{Command, Runnable};
 use abscissa_core::config::Reader;
 use orchard::keys::Scope::External;
 use zcash_primitives::transaction::TxId;
-use crate::components::transactions::{mine, mine_empty_blocks};
+use crate::components::transactions::{mine, mine_block, mine_empty_blocks};
 use crate::components::transactions::create_shield_coinbase_tx;
 use crate::components::transactions::sync_from_height;
 use crate::components::transactions::create_transfer_tx;
@@ -62,7 +62,7 @@ impl Runnable for TestCmd {
         let mut balances = TestBalances::get(&mut wallet);
         print_balances("=== Initial balances ===", balances);
 
-        pause();
+      //  pause();
 
         // --------------------- Shield miner's reward ---------------------
 
@@ -72,7 +72,7 @@ impl Runnable for TestCmd {
         let expected_delta = TestBalances::new(500_000_000 /*coinbase_reward*/, 0);
         balances = check_balances("=== Balances after shielding ===", balances, expected_delta, &mut wallet);
 
-        pause();
+      //  pause();
 
         // --------------------- Create transfer ---------------------
 
@@ -84,7 +84,7 @@ impl Runnable for TestCmd {
         let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);
         check_balances("=== Balances after transfer ===", balances, expected_delta, &mut wallet);
 
-        pause();
+      //  pause();
     }
 }
 
@@ -98,6 +98,7 @@ fn pause() {
 fn prepare_test(config: &Reader<AppConfig>, wallet: &mut Wallet, rpc_client: &mut ReqwestRpcClient) -> TxId {
     wallet.reset();
     sync_from_height(config.chain.nu5_activation_height, wallet, rpc_client);
+    mine_block(rpc_client, vec![]); // mine Nu5 block
     let (_, coinbase_txid) = mine_empty_blocks(100, rpc_client); // coinbase maturity = 100
     coinbase_txid
 }

@@ -169,10 +169,11 @@ pub fn template_into_proposal(block_template: BlockTemplate, mut txs: Vec<Transa
         }
     }).collect::<AuthDataRoot>();
 
-    let hash_block_commitments = block_commitment_from_parts(
-        crate::components::rpc_client::decode_hex(block_template.default_roots.chain_history_root),
-        auth_data_root.0,
-    );
+    let hash_block_commitments = crate::components::rpc_client::decode_hex(block_template.block_commitments_hash);
+    // let hash_block_commitments = block_commitment_from_parts(
+    //     crate::components::rpc_client::decode_hex(block_template.default_roots.chain_history_root),
+    //     auth_data_root.0,
+    // );
 
     let block_header_data = BlockHeaderData {
         version: block_template.version as i32,

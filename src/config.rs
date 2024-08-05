@@ -83,7 +83,7 @@ pub struct ChainConfig {
 impl Default for ChainConfig {
     fn default() -> Self {
         Self {
-            nu5_activation_height: 1_060_755, // NU5 activation height for shorter chain, should be in sync with node's chain params
+            nu5_activation_height: 1, // NU5 activation height for regtest, should be in sync with node's chain params
         }
     }
 }

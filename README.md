@@ -33,9 +33,9 @@ Currently, we use a custom Zebra build. There are several changes compared to th
 To build and run the docker image:
 
 ```bash
-docker build -t qedit/zebra-singlenode-txv5 .
+docker build -t qedit/zebra-regtest-txv5 .
 
-docker run --name zebra-node -p 18232:18232 qedit/zebra-singlenode-txv5
+docker run -p 18232:18232 qedit/zebra-regtest-txv5
 ``` 
 
 More details on how the docker file is created and synced: [Link](https://github.com/QED-it/zcash_tx_tool/blob/main/Dockerfile)
