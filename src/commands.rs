@@ -12,10 +12,10 @@
 
 mod test;
 
+use crate::commands::test::TestCmd;
 use crate::config::AppConfig;
 use abscissa_core::{Command, Configurable, FrameworkError, Runnable};
 use std::path::PathBuf;
-use crate::commands::test::TestCmd;
 
 /// Application Configuration Filename
 pub const CONFIG_FILE: &str = "config.toml";
@@ -23,7 +23,7 @@ pub const CONFIG_FILE: &str = "config.toml";
 /// Application subcommands need to be listed in an enum.
 #[derive(clap::Parser, Command, Debug, Runnable)]
 pub enum AppCmd {
-    Test(TestCmd)
+    Test(TestCmd),
 }
 
 /// Entry point for the application. It needs to be a struct to allow using subcommands!
@@ -73,10 +73,7 @@ impl Configurable<AppConfig> for EntryPoint {
     ///
     /// This can be safely deleted if you don't want to override config
     /// settings from command-line options.
-    fn process_config(
-        &self,
-        config: AppConfig,
-    ) -> Result<AppConfig, FrameworkError> {
+    fn process_config(&self, config: AppConfig) -> Result<AppConfig, FrameworkError> {
         match &self.cmd {
             // AppCmd::UnconventionalCommand(cmd) => cmd.override_config(config),
             // If you don't need special overrides for some

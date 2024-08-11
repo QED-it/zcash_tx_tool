@@ -1,22 +1,22 @@
-use std::env;
+use crate::components::persistence::model::{InsertableNoteData, NoteData};
+use crate::schema::notes::dsl::notes;
+use crate::schema::notes::*;
 use diesel::associations::HasTable;
 use diesel::prelude::*;
 use dotenvy::dotenv;
-use orchard::Address;
 use orchard::note::Nullifier;
+use orchard::Address;
+use std::env;
 use zcash_primitives::transaction::TxId;
-use crate::components::persistence::model::{InsertableNoteData, NoteData};
-use crate::schema::notes::*;
-use crate::schema::notes::dsl::notes;
 
 pub struct SqliteDataStorage {
-    connection: SqliteConnection
+    connection: SqliteConnection,
 }
 
 impl SqliteDataStorage {
     pub fn new() -> Self {
         Self {
-            connection: establish_connection()
+            connection: establish_connection(),
         }
     }
 }
@@ -32,9 +32,9 @@ impl SqliteDataStorage {
     pub fn find_non_spent_notes(&mut self, recipient: Address) -> Vec<NoteData> {
         notes
             .filter(
-                spend_tx_id.is_null().and(
-                    recipient_address.eq(recipient.to_raw_address_bytes().to_vec())
-                )
+                spend_tx_id
+                    .is_null()
+                    .and(recipient_address.eq(recipient.to_raw_address_bytes().to_vec())),
             )
             .select(NoteData::as_select())
             .load(&mut self.connection)
@@ -55,21 +55,32 @@ impl SqliteDataStorage {
             .select(NoteData::as_select())
             .limit(1)
             .load(&mut self.connection)
-            .expect("Error loading notes").pop()
+            .expect("Error loading notes")
+            .pop()
     }
 
-    pub fn mark_as_potentially_spent(&mut self, note_id: i32, spend_tx_id_value: &TxId, spend_action_index_value: i32) {
+    pub fn mark_as_potentially_spent(
+        &mut self,
+        note_id: i32,
+        spend_tx_id_value: &TxId,
+        spend_action_index_value: i32,
+    ) {
         diesel::update(notes)
             .filter(id.eq(note_id))
-            .set((spend_tx_id.eq(spend_tx_id_value.0.to_vec()), spend_action_index.eq(spend_action_index_value)))
-            .execute(&mut self.connection).unwrap();
+            .set((
+                spend_tx_id.eq(spend_tx_id_value.0.to_vec()),
+                spend_action_index.eq(spend_action_index_value),
+            ))
+            .execute(&mut self.connection)
+            .unwrap();
     }
 
     pub fn update_note_position(&mut self, note_id: i32, position_value: i64) {
         diesel::update(notes)
             .filter(id.eq(note_id))
             .set(position.eq(position_value))
-            .execute(&mut self.connection).unwrap();
+            .execute(&mut self.connection)
+            .unwrap();
     }
 
     pub fn insert_note(&mut self, note: NoteData) -> NoteData {

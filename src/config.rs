@@ -62,15 +62,17 @@ impl Default for NetworkConfig {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(18232),
-            protocol: env::var("ZCASH_NODE_PROTOCOL")
-                .unwrap_or_else(|_| "http".to_string()),
+            protocol: env::var("ZCASH_NODE_PROTOCOL").unwrap_or_else(|_| "http".to_string()),
         }
     }
 }
 
 impl NetworkConfig {
     pub fn node_url(&self) -> String {
-        format!("{}://{}:{}", self.protocol, self.node_address, self.node_port)
+        format!(
+            "{}://{}:{}",
+            self.protocol, self.node_address, self.node_port
+        )
     }
 }
 
