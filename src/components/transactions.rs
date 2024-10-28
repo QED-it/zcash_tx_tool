@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::components::wallet::Wallet;
 use crate::components::zebra_merkle::{
@@ -6,8 +5,9 @@ use crate::components::zebra_merkle::{
 };
 use crate::prelude::{error, info};
 use orchard::Address;
+use std::convert::TryFrom;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
-use zcash_primitives::consensus::REGTEST_NETWORK;
+use zcash_primitives::consensus::{BranchId, REGTEST_NETWORK};
 use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::transaction::builder::Builder;
 use zcash_primitives::transaction::components::{transparent, Amount, TxOut};
@@ -17,20 +17,21 @@ use zcash_proofs::prover::LocalTxProver;
 
 /// Mine a block with the given transactions and sync the wallet
 pub fn mine(wallet: &mut Wallet, rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) {
-    let (block_height, _) = mine_block(rpc_client, txs, false);
+    let (block_height, _) = mine_block(rpc_client, BranchId::Nu5, txs, false);
     sync_from_height(block_height, wallet, rpc_client);
 }
 
 /// Mine a block with the given transactions and return the block height and coinbase txid
 pub fn mine_block(
     rpc_client: &mut dyn RpcClient,
+    branch_id: BranchId,
     txs: Vec<Transaction>,
     activate: bool,
 ) -> (u32, TxId) {
     let block_template = rpc_client.get_block_template().unwrap();
     let block_height = block_template.height;
 
-    let block_proposal = template_into_proposal(block_template, txs, activate);
+    let block_proposal = template_into_proposal(block_template, branch_id, txs, activate);
     let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
 
     rpc_client.submit_block(block_proposal).unwrap();
@@ -44,10 +45,10 @@ pub fn mine_empty_blocks(num_blocks: u32, rpc_client: &mut dyn RpcClient) -> (u3
         panic!("num_blocks must be greater than 0")
     }
 
-    let (block_height, coinbase_txid) = mine_block(rpc_client, vec![], false);
+    let (block_height, coinbase_txid) = mine_block(rpc_client, BranchId::Nu5, vec![], false);
 
     for _ in 1..num_blocks {
-        mine_block(rpc_client, vec![], false);
+        mine_block(rpc_client, BranchId::Nu5, vec![], false);
     }
 
     (block_height, coinbase_txid)
@@ -67,7 +68,7 @@ pub fn create_shield_coinbase_tx(
         wallet.orchard_anchor(),
     );
 
-    let coinbase_value = 625000000;
+    let coinbase_value = 625_000_000;
     let coinbase_amount = Amount::from_u64(coinbase_value).unwrap();
     let miner_taddr = wallet.miner_address();
 
@@ -209,6 +210,7 @@ pub fn create_transfer_tx(
 /// Convert a block template and a list of transactions into a block proposal
 pub fn template_into_proposal(
     block_template: BlockTemplate,
+    branch_id: BranchId,
     mut txs: Vec<Transaction>,
     activate: bool,
 ) -> BlockProposal {
@@ -216,7 +218,7 @@ pub fn template_into_proposal(
         hex::decode(block_template.coinbase_txn.data)
             .unwrap()
             .as_slice(),
-        zcash_primitives::consensus::BranchId::Nu5,
+        branch_id,
     )
     .unwrap();
 
@@ -238,8 +240,7 @@ pub fn template_into_proposal(
         .iter()
         .map(|tx| {
             if tx.version().has_orchard() {
-                let bytes: [u8; 32] =
-                    <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
+                let bytes = <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
                 bytes
             } else {
                 AUTH_COMMITMENT_PLACEHOLDER

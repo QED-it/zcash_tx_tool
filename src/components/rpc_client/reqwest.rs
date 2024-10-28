@@ -100,7 +100,6 @@ impl RpcClient for ReqwestRpcClient {
         let mut params: Vec<ParamType> = Vec::new();
         params.push(ParamType::String(hex::encode(txid.as_ref())));
         params.push(ParamType::Number(0)); // Verbosity
-                                           // params.push(ParamType::String(hex::encode(block_id.0.as_ref())));
         let tx_hex: String =
             self.request(&RpcRequest::new_with_params("getrawtransaction", params))?;
         let tx_bytes = hex::decode(tx_hex).unwrap();

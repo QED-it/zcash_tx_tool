@@ -12,6 +12,7 @@ use abscissa_core::config::Reader;
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
 use std::io::{self, Write};
+use zcash_primitives::consensus::BranchId;
 use zcash_primitives::transaction::TxId;
 
 /// Run the E2E test
@@ -55,14 +56,16 @@ impl Runnable for TestCmd {
         let mut balances = TestBalances::get(&mut wallet);
         print_balances("=== Initial balances ===", balances);
 
-        pause();
+        // Uncomment the following line to pause the demo
+        // pause();
 
         // --------------------- Shield miner's reward ---------------------
 
         let shielding_tx = create_shield_coinbase_tx(miner, coinbase_txid, &mut wallet);
         mine(&mut wallet, &mut rpc_client, Vec::from([shielding_tx]));
 
-        let expected_delta = TestBalances::new(625_000_000 /*coinbase_reward*/, 0);
+        // 625_000_000 is the miner's coinbase reward for mining a block
+        let expected_delta = TestBalances::new(625_000_000, 0);
         balances = check_balances(
             "=== Balances after shielding ===",
             balances,
@@ -70,7 +73,8 @@ impl Runnable for TestCmd {
             &mut wallet,
         );
 
-        pause();
+        // Uncomment the following line to pause the demo
+        // pause();
 
         // --------------------- Create transfer ---------------------
 
@@ -88,10 +92,12 @@ impl Runnable for TestCmd {
             &mut wallet,
         );
 
-        pause();
+        // Uncomment the following line to pause the demo
+        // pause();
     }
 }
 
+#[allow(dead_code)]
 fn pause() {
     print!("Press Enter to continue the demo...");
     io::stdout().flush().unwrap();
@@ -106,8 +112,10 @@ fn prepare_test(
 ) -> TxId {
     wallet.reset();
     sync_from_height(config.chain.nu5_activation_height, wallet, rpc_client);
-    mine_block(rpc_client, vec![], true); // mine Nu5 activation block
-    let (_, coinbase_txid) = mine_empty_blocks(100, rpc_client); // coinbase maturity = 100
+    // mine Nu5 activation block
+    mine_block(rpc_client, BranchId::Nu5, vec![], true);
+    // mine 100 blocks to achieve coinbase maturity = 100
+    let (_, coinbase_txid) = mine_empty_blocks(100, rpc_client);
     let height = match wallet.last_block_height() {
         Some(bh) => bh.into(),
         _ => config.chain.nu5_activation_height,
