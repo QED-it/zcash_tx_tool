@@ -41,7 +41,7 @@ pub fn mine_block(
 
 /// Mine the given number of empty blocks and return the block height and coinbase txid of the first block
 pub fn mine_empty_blocks(num_blocks: u32, rpc_client: &mut dyn RpcClient) -> (u32, TxId) {
-    if num_blocks <= 0 {
+    if num_blocks == 0 {
         panic!("num_blocks must be greater than 0")
     }
 
@@ -258,7 +258,7 @@ pub fn template_into_proposal(
         prev_block: BlockHash(crate::components::rpc_client::decode_hex(
             block_template.previous_block_hash,
         )),
-        merkle_root: merkle_root,
+        merkle_root,
         final_sapling_root: if activate {
             [0; 32]
         } else {

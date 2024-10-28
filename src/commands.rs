@@ -74,11 +74,6 @@ impl Configurable<AppConfig> for EntryPoint {
     /// This can be safely deleted if you don't want to override config
     /// settings from command-line options.
     fn process_config(&self, config: AppConfig) -> Result<AppConfig, FrameworkError> {
-        match &self.cmd {
-            // AppCmd::UnconventionalCommand(cmd) => cmd.override_config(config),
-            // If you don't need special overrides for some
-            // subcommands, you can just use a catch all
-            _ => Ok(config),
-        }
+        Ok(config)
     }
 }

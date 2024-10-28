@@ -40,6 +40,12 @@ impl MockZcashNode {
     }
 }
 
+impl Default for MockZcashNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RpcClient for MockZcashNode {
     fn get_best_block_hash(&self) -> Result<BlockHash, Box<dyn Error>> {
         self.blockchain

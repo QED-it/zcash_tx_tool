@@ -154,7 +154,7 @@ impl Wallet {
 
             selected_notes.push(NoteSpendMetadata {
                 note,
-                sk: sk.clone(),
+                sk: *sk,
                 merkle_path,
             });
             total_amount_selected += note_value;
@@ -168,7 +168,7 @@ impl Wallet {
 
     pub fn address_for_account(&mut self, account: u32, scope: Scope) -> Address {
         match self.key_store.accounts.get(&account) {
-            Some(addr) => addr.clone(),
+            Some(addr) => *addr,
             None => {
                 let sk = SpendingKey::from_zip32_seed(
                     self.seed.as_slice(),
@@ -207,8 +207,7 @@ impl Wallet {
             .public_key(&Secp256k1::new())
             .serialize();
         let hash = &Ripemd160::digest(Sha256::digest(pubkey))[..];
-        let taddr = TransparentAddress::PublicKey(hash.try_into().unwrap());
-        taddr
+        TransparentAddress::PublicKey(hash.try_into().unwrap())
     }
 
     pub fn miner_sk(&mut self) -> SecretKey {
@@ -323,7 +322,7 @@ impl Wallet {
             .collect::<Vec<_>>();
 
         for (action_idx, ivk, note, recipient, memo) in
-            self.decrypt_outputs_with_keys(&bundle, &keys)
+            self.decrypt_outputs_with_keys(bundle, &keys)
         {
             info!("Store note");
             self.store_note(txid, action_idx, ivk.clone(), note, recipient, memo)
@@ -349,7 +348,7 @@ impl Wallet {
             .iter()
             .enumerate()
             .filter_map(|(idx, action)| {
-                let domain = OrchardDomain::for_action(&action);
+                let domain = OrchardDomain::for_action(action);
                 prepared_keys.iter().find_map(|(ivk, prepared_ivk)| {
                     try_note_decryption(&domain, prepared_ivk, action)
                         .map(|(n, a, m)| (idx, (*ivk).clone(), n, a, m))
@@ -403,13 +402,10 @@ impl Wallet {
 
     fn mark_potential_spends(&mut self, txid: &TxId, orchard_bundle: &Bundle<Authorized, Amount>) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
-            match self.db.find_by_nullifier(action.nullifier()) {
-                Some(note) => {
-                    info!("Adding spend of nullifier {:?}", action.nullifier());
-                    self.db
-                        .mark_as_potentially_spent(note.id, txid, action_index as i32);
-                }
-                None => {}
+            if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {
+                info!("Adding spend of nullifier {:?}", action.nullifier());
+                self.db
+                    .mark_as_potentially_spent(note.id, txid, action_index as i32);
             }
         }
     }
@@ -447,20 +443,17 @@ impl Wallet {
             }
 
             // for notes that are ours, mark the current state of the tree
-            match my_notes_for_tx
+            if let Some(note) = my_notes_for_tx
                 .iter()
                 .find(|note| note.action_index == note_index as i32)
             {
-                Some(note) => {
-                    info!("Witnessing Orchard note ({}, {})", txid, note_index);
-                    let position: u64 = self
-                        .commitment_tree
-                        .mark()
-                        .expect("tree is not empty")
-                        .into();
-                    self.db.update_note_position(note.id, position as i64);
-                }
-                None => {}
+                info!("Witnessing Orchard note ({}, {})", txid, note_index);
+                let position: u64 = self
+                    .commitment_tree
+                    .mark()
+                    .expect("tree is not empty")
+                    .into();
+                self.db.update_note_position(note.id, position as i64);
             }
         }
 

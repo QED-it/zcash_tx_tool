@@ -21,6 +21,12 @@ impl SqliteDataStorage {
     }
 }
 
+impl Default for SqliteDataStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SqliteDataStorage {
     pub fn find_notes(&mut self) -> Vec<NoteData> {
         notes
