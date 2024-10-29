@@ -1,7 +1,7 @@
-/// Partially copied from `zebra/zebra-chain/src/block/merkle.rs`
-use std::{fmt, iter};
 use std::convert::TryInto;
 use std::iter::FromIterator;
+/// Partially copied from `zebra/zebra-chain/src/block/merkle.rs`
+use std::{fmt, iter};
 
 use hex::{FromHex, ToHex};
 use sha2::{Digest, Sha256};
@@ -87,8 +87,8 @@ impl FromIterator<[u8; 32]> for Root {
     /// When there are no transactions in the iterator.
     /// This is impossible, because every block must have a coinbase transaction.
     fn from_iter<I>(hashes: I) -> Self
-        where
-            I: IntoIterator<Item = [u8; 32]>,
+    where
+        I: IntoIterator<Item = [u8; 32]>,
     {
         let mut hashes = hashes.into_iter().collect::<Vec<_>>();
         while hashes.len() > 1 {
@@ -116,7 +116,6 @@ fn hash(h1: &[u8; 32], h2: &[u8; 32]) -> [u8; 32] {
     buffer
 }
 
-
 fn auth_data_hash(h1: &[u8; 32], h2: &[u8; 32]) -> [u8; 32] {
     // > Non-leaf hashes in this tree are BLAKE2b-256 hashes personalized by
     // > the string "ZcashAuthDatHash".
@@ -132,7 +131,6 @@ fn auth_data_hash(h1: &[u8; 32], h2: &[u8; 32]) -> [u8; 32] {
         .try_into()
         .expect("32 byte array")
 }
-
 
 /// The root of the authorizing data Merkle tree, binding the
 /// block header to the authorizing data of the block (signatures, proofs)
@@ -217,7 +215,6 @@ impl FromHex for AuthDataRoot {
         Ok(hash.into())
     }
 }
-
 
 /// The placeholder used for the [`AuthDigest`](transaction::AuthDigest) of pre-v5 transactions.
 ///

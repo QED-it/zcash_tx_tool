@@ -8,5 +8,5 @@ pub struct Block {
     pub height: BlockHeight,
     pub confirmations: i64,
     pub tx_ids: Vec<TxId>,
-    pub previous_block_hash: BlockHash
+    pub previous_block_hash: BlockHash,
 }

@@ -624,7 +624,7 @@ dependencies = [
 [[package]]
 name = "equihash"
 version = "0.2.0"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#2a0e3c2c6e037157c8e5be893993396466034efb"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#4e76db7bbc9da866d9fa8643af5efcb747705f2e"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -659,7 +659,7 @@ dependencies = [
 [[package]]
 name = "f4jumble"
 version = "0.1.0"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#2a0e3c2c6e037157c8e5be893993396466034efb"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#4e76db7bbc9da866d9fa8643af5efcb747705f2e"
 dependencies = [
  "blake2b_simd",
 ]
@@ -2734,7 +2734,7 @@ checksum = "213b7324336b53d2414b2db8537e56544d981803139155afa84f76eeebb7a546"
 [[package]]
 name = "zcash_address"
 version = "0.3.0"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#2a0e3c2c6e037157c8e5be893993396466034efb"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#4e76db7bbc9da866d9fa8643af5efcb747705f2e"
 dependencies = [
  "bech32",
  "bs58",
@@ -2745,7 +2745,7 @@ dependencies = [
 [[package]]
 name = "zcash_client_backend"
 version = "0.10.0-rc.1"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#2a0e3c2c6e037157c8e5be893993396466034efb"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#4e76db7bbc9da866d9fa8643af5efcb747705f2e"
 dependencies = [
  "base64",
  "bech32",
@@ -2777,7 +2777,7 @@ dependencies = [
 [[package]]
 name = "zcash_encoding"
 version = "0.2.0"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#2a0e3c2c6e037157c8e5be893993396466034efb"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#4e76db7bbc9da866d9fa8643af5efcb747705f2e"
 dependencies = [
  "byteorder",
  "nonempty",
@@ -2786,7 +2786,7 @@ dependencies = [
 [[package]]
 name = "zcash_note_encryption"
 version = "0.4.0"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#2a0e3c2c6e037157c8e5be893993396466034efb"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#4e76db7bbc9da866d9fa8643af5efcb747705f2e"
 dependencies = [
  "chacha20",
  "chacha20poly1305",
@@ -2798,7 +2798,7 @@ dependencies = [
 [[package]]
 name = "zcash_primitives"
 version = "0.13.0-rc.1"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#2a0e3c2c6e037157c8e5be893993396466034efb"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#4e76db7bbc9da866d9fa8643af5efcb747705f2e"
 dependencies = [
  "aes",
  "bip0039",
@@ -2833,7 +2833,7 @@ dependencies = [
 [[package]]
 name = "zcash_proofs"
 version = "0.13.0-rc.1"
-source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#2a0e3c2c6e037157c8e5be893993396466034efb"
+source = "git+https://github.com/QED-it/librustzcash.git?branch=zcash-tx-test-tool-txv5#4e76db7bbc9da866d9fa8643af5efcb747705f2e"
 dependencies = [
  "bellman",
  "blake2b_simd",
