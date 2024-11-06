@@ -58,7 +58,7 @@ impl RpcClient for MockZcashNode {
         self.blockchain
             .get(height as usize)
             .ok_or(io::Error::new(ErrorKind::NotFound, "Block not found").into())
-            .map(|b| b.clone())
+            .cloned()
     }
 
     fn send_transaction(&mut self, tx: Transaction) -> Result<TxId, Box<dyn Error>> {
@@ -68,7 +68,7 @@ impl RpcClient for MockZcashNode {
         self.transactions.insert(txid, hex::encode(tx_bytes));
         // We create block per transaction for now
         let mut block_hash: [u8; 32] = [0; 32];
-        OsRng::default().fill_bytes(block_hash.as_mut_slice());
+        OsRng.fill_bytes(block_hash.as_mut_slice());
 
         self.blockchain.push(Block {
             hash: BlockHash::from_slice(block_hash.as_slice()),

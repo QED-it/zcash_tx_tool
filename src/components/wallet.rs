@@ -236,8 +236,7 @@ impl Wallet {
             .public_key(&Secp256k1::new())
             .serialize();
         let hash = &Ripemd160::digest(Sha256::digest(pubkey))[..];
-        let taddr = TransparentAddress::PublicKeyHash(hash.try_into().unwrap());
-        taddr
+        TransparentAddress::PublicKeyHash(hash.try_into().unwrap())
     }
 
     pub fn miner_sk(&self) -> SecretKey {
@@ -318,11 +317,10 @@ impl Wallet {
         transactions: Vec<Transaction>,
     ) -> Result<(), BundleLoadError> {
         transactions.into_iter().try_for_each(|tx| {
-            Ok(
-                if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
-                    self.add_notes_from_tx(tx)?;
-                },
-            )
+            if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
+                self.add_notes_from_tx(tx)?;
+            };
+            Ok(())
         })?;
 
         self.last_block_hash = Some(block_hash);
@@ -463,13 +461,10 @@ impl Wallet {
         orchard_bundle: &Bundle<Authorized, Amount, O>,
     ) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
-            match self.db.find_by_nullifier(&action.nullifier()) {
-                Some(note) => {
-                    info!("Adding spend of nullifier {:?}", action.nullifier());
-                    self.db
-                        .mark_as_potentially_spent(note.id, txid, action_index as i32);
-                }
-                None => {}
+            if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {
+                info!("Adding spend of nullifier {:?}", action.nullifier());
+                self.db
+                    .mark_as_potentially_spent(note.id, txid, action_index as i32);
             }
         }
     }
