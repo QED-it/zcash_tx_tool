@@ -10,15 +10,15 @@
 //! See the `impl Configurable` below for how to specify the path to the
 //! application's configuration file.
 
+mod test_balances;
 mod test_orchard;
 mod test_orchard_zsa;
-mod test_balances;
 
+use crate::commands::test_orchard::TestOrchardCmd;
+use crate::commands::test_orchard_zsa::TestOrchardZSACmd;
 use crate::config::AppConfig;
 use abscissa_core::{Command, Configurable, FrameworkError, Runnable};
 use std::path::PathBuf;
-use crate::commands::test_orchard::TestOrchardCmd;
-use crate::commands::test_orchard_zsa::TestOrchardZSACmd;
 
 /// Application Configuration Filename
 pub const CONFIG_FILE: &str = "config.toml";

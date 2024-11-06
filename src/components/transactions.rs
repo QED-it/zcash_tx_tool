@@ -1,23 +1,23 @@
-use std::convert::TryFrom;
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::components::wallet::Wallet;
 use crate::components::zebra_merkle::{
     block_commitment_from_parts, AuthDataRoot, Root, AUTH_COMMITMENT_PLACEHOLDER,
 };
 use crate::prelude::{error, info};
-use orchard::Address;
 use orchard::issuance::IssueInfo;
 use orchard::note::AssetBase;
 use orchard::value::NoteValue;
+use orchard::Address;
 use rand::rngs::OsRng;
+use std::convert::TryFrom;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
-use zcash_primitives::consensus::{BlockHeight, BranchId, REGTEST_NETWORK, RegtestNetwork};
+use zcash_primitives::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
 use zcash_primitives::memo::MemoBytes;
-use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_primitives::transaction::builder::{BuildConfig, Builder};
-use zcash_primitives::transaction::components::{transparent, TxOut};
 use zcash_primitives::transaction::components::amount::NonNegativeAmount;
+use zcash_primitives::transaction::components::{transparent, TxOut};
 use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
+use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
 
 /// Mine a block with the given transactions and sync the wallet
@@ -75,8 +75,23 @@ pub fn create_shield_coinbase_transaction(
 
     let sk = wallet.miner_sk();
 
-    tx.add_transparent_input(sk, transparent::OutPoint::new(coinbase_txid.0, 0), TxOut { value: coinbase_amount, script_pubkey: miner_taddr.script() }).unwrap();
-    tx.add_orchard_output::<FeeError>(Some(wallet.orchard_ovk()), recipient, coinbase_value, AssetBase::native(), MemoBytes::empty()).unwrap();
+    tx.add_transparent_input(
+        sk,
+        transparent::OutPoint::new(coinbase_txid.0, 0),
+        TxOut {
+            value: coinbase_amount,
+            script_pubkey: miner_taddr.script(),
+        },
+    )
+    .unwrap();
+    tx.add_orchard_output::<FeeError>(
+        Some(wallet.orchard_ovk()),
+        recipient,
+        coinbase_value,
+        AssetBase::native(),
+        MemoBytes::empty(),
+    )
+    .unwrap();
 
     build_tx(tx)
 }
@@ -135,15 +150,22 @@ pub fn sync_from_height(from_height: u32, wallet: &mut Wallet, rpc: &mut dyn Rpc
 }
 
 /// Create a transfer transaction
-pub fn create_transfer_transaction(sender: Address, recipient: Address, amount: u64, asset: AssetBase, wallet: &mut Wallet) -> Transaction {
-
+pub fn create_transfer_transaction(
+    sender: Address,
+    recipient: Address,
+    amount: u64,
+    asset: AssetBase,
+    wallet: &mut Wallet,
+) -> Transaction {
     info!("Transfer {} zatoshi", amount);
 
     let ovk = wallet.orchard_ovk();
 
     // Add inputs
     let inputs = wallet.select_spendable_notes(sender, amount, Some(asset));
-    let total_inputs_amount = inputs.iter().fold(0, |acc, input| acc + input.note.value().inner());
+    let total_inputs_amount = inputs
+        .iter()
+        .fold(0, |acc, input| acc + input.note.value().inner());
 
     info!(
         "Total inputs amount: {}, amount to transfer: {}",
@@ -152,34 +174,64 @@ pub fn create_transfer_transaction(sender: Address, recipient: Address, amount: 
 
     let mut tx = create_tx(wallet);
 
-    inputs.into_iter().for_each(|input| tx.add_orchard_spend::<FeeError>(&input.sk, input.note, input.merkle_path).unwrap());
+    inputs.into_iter().for_each(|input| {
+        tx.add_orchard_spend::<FeeError>(&input.sk, input.note, input.merkle_path)
+            .unwrap()
+    });
 
     // Add main transfer output
-    tx.add_orchard_output::<FeeError>(Some(ovk.clone()), recipient, amount, asset, MemoBytes::empty()).unwrap();
+    tx.add_orchard_output::<FeeError>(
+        Some(ovk.clone()),
+        recipient,
+        amount,
+        asset,
+        MemoBytes::empty(),
+    )
+    .unwrap();
 
     // Add change output
     let change_amount = total_inputs_amount - amount;
 
     if change_amount != 0 {
-        tx.add_orchard_output::<FeeError>(Some(ovk), sender, change_amount, asset, MemoBytes::empty()).unwrap();
+        tx.add_orchard_output::<FeeError>(
+            Some(ovk),
+            sender,
+            change_amount,
+            asset,
+            MemoBytes::empty(),
+        )
+        .unwrap();
     }
 
     build_tx(tx)
 }
 
 /// Create a burn transaction
-pub fn create_burn_transaction(arsonist: Address, amount: u64, asset: AssetBase, wallet: &mut Wallet) -> Transaction {
+pub fn create_burn_transaction(
+    arsonist: Address,
+    amount: u64,
+    asset: AssetBase,
+    wallet: &mut Wallet,
+) -> Transaction {
     info!("Burn {} zatoshi", amount);
 
     // Add inputs
     let inputs = wallet.select_spendable_notes(arsonist, amount, Some(asset));
-    let total_inputs_amount = inputs.iter().fold(0, |acc, input| acc + input.note.value().inner());
+    let total_inputs_amount = inputs
+        .iter()
+        .fold(0, |acc, input| acc + input.note.value().inner());
 
-    info!("Total inputs amount: {}, amount to burn: {}", total_inputs_amount, amount);
+    info!(
+        "Total inputs amount: {}, amount to burn: {}",
+        total_inputs_amount, amount
+    );
 
     let mut tx = create_tx(wallet);
 
-    inputs.into_iter().for_each(|input| tx.add_orchard_spend::<FeeError>(&input.sk, input.note, input.merkle_path).unwrap());
+    inputs.into_iter().for_each(|input| {
+        tx.add_orchard_spend::<FeeError>(&input.sk, input.note, input.merkle_path)
+            .unwrap()
+    });
 
     // Add main transfer output
     tx.add_burn::<FeeError>(amount, asset).unwrap();
@@ -188,20 +240,39 @@ pub fn create_burn_transaction(arsonist: Address, amount: u64, asset: AssetBase,
     let change_amount = total_inputs_amount - amount;
     if change_amount != 0 {
         let ovk = wallet.orchard_ovk();
-        tx.add_orchard_output::<FeeError>(Some(ovk), arsonist, change_amount, asset, MemoBytes::empty()).unwrap();
+        tx.add_orchard_output::<FeeError>(
+            Some(ovk),
+            arsonist,
+            change_amount,
+            asset,
+            MemoBytes::empty(),
+        )
+        .unwrap();
     }
 
     build_tx(tx)
 }
 
 /// Create a transaction that issues a new asset
-pub fn create_issue_transaction(recipient: Address, amount: u64, asset_desc: Vec<u8>, wallet: &mut Wallet) -> Transaction {
+pub fn create_issue_transaction(
+    recipient: Address,
+    amount: u64,
+    asset_desc: Vec<u8>,
+    wallet: &mut Wallet,
+) -> Transaction {
     info!("Issue {} asset", amount);
     let mut tx = create_tx(wallet);
-    tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc, Some(IssueInfo{ recipient, value: NoteValue::from_raw(amount) })).unwrap();
+    tx.init_issuance_bundle::<FeeError>(
+        wallet.issuance_key(),
+        asset_desc,
+        Some(IssueInfo {
+            recipient,
+            value: NoteValue::from_raw(amount),
+        }),
+    )
+    .unwrap();
     build_tx(tx)
 }
-
 
 /// Convert a block template and a list of transactions into a block proposal
 pub fn template_into_proposal(
@@ -232,14 +303,17 @@ pub fn template_into_proposal(
             .0
     };
 
-    let auth_data_root = txs_with_coinbase.iter().map(|tx| {
-        if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
-            let bytes = <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
-            bytes
-        } else {
-            AUTH_COMMITMENT_PLACEHOLDER
-        }
-    }).collect::<AuthDataRoot>();
+    let auth_data_root = txs_with_coinbase
+        .iter()
+        .map(|tx| {
+            if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
+                let bytes = <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
+                bytes
+            } else {
+                AUTH_COMMITMENT_PLACEHOLDER
+            }
+        })
+        .collect::<AuthDataRoot>();
 
     let hash_block_commitments = block_commitment_from_parts(
         crate::components::rpc_client::decode_hex(block_template.default_roots.chain_history_root),
@@ -276,22 +350,29 @@ fn create_tx(wallet: &Wallet) -> Builder<'_, RegtestNetwork, ()> {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),
     };
-    let tx = Builder::new(REGTEST_NETWORK, /*wallet.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_420), build_config);
+    let tx = Builder::new(
+        REGTEST_NETWORK,
+        /*wallet.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_420),
+        build_config,
+    );
     tx
 }
 
 fn build_tx(builder: Builder<'_, RegtestNetwork, ()>) -> Transaction {
-    let fee_rule = &FeeRule::non_standard(NonNegativeAmount::from_u64(0).unwrap(), 20, 150, 34).unwrap();
+    let fee_rule =
+        &FeeRule::non_standard(NonNegativeAmount::from_u64(0).unwrap(), 20, 150, 34).unwrap();
     let prover = LocalTxProver::with_default_location();
     match prover {
         None => {
             panic!("Zcash parameters not found. Please run `zcutil/fetch-params.sh`")
         }
         Some(prover) => {
-            let tx = builder.build(OsRng, &prover, &prover, fee_rule).unwrap().into_transaction();
+            let tx = builder
+                .build(OsRng, &prover, &prover, fee_rule)
+                .unwrap()
+                .into_transaction();
             info!("Build tx: {}", tx.txid());
             tx
         }
     }
-
 }

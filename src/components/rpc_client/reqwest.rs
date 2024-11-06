@@ -27,7 +27,11 @@ impl ReqwestRpcClient {
     where
         T: DeserializeOwned,
     {
-        info!("Request {} Body: {}", request.method, serde_json::to_string(&request.params).unwrap());
+        info!(
+            "Request {} Body: {}",
+            request.method,
+            serde_json::to_string(&request.params).unwrap()
+        );
 
         let binding = self
             .client

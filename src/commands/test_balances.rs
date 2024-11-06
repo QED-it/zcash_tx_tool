@@ -1,7 +1,7 @@
-use orchard::keys::Scope::External;
-use orchard::note::AssetBase;
 use crate::components::wallet::Wallet;
 use crate::prelude::info;
+use orchard::keys::Scope::External;
+use orchard::note::AssetBase;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct TestBalances {
@@ -10,7 +10,6 @@ pub(crate) struct TestBalances {
 }
 
 impl TestBalances {
-
     pub(crate) fn new(account0: i64, account1: i64) -> Self {
         TestBalances { account0, account1 }
     }
@@ -20,7 +19,6 @@ impl TestBalances {
     }
 
     pub(crate) fn get_asset(asset: AssetBase, wallet: &mut Wallet) -> TestBalances {
-
         let address0 = wallet.address_for_account(0, External);
         let address1 = wallet.address_for_account(1, External);
 
@@ -34,11 +32,22 @@ impl TestBalances {
     }
 }
 
-pub(crate) fn check_balances(header: &str, initial: TestBalances, expected_delta: TestBalances, wallet: &mut Wallet) -> TestBalances {
+pub(crate) fn check_balances(
+    header: &str,
+    initial: TestBalances,
+    expected_delta: TestBalances,
+    wallet: &mut Wallet,
+) -> TestBalances {
     let actual_balances = TestBalances::get_zec(wallet);
     print_balances(header, actual_balances);
-    assert_eq!(actual_balances.account0, initial.account0 + expected_delta.account0);
-    assert_eq!(actual_balances.account1, initial.account1 + expected_delta.account1);
+    assert_eq!(
+        actual_balances.account0,
+        initial.account0 + expected_delta.account0
+    );
+    assert_eq!(
+        actual_balances.account1,
+        initial.account1 + expected_delta.account1
+    );
     actual_balances
 }
 
