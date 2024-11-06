@@ -14,6 +14,7 @@ mod test_orchard;
 mod test_orchard_zsa;
 mod test_balances;
 
+use crate::commands::test::TestCmd;
 use crate::config::AppConfig;
 use abscissa_core::{Command, Configurable, FrameworkError, Runnable};
 use std::path::PathBuf;
@@ -77,15 +78,7 @@ impl Configurable<AppConfig> for EntryPoint {
     ///
     /// This can be safely deleted if you don't want to override config
     /// settings from command-line options.
-    fn process_config(
-        &self,
-        config: AppConfig,
-    ) -> Result<AppConfig, FrameworkError> {
-        match &self.cmd {
-            // AppCmd::UnconventionalCommand(cmd) => cmd.override_config(config),
-            // If you don't need special overrides for some
-            // subcommands, you can just use a catch all
-            _ => Ok(config),
-        }
+    fn process_config(&self, config: AppConfig) -> Result<AppConfig, FrameworkError> {
+        Ok(config)
     }
 }

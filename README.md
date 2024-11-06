@@ -33,9 +33,9 @@ Currently, we use a custom Zebra build. There are several changes compared to th
 To build and run the docker image:
 
 ```bash
-docker build -t qedit/zebra-singlenode-txv6 .
+docker build -t qedit/zebra-regtest-txv6 .
 
-docker run -p 18232:18232 qedit/zebra-singlenode-txv6
+docker run -p 18232:18232 qedit/zebra-regtest-txv6
 ``` 
 
 More details on how the docker file is created and synced: [Link](https://github.com/QED-it/zcash_tx_tool/blob/main/Dockerfile)
@@ -110,3 +110,32 @@ With optional, but recommended `--release` flag, or simply
 ```bash
 zcash_tx_tool test_orchard_zsa
 ```
+
+You can also run the tests using docker. To do that you'll need first to build the docker image
+
+```bash
+docker build -t zcash_tx_tool -f Dockerfile-demo .
+```
+
+And after that run the image itself.
+The default connection parameters are set to connect to the zebra-node running on the machine itself (127.0.0.1)
+If you ran the node in a docker container with the command above, you named that container "zebra-node", so you should use that as the ZCASH_NODE_ADDRESS.
+If the node is running on the ECS server, you can connect to it by setting the ZCASH_NODE_ADDRESS=<Domain>.
+
+First, make sure you created the network:
+```bash
+docker network create zcash-network
+```
+And started the node with the network argument, like this
+```bash
+docker run --name zebra-node --network zcash-network -p 18232:18232 qedit/zebra-singlenode-txv5
+```
+
+Here are the 3 options (No parameters will default to the first configuration)
+
+```bash
+docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=127.0.0.1 -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool
+docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=zebra-node -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool
+docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=<Domain> -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool
+```
+The '-it' parameter was added to allow the demo to be interactive.

@@ -1,4 +1,9 @@
-use std::convert::TryFrom;
+use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
+use crate::components::wallet::Wallet;
+use crate::components::zebra_merkle::{
+    block_commitment_from_parts, AuthDataRoot, Root, AUTH_COMMITMENT_PLACEHOLDER,
+};
+use crate::prelude::{error, info};
 use orchard::Address;
 use orchard::issuance::IssueInfo;
 use orchard::note::AssetBase;
@@ -12,24 +17,26 @@ use zcash_primitives::transaction::builder::{BuildConfig, Builder};
 use zcash_primitives::transaction::components::{transparent, TxOut};
 use zcash_primitives::transaction::components::amount::NonNegativeAmount;
 use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
+use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
-use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
-use crate::components::wallet::Wallet;
-use crate::components::zebra_merkle::{AUTH_COMMITMENT_PLACEHOLDER, AuthDataRoot, block_commitment_from_parts, Root};
-use crate::prelude::{error, info};
 
 /// Mine a block with the given transactions and sync the wallet
 pub fn mine(wallet: &mut Wallet, rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) {
-    let (block_height, _) = mine_block(rpc_client, txs);
+    let (block_height, _) = mine_block(rpc_client, BranchId::Nu5, txs, false);
     sync_from_height(block_height, wallet, rpc_client);
 }
 
 /// Mine a block with the given transactions and return the block height and coinbase txid
-pub fn mine_block(rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) -> (u32, TxId) {
+pub fn mine_block(
+    rpc_client: &mut dyn RpcClient,
+    branch_id: BranchId,
+    txs: Vec<Transaction>,
+    activate: bool,
+) -> (u32, TxId) {
     let block_template = rpc_client.get_block_template().unwrap();
     let block_height = block_template.height;
 
-    let block_proposal = template_into_proposal(block_template, txs);
+    let block_proposal = template_into_proposal(block_template, branch_id, txs, activate);
     let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
 
     rpc_client.submit_block(block_proposal).unwrap();
@@ -39,26 +46,30 @@ pub fn mine_block(rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) -> (u32
 
 /// Mine the given number of empty blocks and return the block height and coinbase txid of the first block
 pub fn mine_empty_blocks(num_blocks: u32, rpc_client: &mut dyn RpcClient) -> (u32, TxId) {
+    if num_blocks == 0 {
+        panic!("num_blocks must be greater than 0")
+    }
 
-    if num_blocks <= 0 { panic!("num_blocks must be greater than 0") }
-
-    let (block_height, coinbase_txid) = mine_block(rpc_client, vec![]);
+    let (block_height, coinbase_txid) = mine_block(rpc_client, BranchId::Nu5, vec![], false);
 
     for _ in 1..num_blocks {
-        mine_block(rpc_client, vec![]);
-    };
+        mine_block(rpc_client, BranchId::Nu5, vec![], false);
+    }
 
     (block_height, coinbase_txid)
 }
 
 /// Create a shielded coinbase transaction
-pub fn create_shield_coinbase_transaction(recipient: Address, coinbase_txid: TxId, wallet: &mut Wallet) -> Transaction {
-
+pub fn create_shield_coinbase_tx(
+    recipient: Address,
+    coinbase_txid: TxId,
+    wallet: &mut Wallet,
+) -> Transaction {
     info!("Shielding coinbase output from tx {}", coinbase_txid);
 
     let mut tx = create_tx(wallet);
 
-    let coinbase_value = 500000000;
+    let coinbase_value = 625_000_000;
     let coinbase_amount = NonNegativeAmount::from_u64(coinbase_value).unwrap();
     let miner_taddr = wallet.miner_address();
 
@@ -81,7 +92,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut Wallet, rpc: &mut dyn Rpc
     info!("Starting sync from height {}", from_height);
 
     let wallet_last_block_height = wallet.last_block_height().map_or(0, |h| h.into());
-    let mut next_height= if from_height < wallet_last_block_height {
+    let mut next_height = if from_height < wallet_last_block_height {
         wallet_last_block_height
     } else {
         from_height
@@ -92,18 +103,33 @@ pub fn sync_from_height(from_height: u32, wallet: &mut Wallet, rpc: &mut dyn Rpc
             Ok(block) => block,
             Err(err) => {
                 info!("No block at height {}: {}", next_height, err);
-                return
+                return;
             }
         };
 
-        if true /* block.prev_hash == wallet.last_block_hash */ {
-            info!("Adding transactions from block {} at height {}", block.hash, block.height);
-            let transactions = block.tx_ids.into_iter().map(| tx_id| rpc.get_transaction(&tx_id).unwrap()).collect();
-            wallet.add_notes_from_block(block.height, block.hash, transactions).unwrap();
+        if true
+        /* block.prev_hash == wallet.last_block_hash */
+        {
+            info!(
+                "Adding transactions from block {} at height {}",
+                block.hash, block.height
+            );
+            let transactions = block
+                .tx_ids
+                .into_iter()
+                .map(|tx_id| rpc.get_transaction(&tx_id).unwrap())
+                .collect();
+            wallet
+                .add_notes_from_block(block.height, block.hash, transactions)
+                .unwrap();
             next_height += 1;
         } else {
             // Fork management is not implemented
-            error!("REORG: dropping block {} at height {}", wallet.last_block_hash().unwrap(), next_height);
+            error!(
+                "REORG: dropping block {} at height {}",
+                wallet.last_block_hash().unwrap(),
+                next_height
+            );
         }
     }
 }
@@ -119,7 +145,10 @@ pub fn create_transfer_transaction(sender: Address, recipient: Address, amount: 
     let inputs = wallet.select_spendable_notes(sender, amount, Some(asset));
     let total_inputs_amount = inputs.iter().fold(0, |acc, input| acc + input.note.value().inner());
 
-    info!("Total inputs amount: {}, amount to transfer: {}", total_inputs_amount, amount);
+    info!(
+        "Total inputs amount: {}, amount to transfer: {}",
+        total_inputs_amount, amount
+    );
 
     let mut tx = create_tx(wallet);
 
@@ -175,9 +204,19 @@ pub fn create_issue_transaction(recipient: Address, amount: u64, asset_desc: Vec
 
 
 /// Convert a block template and a list of transactions into a block proposal
-pub fn template_into_proposal(block_template: BlockTemplate, mut txs: Vec<Transaction>) -> BlockProposal {
-
-    let coinbase = Transaction::read(hex::decode(block_template.coinbase_txn.data).unwrap().as_slice(), zcash_primitives::consensus::BranchId::Nu5).unwrap();
+pub fn template_into_proposal(
+    block_template: BlockTemplate,
+    branch_id: BranchId,
+    mut txs: Vec<Transaction>,
+    activate: bool,
+) -> BlockProposal {
+    let coinbase = Transaction::read(
+        hex::decode(block_template.coinbase_txn.data)
+            .unwrap()
+            .as_slice(),
+        branch_id,
+    )
+    .unwrap();
 
     let mut txs_with_coinbase = vec![coinbase];
     txs_with_coinbase.append(&mut txs);
@@ -186,12 +225,16 @@ pub fn template_into_proposal(block_template: BlockTemplate, mut txs: Vec<Transa
         // only coinbase tx is present, no need to calculate
         crate::components::rpc_client::decode_hex(block_template.default_roots.merkle_root)
     } else {
-        txs_with_coinbase.iter().map(|tx| { tx.txid().0 }).collect::<Root>().0
+        txs_with_coinbase
+            .iter()
+            .map(|tx| tx.txid().0)
+            .collect::<Root>()
+            .0
     };
 
     let auth_data_root = txs_with_coinbase.iter().map(|tx| {
         if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
-            let bytes: [u8;32] = <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
+            let bytes = <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
             bytes
         } else {
             AUTH_COMMITMENT_PLACEHOLDER
@@ -205,12 +248,18 @@ pub fn template_into_proposal(block_template: BlockTemplate, mut txs: Vec<Transa
 
     let block_header_data = BlockHeaderData {
         version: block_template.version as i32,
-        prev_block: BlockHash(crate::components::rpc_client::decode_hex(block_template.previous_block_hash)),
-        merkle_root: merkle_root,
-        final_sapling_root: hash_block_commitments,
+        prev_block: BlockHash(crate::components::rpc_client::decode_hex(
+            block_template.previous_block_hash,
+        )),
+        merkle_root,
+        final_sapling_root: if activate {
+            [0; 32]
+        } else {
+            hash_block_commitments
+        },
         time: block_template.cur_time,
         bits: u32::from_str_radix(block_template.bits.as_str(), 16).unwrap(),
-        nonce: [2; 32], // Currently PoW is switched off in Zebra
+        nonce: [2; 32],                 // Currently PoW is switched off in Zebra
         solution: Vec::from([0; 1344]), // Currently PoW is switched off in Zebra
     };
 
@@ -227,7 +276,7 @@ fn create_tx(wallet: &Wallet) -> Builder<'_, TestNetwork, ()> {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),
     };
-    let tx = Builder::new(TEST_NETWORK, /*wallet.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_420), build_config);
+    let tx = Builder::new(REGTEST_NETWORK, /*wallet.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_420), build_config);
     tx
 }
 

@@ -23,16 +23,13 @@ use secp256k1::{Secp256k1, SecretKey};
 use sha2::Sha256;
 
 use zcash_primitives::block::BlockHash;
-use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK};
+use zcash_primitives::consensus::{BlockHeight, REGTEST_NETWORK};
 use zcash_primitives::legacy::keys::NonHardenedChildIndex;
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::transaction::components::issuance::{write_note};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_primitives::zip32::AccountId;
 use zcash_primitives::zip339::Mnemonic;
-use crate::components::persistence::model::NoteData;
-use crate::components::persistence::sqlite::SqliteDataStorage;
-use crate::components::wallet::structs::OrderedAddress;
 
 pub const MAX_CHECKPOINTS: usize = 100;
 pub const NOTE_COMMITMENT_TREE_DEPTH: u8 = 32;
@@ -41,7 +38,7 @@ pub const NOTE_COMMITMENT_TREE_DEPTH: u8 = 32;
 pub struct NoteSpendMetadata {
     pub note: Note,
     pub sk: SpendingKey,
-    pub merkle_path: MerklePath
+    pub merkle_path: MerklePath,
 }
 
 struct KeyStore {
@@ -80,7 +77,8 @@ impl KeyStore {
     /// corresponds to a FVK known by this wallet, `false` otherwise.
     pub fn add_raw_address(&mut self, addr: Address, ivk: IncomingViewingKey) -> bool {
         let has_fvk = self.viewing_keys.contains_key(&ivk);
-        self.payment_addresses.insert(OrderedAddress::new(addr), ivk);
+        self.payment_addresses
+            .insert(OrderedAddress::new(addr), ivk);
         has_fvk
     }
 
@@ -108,11 +106,10 @@ pub struct Wallet {
     /// The block hash at which the last checkpoint was created, if any.
     last_block_hash: Option<BlockHash>,
     /// The seed used to derive the wallet's keys.
-    seed: [u8; 64]
+    seed: [u8; 64],
 }
 
 impl Wallet {
-
     pub fn last_block_hash(&self) -> Option<BlockHash> {
         self.last_block_hash
     }
@@ -139,27 +136,43 @@ impl Wallet {
             ).unwrap();
 
             let note_value = note.value().inner();
-            let sk = self.key_store.spending_key_for_ivk(self.key_store.ivk_for_address(&note.recipient()).expect("IVK not found for address")).expect("SpendingKey not found for IVK");
+            let sk = self
+                .key_store
+                .spending_key_for_ivk(
+                    self.key_store
+                        .ivk_for_address(&note.recipient())
+                        .expect("IVK not found for address"),
+                )
+                .expect("SpendingKey not found for IVK");
 
-            let merkle_path = MerklePath::from_parts(note_data.position as u32, self.commitment_tree.witness(Position::from(note_data.position as u64), 0).unwrap().try_into().unwrap());
+            let merkle_path = MerklePath::from_parts(
+                note_data.position as u32,
+                self.commitment_tree
+                    .witness(Position::from(note_data.position as u64), 0)
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            );
 
             selected_notes.push(NoteSpendMetadata {
                 note,
-                sk: sk.clone(),
+                sk: *sk,
                 merkle_path,
             });
             total_amount_selected += note_value;
 
-            if total_amount_selected >= total_amount { break }
-        };
+            if total_amount_selected >= total_amount {
+                break;
+            }
+        }
         selected_notes
     }
 
     pub fn address_for_account(&mut self, account: u32, scope: Scope) -> Address {
         match self.key_store.accounts.get(&account) {
-            Some(addr) => addr.clone(),
+            Some(addr) => *addr,
             None => {
-                let sk = SpendingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, AccountId::try_from(account).unwrap()).unwrap();
+                let sk = SpendingKey::from_zip32_seed(self.seed.as_slice(), constants::regtest::COIN_TYPE, AccountId::try_from(account).unwrap()).unwrap();
                 let fvk = FullViewingKey::from(&sk);
                 let address = fvk.address_at(0u32, scope);
                 self.key_store.add_raw_address(address, fvk.to_ivk(scope));
@@ -172,7 +185,7 @@ impl Wallet {
     }
 
     pub(crate) fn orchard_ovk(&self) -> OutgoingViewingKey {
-        let sk = SpendingKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, AccountId::try_from(0).unwrap()).unwrap();
+        let sk = SpendingKey::from_zip32_seed(self.seed.as_slice(), constants::regtest::COIN_TYPE, AccountId::try_from(0).unwrap()).unwrap();
         FullViewingKey::from(&sk).to_ovk(Scope::External)
     }
 
@@ -187,7 +200,7 @@ impl Wallet {
     // Hack for claiming coinbase
     pub fn miner_address(&self) -> TransparentAddress {
         let account = AccountId::try_from(0).unwrap();
-        let pubkey = legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(NonHardenedChildIndex::ZERO).unwrap().public_key(&Secp256k1::new()).serialize();
+        let pubkey = legacy::keys::AccountPrivKey::from_seed(&REGTEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(NonHardenedChildIndex::ZERO).unwrap().public_key(&Secp256k1::new()).serialize();
         let hash = &Ripemd160::digest(Sha256::digest(pubkey))[..];
         let taddr = TransparentAddress::PublicKeyHash(hash.try_into().unwrap());
         taddr
@@ -195,7 +208,7 @@ impl Wallet {
 
     pub fn miner_sk(&self) -> SecretKey {
         let account = AccountId::try_from(0).unwrap();
-        legacy::keys::AccountPrivKey::from_seed(&TEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(NonHardenedChildIndex::ZERO).unwrap()
+        legacy::keys::AccountPrivKey::from_seed(&REGTEST_NETWORK, &self.seed, account).unwrap().derive_external_secret_key(NonHardenedChildIndex::ZERO).unwrap()
     }
 
     pub fn balance_zec(&mut self, address: Address) -> u64 {
@@ -208,7 +221,7 @@ impl Wallet {
 
         for note_data in all_notes {
             total_amount += note_data.amount;
-        };
+        }
         total_amount as u64
     }
 }
@@ -216,7 +229,7 @@ impl Wallet {
 #[derive(Debug, Clone)]
 pub enum WalletError {
     OutOfOrder(BlockHeight, usize),
-    NoteCommitmentTreeFull
+    NoteCommitmentTreeFull,
 }
 
 #[derive(Debug, Clone)]
@@ -232,7 +245,7 @@ pub enum BundleLoadError {
     /// notes is not a valid action index for the bundle.
     InvalidActionIndex(usize),
     /// Invalid Transaction data format
-    InvalidTransactionFormat
+    InvalidTransactionFormat,
 }
 
 impl Wallet {
@@ -243,7 +256,7 @@ impl Wallet {
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
             last_block_height: None,
             last_block_hash: None,
-            seed: Mnemonic::from_phrase(seed_phrase).unwrap().to_seed("")
+            seed: Mnemonic::from_phrase(seed_phrase).unwrap().to_seed(""),
         }
     }
 
@@ -301,7 +314,6 @@ impl Wallet {
         Ok(())
     }
 
-
     /// Add note data for those notes that are decryptable with one of this wallet's
     /// incoming viewing keys to the wallet, and return a data structure that describes
     /// the actions that are involved with this wallet, either spending notes belonging
@@ -320,7 +332,8 @@ impl Wallet {
 
         for (action_idx, ivk, note, recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
             info!("Store note");
-            self.store_note(txid, action_idx, ivk.clone(), note, recipient, memo).unwrap();
+            self.store_note(txid, action_idx, ivk.clone(), note, recipient, memo)
+                .unwrap();
         }
     }
 
@@ -375,7 +388,7 @@ impl Wallet {
                 rseed: note.rseed().as_bytes().to_vec(),
                 recipient_address: recipient.to_raw_address_bytes().to_vec(),
                 spend_tx_id: None,
-                spend_action_index: -1
+                spend_action_index: -1,
             };
             self.db.insert_note(note_data);
 
@@ -456,13 +469,17 @@ impl Wallet {
             }
 
             // for notes that are ours, mark the current state of the tree
-            match my_notes_for_tx.iter().find(|note| note.action_index == note_index as i32) {
-                Some(note) => {
-                    info!("Witnessing Orchard note ({}, {})", txid, note_index);
-                    let position: u64 = self.commitment_tree.mark().expect("tree is not empty").into();
-                    self.db.update_note_position(note.id, position as i64);
-                }
-                None => {}
+            if let Some(note) = my_notes_for_tx
+                .iter()
+                .find(|note| note.action_index == note_index as i32)
+            {
+                info!("Witnessing Orchard note ({}, {})", txid, note_index);
+                let position: u64 = self
+                    .commitment_tree
+                    .mark()
+                    .expect("tree is not empty")
+                    .into();
+                self.db.update_note_position(note.id, position as i64);
             }
         }
 

@@ -1,14 +1,14 @@
-use std::convert::TryInto;
+use crate::components::rpc_client::{BlockProposal, BlockTemplate, GetBlock, RpcClient};
+use crate::model::Block;
+use crate::prelude::info;
 use reqwest::blocking::Client;
-use crate::components::rpc_client::{RpcClient, GetBlock, BlockTemplate, BlockProposal};
-use serde::{Deserialize, Serialize};
-use std::error::Error;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
+use std::error::Error;
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, BranchId};
 use zcash_primitives::transaction::{Transaction, TxId};
-use crate::model::Block;
-use crate::prelude::info;
 
 pub struct ReqwestRpcClient {
     client: Client,
@@ -24,11 +24,12 @@ impl ReqwestRpcClient {
     }
 
     fn request<T>(&self, request: &RpcRequest) -> Result<T, Box<dyn Error>>
-        where T: DeserializeOwned
+    where
+        T: DeserializeOwned,
     {
-        let binding = self.client.post(
-            &self.node_url
-        )
+        let binding = self
+            .client
+            .post(&self.node_url)
             .body(serde_json::to_string(request)?)
             .send()?
             .text()?;
@@ -43,7 +44,6 @@ impl ReqwestRpcClient {
 }
 
 impl RpcClient for ReqwestRpcClient {
-
     fn get_best_block_hash(&self) -> Result<BlockHash, Box<dyn Error>> {
         let hash: String = self.request(&RpcRequest::new("getbestblockhash"))?;
         let mut block_hash_bytes = hex::decode(hash).unwrap();
@@ -52,16 +52,35 @@ impl RpcClient for ReqwestRpcClient {
     }
 
     fn get_block(&self, height: u32) -> Result<Block, Box<dyn Error>> {
-        let mut params: Vec<ParamType> = Vec::new();
-        params.push(ParamType::String(height.to_string())); // Height
-        params.push(ParamType::Number(1)); // Verbosity
+        let params: Vec<ParamType> = vec![
+            ParamType::String(height.to_string()), // Height
+            ParamType::Number(1),                  // Verbosity
+        ];
         let block: GetBlock = self.request(&RpcRequest::new_with_params("getblock", params))?;
 
         Ok(Block {
-            hash: BlockHash(hex::decode(block.hash).unwrap().as_slice().try_into().unwrap()),
+            hash: BlockHash(
+                hex::decode(block.hash)
+                    .unwrap()
+                    .as_slice()
+                    .try_into()
+                    .unwrap(),
+            ),
             height: BlockHeight::from_u32(block.height.unwrap()),
             confirmations: block.confirmations,
-            tx_ids: block.tx.iter().map(|tx_id_str| TxId::from_bytes(hex::decode(tx_id_str).unwrap().as_slice().try_into().unwrap())).collect(),
+            tx_ids: block
+                .tx
+                .iter()
+                .map(|tx_id_str| {
+                    TxId::from_bytes(
+                        hex::decode(tx_id_str)
+                            .unwrap()
+                            .as_slice()
+                            .try_into()
+                            .unwrap(),
+                    )
+                })
+                .collect(),
             previous_block_hash: BlockHash([0; 32]), // Previous block hash is not yet implemented in Zebra
         })
     }
@@ -70,42 +89,47 @@ impl RpcClient for ReqwestRpcClient {
         let mut tx_bytes = vec![];
         tx.write(&mut tx_bytes).unwrap();
 
-        let mut params: Vec<ParamType> = Vec::new();
-        params.push(ParamType::String(hex::encode(tx_bytes)));
-        let tx_hash: String = self.request(&RpcRequest::new_with_params("sendrawtransaction", params))?;
+        let tx_hash: String = self.request(&RpcRequest::new_with_params(
+            "sendrawtransaction",
+            vec![ParamType::String(hex::encode(tx_bytes))],
+        ))?;
         let tx_hash_bytes: [u8; 32] = hex::decode(tx_hash).unwrap().as_slice().try_into().unwrap();
         Ok(TxId::from_bytes(tx_hash_bytes))
     }
 
     fn get_transaction(&self, txid: &TxId) -> Result<Transaction, Box<dyn Error>> {
-        let mut params: Vec<ParamType> = Vec::new();
-        params.push(ParamType::String(hex::encode(txid.as_ref())));
-        params.push(ParamType::Number(0)); // Verbosity
-        // params.push(ParamType::String(hex::encode(block_id.0.as_ref())));
-        let tx_hex: String = self.request(&RpcRequest::new_with_params("getrawtransaction", params))?;
+        let params: Vec<ParamType> = vec![
+            ParamType::String(hex::encode(txid.as_ref())), // TxId
+            ParamType::Number(0),                          // Verbosity
+        ];
+        let tx_hex: String =
+            self.request(&RpcRequest::new_with_params("getrawtransaction", params))?;
         let tx_bytes = hex::decode(tx_hex).unwrap();
         Ok(Transaction::read(tx_bytes.as_slice(), BranchId::Nu5).unwrap())
     }
 
     fn get_block_template(&self) -> Result<BlockTemplate, Box<dyn Error>> {
-        Ok(self.request(&RpcRequest::new("getblocktemplate"))?)
+        self.request(&RpcRequest::new("getblocktemplate"))
     }
 
     fn submit_block(&self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
         let mut block_bytes = vec![];
         block.write(&mut block_bytes).unwrap();
 
-        let mut params: Vec<ParamType> = Vec::new();
-        params.push(ParamType::String(hex::encode(block_bytes)));
-        let result = self.request(&RpcRequest::new_with_params("submitblock", params))?;
+        let result = self.request(&RpcRequest::new_with_params(
+            "submitblock",
+            vec![ParamType::String(hex::encode(block_bytes))],
+        ))?;
 
         match result {
             None => Ok(None),
 
-            Some(result) => if result == "rejected" {
-                Err("Block rejected".into())
-            } else {
-                Ok(Some(result))
+            Some(result) => {
+                if result == "rejected" {
+                    Err("Block rejected".into())
+                } else {
+                    Ok(Some(result))
+                }
             }
         }
     }
@@ -115,7 +139,7 @@ impl RpcClient for ReqwestRpcClient {
 #[serde(untagged)]
 enum ParamType {
     String(String),
-    Number(u32)
+    Number(u32),
 }
 
 #[derive(Serialize)]
@@ -123,17 +147,16 @@ struct RpcRequest {
     jsonrpc: &'static str,
     id: &'static str,
     method: &'static str,
-    params: Vec<ParamType>
+    params: Vec<ParamType>,
 }
 
 impl RpcRequest {
-
     fn new(method: &'static str) -> RpcRequest {
         Self {
             jsonrpc: "1.0",
             id: "zcash-tx-tool",
-            method: method,
-            params: Vec::new()
+            method,
+            params: Vec::new(),
         }
     }
 
@@ -141,13 +164,13 @@ impl RpcRequest {
         Self {
             jsonrpc: "1.0",
             id: "zcash-tx-tool",
-            method: method,
-            params: params
+            method,
+            params,
         }
     }
 }
 
 #[derive(Deserialize)]
 struct RpcResponse<T> {
-    result: T
+    result: T,
 }

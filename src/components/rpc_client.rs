@@ -1,10 +1,10 @@
-pub mod reqwest;
 pub mod mock;
+pub mod reqwest;
 
-use std::convert::{TryInto};
+use std::convert::TryInto;
 use std::error::Error;
+use std::io;
 use std::io::Write;
-use std::{io};
 use zcash_encoding::{CompactSize, Vector};
 use zcash_primitives::block::{BlockHash, BlockHeader};
 use zcash_primitives::transaction::{Transaction, TxId};
@@ -24,21 +24,20 @@ pub trait RpcClient {
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct GetBlock {
-        /// The hash of the requested block in hex.
-        hash: String,
+    /// The hash of the requested block in hex.
+    hash: String,
 
-        /// The number of confirmations of this block in the best chain,
-        /// or -1 if it is not in the best chain.
-        confirmations: i64,
+    /// The number of confirmations of this block in the best chain,
+    /// or -1 if it is not in the best chain.
+    confirmations: i64,
 
-        /// The height of the requested block.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        height: Option<u32>,
+    /// The height of the requested block.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    height: Option<u32>,
 
-        /// List of transaction IDs in block order, hex-encoded.
-        tx: Vec<String>
+    /// List of transaction IDs in block order, hex-encoded.
+    tx: Vec<String>,
 }
-
 
 /// A serialized `getblocktemplate` RPC response in template mode.
 #[derive(Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
