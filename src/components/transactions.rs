@@ -3,7 +3,7 @@ use crate::components::wallet::Wallet;
 use crate::components::zebra_merkle::{
     block_commitment_from_parts, AuthDataRoot, Root, AUTH_COMMITMENT_PLACEHOLDER,
 };
-use crate::prelude::{error, info};
+use crate::prelude::info;
 use orchard::issuance::IssueInfo;
 use orchard::note::AssetBase;
 use orchard::value::NoteValue;
@@ -122,30 +122,29 @@ pub fn sync_from_height(from_height: u32, wallet: &mut Wallet, rpc: &mut dyn Rpc
             }
         };
 
-        if true
-        /* block.prev_hash == wallet.last_block_hash */
-        {
-            info!(
-                "Adding transactions from block {} at height {}",
-                block.hash, block.height
-            );
-            let transactions = block
-                .tx_ids
-                .into_iter()
-                .map(|tx_id| rpc.get_transaction(&tx_id).unwrap())
-                .collect();
-            wallet
-                .add_notes_from_block(block.height, block.hash, transactions)
-                .unwrap();
-            next_height += 1;
-        } else {
-            // Fork management is not implemented
-            error!(
-                "REORG: dropping block {} at height {}",
-                wallet.last_block_hash().unwrap(),
-                next_height
-            );
-        }
+        // if block.prev_hash == wallet.last_block_hash
+        // {
+        info!(
+            "Adding transactions from block {} at height {}",
+            block.hash, block.height
+        );
+        let transactions = block
+            .tx_ids
+            .into_iter()
+            .map(|tx_id| rpc.get_transaction(&tx_id).unwrap())
+            .collect();
+        wallet
+            .add_notes_from_block(block.height, block.hash, transactions)
+            .unwrap();
+        next_height += 1;
+        // } else {
+        //     // Fork management is not implemented
+        //     error!(
+        //         "REORG: dropping block {} at height {}",
+        //         wallet.last_block_hash().unwrap(),
+        //         next_height
+        //     );
+        // }
     }
 }
 
