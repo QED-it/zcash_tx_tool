@@ -14,7 +14,7 @@ use orchard::{bundle::Authorized, Address, Bundle, Note, Anchor};
 use orchard::issuance::{IssueBundle, Signed};
 use orchard::keys::{OutgoingViewingKey, FullViewingKey, IncomingViewingKey, Scope, SpendingKey, IssuanceAuthorizingKey};
 use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
-use orchard::note_encryption::OrchardDomain;
+use orchard::note_encryption::OrchardDomainCommon;
 use orchard::orchard_flavor::{OrchardVanilla, OrchardZSA};
 use orchard::tree::{MerklePath, MerkleHashOrchard};
 use orchard::value::NoteValue;
@@ -262,7 +262,7 @@ impl Wallet {
     /// Add note data from all V5 transactions of the block to the wallet.
     /// Versions other than V5 are ignored.
     pub fn add_notes_from_block(&mut self, block_height: BlockHeight, block_hash: BlockHash, transactions: Vec<Transaction>) -> Result<(), BundleLoadError> {
-        transactions.into_iter().try_for_each(|tx| Ok(if tx.version().has_orchard() || tx.version().has_zsa() {
+        transactions.into_iter().try_for_each(|tx| Ok(if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
             self.add_notes_from_tx(tx)?;
         }))?;
 
@@ -306,7 +306,7 @@ impl Wallet {
     /// incoming viewing keys to the wallet, and return a data structure that describes
     /// the actions that are involved with this wallet, either spending notes belonging
     /// to this wallet or creating new notes owned by this wallet.
-    fn add_notes_from_orchard_bundle<O: OrchardDomain>(
+    fn add_notes_from_orchard_bundle<O: OrchardDomainCommon>(
         &mut self,
         txid: &TxId,
         bundle: &Bundle<Authorized, Amount, O>,
@@ -360,7 +360,7 @@ impl Wallet {
             info!("Adding decrypted note to the wallet");
 
             let mut note_bytes = vec![];
-            write_note(&note, &mut note_bytes).unwrap();
+            write_note(&mut note_bytes, &note).unwrap();
 
             let note_data = NoteData {
                 id: 0,
@@ -389,7 +389,7 @@ impl Wallet {
         }
     }
 
-    fn mark_potential_spends<O: OrchardDomain>(&mut self, txid: &TxId, orchard_bundle: &Bundle<Authorized, Amount, O>) {
+    fn mark_potential_spends<O: OrchardDomainCommon>(&mut self, txid: &TxId, orchard_bundle: &Bundle<Authorized, Amount, O>) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             match self.db.find_by_nullifier(&action.nullifier()) {
                 Some(note) => {

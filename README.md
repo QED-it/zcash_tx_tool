@@ -33,9 +33,9 @@ Currently, we use a custom Zebra build. There are several changes compared to th
 To build and run the docker image:
 
 ```bash
-docker build -t qedit/zebra-singlenode-txv5 .
+docker build -t qedit/zebra-singlenode-txv6 .
 
-docker run -p 18232:18232 qedit/zebra-singlenode-txv5
+docker run -p 18232:18232 qedit/zebra-singlenode-txv6
 ``` 
 
 More details on how the docker file is created and synced: [Link](https://github.com/QED-it/zcash_tx_tool/blob/main/Dockerfile)
@@ -64,10 +64,15 @@ Although release build is highly recommended for performance reasons:
 
 `cargo build --release`
 
+To test ZSA functionality with the tool, the corresponding flag should be set:
 
-## Main test scenario
+```bash
+RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo build
+```
 
-Main test scenario ([src/commands/test.rs](src/commands/test_v5)) consists of the following steps:
+## Vanilla Orchard test scenario
+
+Main test scenario ([src/commands/test_orchard.rs](src/commands/test_orchard.rs)) consists of the following steps:
 
 1) Mine 100 empty blocks to be able to use transparent coinbase output
 2) Create and mine a new shielding transaction with a transparent input and a shielded output
@@ -77,11 +82,31 @@ Main test scenario ([src/commands/test.rs](src/commands/test_v5)) consists of th
 To run the test scenario:
 
 ```bash
-cargo run --package zcash_tx_tool --bin zcash_tx_tool test
+cargo run --package zcash_tx_tool --bin zcash_tx_tool test_orchard
 ```
 
 With optional, but recommended `--release` flag, or simply 
 
 ```bash
-zcash_tx_tool test
+zcash_tx_tool test_orchard
+```
+
+## ZSA Orchard test scenario
+
+Main test scenario ([src/commands/test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs)) consists of the following steps:
+
+1) Issue an asset
+2) Transfer the asset to another account
+3) Burn the asset
+
+To run the test scenario:
+
+```bash
+RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo run --package zcash_tx_tool --bin zcash_tx_tool test_orchard_zsa
+```
+
+With optional, but recommended `--release` flag, or simply
+
+```bash
+zcash_tx_tool test_orchard_zsa
 ```

@@ -2,6 +2,7 @@
 
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
+use orchard::note::AssetBase;
 use zcash_primitives::transaction::TxId;
 
 use crate::commands::test_balances::{check_balances, print_balances, TestBalances};
@@ -45,7 +46,7 @@ impl Runnable for TestOrchardCmd {
 
         let amount_to_transfer_1: i64 = 2;
 
-        let transfer_tx_1 = create_transfer_transaction(miner, alice, amount_to_transfer_1 as u64, &mut wallet);
+        let transfer_tx_1 = create_transfer_transaction(miner, alice, amount_to_transfer_1 as u64, AssetBase::native(), &mut wallet);
         mine(&mut wallet, &mut rpc_client, Vec::from([ transfer_tx_1 ]));
 
         let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);

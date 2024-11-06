@@ -1,5 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Test Orchard" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="buildProfileId" value="dev" />
     <option name="command" value="run --package zcash_tx_tool --bin zcash_tx_tool test-orchard" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />

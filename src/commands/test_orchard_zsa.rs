@@ -5,7 +5,7 @@ use orchard::keys::Scope::External;
 
 use crate::commands::test_balances::{check_balances, print_balances, TestBalances};
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{create_burn_transaction, create_issue_transaction, create_transfer_zsa_transaction, mine};
+use crate::components::transactions::{create_burn_transaction, create_issue_transaction, create_transfer_transaction, mine};
 use crate::components::transactions::sync_from_height;
 use crate::components::wallet::Wallet;
 use crate::prelude::*;
@@ -29,7 +29,7 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Issue asset ---------------------
 
-        let issue_tx = create_issue_transaction(issuer, 1000, "WETH".to_string(), &mut wallet);
+        let issue_tx = create_issue_transaction(issuer, 1000, "WETH".as_bytes().to_vec(), &mut wallet);
 
         let asset = issue_tx.issue_bundle().unwrap().actions().head.notes().first().unwrap().asset();
         let balances = TestBalances::get_asset(asset, &mut wallet);
@@ -44,7 +44,7 @@ impl Runnable for TestOrchardZSACmd {
 
         let amount_to_transfer_1: i64 = 3;
 
-        let transfer_tx_1 = create_transfer_zsa_transaction(issuer, alice, amount_to_transfer_1 as u64, asset, &mut wallet);
+        let transfer_tx_1 = create_transfer_transaction(issuer, alice, amount_to_transfer_1 as u64, asset, &mut wallet);
         mine(&mut wallet, &mut rpc_client, Vec::from([ transfer_tx_1 ]));
 
         let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);
