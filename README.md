@@ -82,13 +82,13 @@ Main test scenario ([src/commands/test_orchard.rs](src/commands/test_orchard.rs)
 To run the test scenario:
 
 ```bash
-cargo run --package zcash_tx_tool --bin zcash_tx_tool test_orchard
+cargo run --package zcash_tx_tool --bin zcash_tx_tool test-orchard
 ```
 
 With optional, but recommended `--release` flag, or simply 
 
 ```bash
-zcash_tx_tool test_orchard
+zcash_tx_tool test-orchard
 ```
 
 ## ZSA Orchard test scenario
@@ -102,14 +102,16 @@ Main test scenario ([src/commands/test_orchard_zsa.rs](src/commands/test_orchard
 To run the test scenario:
 
 ```bash
-RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo run --package zcash_tx_tool --bin zcash_tx_tool test_orchard_zsa
+RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo run --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
 ```
 
 With optional, but recommended `--release` flag, or simply
 
 ```bash
-zcash_tx_tool test_orchard_zsa
+zcash_tx_tool test-orchard-zsa
 ```
+
+## Docker-based demo
 
 You can also run the tests using docker. To do that you'll need first to build the docker image
 

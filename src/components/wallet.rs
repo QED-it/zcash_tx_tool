@@ -30,6 +30,9 @@ use zcash_primitives::transaction::components::issuance::{write_note};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_primitives::zip32::AccountId;
 use zcash_primitives::zip339::Mnemonic;
+use crate::components::persistence::model::NoteData;
+use crate::components::persistence::sqlite::SqliteDataStorage;
+use crate::components::wallet::structs::OrderedAddress;
 
 pub const MAX_CHECKPOINTS: usize = 100;
 pub const NOTE_COMMITMENT_TREE_DEPTH: u8 = 32;

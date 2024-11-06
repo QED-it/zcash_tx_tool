@@ -14,7 +14,6 @@ mod test_orchard;
 mod test_orchard_zsa;
 mod test_balances;
 
-use crate::commands::test::TestCmd;
 use crate::config::AppConfig;
 use abscissa_core::{Command, Configurable, FrameworkError, Runnable};
 use std::path::PathBuf;

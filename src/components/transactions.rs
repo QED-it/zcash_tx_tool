@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::components::wallet::Wallet;
 use crate::components::zebra_merkle::{
@@ -10,14 +11,13 @@ use orchard::note::AssetBase;
 use orchard::value::NoteValue;
 use rand::rngs::OsRng;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
-use zcash_primitives::consensus::{BlockHeight, TEST_NETWORK, TestNetwork};
+use zcash_primitives::consensus::{BlockHeight, BranchId, REGTEST_NETWORK, RegtestNetwork};
 use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_primitives::transaction::builder::{BuildConfig, Builder};
 use zcash_primitives::transaction::components::{transparent, TxOut};
 use zcash_primitives::transaction::components::amount::NonNegativeAmount;
 use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
-use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
 
 /// Mine a block with the given transactions and sync the wallet
@@ -60,7 +60,7 @@ pub fn mine_empty_blocks(num_blocks: u32, rpc_client: &mut dyn RpcClient) -> (u3
 }
 
 /// Create a shielded coinbase transaction
-pub fn create_shield_coinbase_tx(
+pub fn create_shield_coinbase_transaction(
     recipient: Address,
     coinbase_txid: TxId,
     wallet: &mut Wallet,
@@ -271,8 +271,8 @@ pub fn template_into_proposal(
     }
 }
 
-fn create_tx(wallet: &Wallet) -> Builder<'_, TestNetwork, ()> {
-    let build_config = BuildConfig::Standard {
+fn create_tx(wallet: &Wallet) -> Builder<'_, RegtestNetwork, ()> {
+    let build_config = BuildConfig::Zsa {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),
     };
@@ -280,7 +280,7 @@ fn create_tx(wallet: &Wallet) -> Builder<'_, TestNetwork, ()> {
     tx
 }
 
-fn build_tx(builder: Builder<'_, TestNetwork, ()>) -> Transaction {
+fn build_tx(builder: Builder<'_, RegtestNetwork, ()>) -> Transaction {
     let fee_rule = &FeeRule::non_standard(NonNegativeAmount::from_u64(0).unwrap(), 20, 150, 34).unwrap();
     let prover = LocalTxProver::with_default_location();
     match prover {
