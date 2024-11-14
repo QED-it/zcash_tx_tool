@@ -118,7 +118,7 @@ impl RpcClient for ReqwestRpcClient {
         self.request(&RpcRequest::new("getblocktemplate"))
     }
 
-    fn submit_block(&self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
+    fn submit_block(&mut self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
         let mut block_bytes = vec![];
         block.write(&mut block_bytes).unwrap();
 

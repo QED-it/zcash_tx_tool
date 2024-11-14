@@ -4,6 +4,7 @@ use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
 
 use crate::commands::test_balances::{check_balances, print_balances, TestBalances};
+use crate::components::rpc_client::mock::MockZcashNode;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::sync_from_height;
 use crate::components::transactions::{
@@ -20,7 +21,7 @@ impl Runnable for TestOrchardZSACmd {
     /// Run the `test` subcommand.
     fn run(&self) {
         let config = APP.config();
-        let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
+        let mut rpc_client = MockZcashNode::new(); // ReqwestRpcClient::new(config.network.node_url());
         let mut wallet = Wallet::new(&config.wallet.seed_phrase);
 
         let issuer = wallet.address_for_account(0, External);
@@ -101,7 +102,7 @@ impl Runnable for TestOrchardZSACmd {
     }
 }
 
-fn prepare_test(target_height: u32, wallet: &mut Wallet, rpc_client: &mut ReqwestRpcClient) {
+fn prepare_test(target_height: u32, wallet: &mut Wallet, rpc_client: &mut MockZcashNode) {
     wallet.reset();
     sync_from_height(target_height, wallet, rpc_client);
 }
