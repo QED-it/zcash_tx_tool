@@ -1,4 +1,4 @@
-FROM rust:1.76.0
+FROM rust:1.81.0
 
 # Set up Rust and cargo
 RUN apt-get update && apt-get install git build-essential clang -y
