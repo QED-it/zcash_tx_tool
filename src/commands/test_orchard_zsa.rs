@@ -21,7 +21,7 @@ impl Runnable for TestOrchardZSACmd {
     /// Run the `test` subcommand.
     fn run(&self) {
         let config = APP.config();
-        let mut rpc_client = MockZcashNode::new(); // ReqwestRpcClient::new(config.network.node_url());
+        let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
         let mut wallet = Wallet::new(&config.wallet.seed_phrase);
 
         let issuer = wallet.address_for_account(0, External);
@@ -102,7 +102,7 @@ impl Runnable for TestOrchardZSACmd {
     }
 }
 
-fn prepare_test(target_height: u32, wallet: &mut Wallet, rpc_client: &mut MockZcashNode) {
+fn prepare_test(target_height: u32, wallet: &mut Wallet, rpc_client: &mut ReqwestRpcClient) {
     wallet.reset();
     sync_from_height(target_height, wallet, rpc_client);
 }
