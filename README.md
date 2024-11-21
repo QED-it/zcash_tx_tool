@@ -130,7 +130,7 @@ docker network create zcash-network
 ```
 And started the node with the network argument, like this
 ```bash
-docker run --name zebra-node --network zcash-network -p 18232:18232 qedit/zebra-singlenode-txv5
+docker run --name zebra-node --network zcash-network -p 18232:18232 qedit/zebra-regtest-txv6
 ```
 
 Here are the 3 options (No parameters will default to the first configuration)
