@@ -21,8 +21,8 @@ use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
 
 /// Mine a block with the given transactions and sync the wallet
-pub fn mine(wallet: &mut Wallet, rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) {
-    let (block_height, _) = mine_block(rpc_client, BranchId::Nu5, txs, false);
+pub fn mine(wallet: &mut Wallet, rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>, activate: bool) {
+    let (block_height, _) = mine_block(rpc_client, BranchId::Nu5, txs, activate);
     sync_from_height(block_height, wallet, rpc_client);
 }
 

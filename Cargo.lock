@@ -1703,7 +1703,7 @@ dependencies = [
 [[package]]
 name = "orchard"
 version = "0.8.0"
-source = "git+https://github.com/QED-it/orchard?branch=zsa-value-balance#5428639c6ab9eb33c6aa8ca9994323546dc20df4"
+source = "git+https://github.com/QED-it/orchard?branch=zsa1#25020f857fd40125b3872ece1c0a2e2059145a17"
 dependencies = [
  "aes",
  "bitvec",

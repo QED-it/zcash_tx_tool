@@ -34,11 +34,12 @@ impl TestBalances {
 
 pub(crate) fn check_balances(
     header: &str,
+    asset: AssetBase,
     initial: TestBalances,
     expected_delta: TestBalances,
     wallet: &mut Wallet,
 ) -> TestBalances {
-    let actual_balances = TestBalances::get_zec(wallet);
+    let actual_balances = TestBalances::get_asset(asset, wallet);
     print_balances(header, actual_balances);
     assert_eq!(
         actual_balances.account0,

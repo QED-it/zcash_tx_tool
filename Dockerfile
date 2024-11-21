@@ -8,7 +8,7 @@ RUN git clone https://github.com/QED-it/zebra.git
 
 WORKDIR zebra
 
-RUN git switch zsa1
+RUN git switch zsa-integration-consensus
 
 RUN cargo build --release --package zebrad --bin zebrad --features="getblocktemplate-rpcs"
 

@@ -50,7 +50,7 @@ impl Runnable for TestOrchardZSACmd {
         let balances = TestBalances::get_asset(asset, &mut wallet);
         print_balances("=== Initial balances ===", balances);
 
-        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]));
+        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]), true);
 
         let balances = TestBalances::get_asset(asset, &mut wallet);
         print_balances("=== Balances after issuing ===", balances);
@@ -66,11 +66,12 @@ impl Runnable for TestOrchardZSACmd {
             asset,
             &mut wallet,
         );
-        mine(&mut wallet, &mut rpc_client, Vec::from([transfer_tx_1]));
+        mine(&mut wallet, &mut rpc_client, Vec::from([transfer_tx_1]), false);
 
         let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);
         check_balances(
             "=== Balances after transfer ===",
+            asset,
             balances,
             expected_delta,
             &mut wallet,
@@ -78,23 +79,27 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Burn asset ---------------------
 
+        let balances = TestBalances::get_asset(asset, &mut wallet);
+
         let amount_to_burn_issuer: i64 = 7;
         let amount_to_burn_alice: i64 = amount_to_transfer_1;
 
         let burn_tx_issuer =
             create_burn_transaction(issuer, amount_to_burn_issuer as u64, asset, &mut wallet);
         let burn_tx_alice =
-            create_burn_transaction(issuer, amount_to_burn_alice as u64, asset, &mut wallet);
+            create_burn_transaction(alice, amount_to_burn_alice as u64, asset, &mut wallet);
 
         mine(
             &mut wallet,
             &mut rpc_client,
             Vec::from([burn_tx_issuer, burn_tx_alice]),
+            false,
         );
 
         let expected_delta = TestBalances::new(-amount_to_burn_issuer, -amount_to_burn_alice);
         check_balances(
             "=== Balances after burning ===",
+            asset,
             balances,
             expected_delta,
             &mut wallet,
