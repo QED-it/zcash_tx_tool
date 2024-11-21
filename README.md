@@ -1,6 +1,6 @@
 # Zcash transaction tool
 
-The tool is designed to create and send Zcash transactions to a node (e.g., Zebra). Currently, it supports V5 transactions only.
+The tool is designed to create and send Zcash transactions to a node (e.g., Zebra). Currently, it supports V5 and v6 transactions.
 
 The repo includes a simple Zebra docker image with a few changes to the original Zebra code to support the tool's test scenario.
 
