@@ -1,90 +1,156 @@
-# Zcash transaction tool
+# Zcash Transaction Tool
 
-The tool is designed to create and send Zcash transactions to a node (e.g., Zebra). Currently, it supports V5 and v6 transactions.
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The repo includes a simple Zebra docker image with a few changes to the original Zebra code to support the tool's test scenario.
+The **Zcash Transaction Tool** is designed to create and send Zcash transactions to a node (e.g., Zebra). It currently supports transaction versions V5 and V6, including the Orchard ZSA (Zcash Shielded Assets) functionality.
 
-Core components include:
+This repository includes a simple Zebra Docker image that incorporates the OrchardZSA version of Zebra and runs in regtest mode.
 
-1) librustzcash for transaction creation and serialization [[Link](https://github.com/zcash/librustzcash)]. Slightly modified with additional functionality.
+## Table of Contents
 
-2) Diesel ORM framework [[Link](https://diesel.rs/)] 
+- [Features](#features)
+- [Core Components](#core-components)
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+    - [1. Build and Run the Zebra Docker Image](#1-build-and-run-the-zebra-docker-image)
+    - [2. Set Up and Run the Zcash Transaction Tool](#2-set-up-and-run-the-zcash-transaction-tool)
+- [Configuration](#configuration)
+- [Build Instructions](#build-instructions)
+- [ZSA Orchard Test Scenario](#zsa-orchard-test-scenario)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
 
-3) Abscissa framework [[Link](https://github.com/iqlusioninc/abscissa)]
+## Features
 
+- **Transaction Creation**: Craft custom Zcash transactions.
+- **Transaction Submission**: Send transactions to a Zcash node.
+- **ZSA Support**: Work with Zcash Shielded Assets (Orchard ZSA).
+- **Version Compatibility**: Supports transaction versions V5 and V6.
 
+## Core Components
 
-## Executing the ZSA flow against a dockerized Zebra node 
+1. **[librustzcash](https://github.com/zcash/librustzcash)**: Used for transaction creation and serialization. This version includes slight modifications for additional functionality.
+2. **[Diesel ORM Framework](https://diesel.rs/)**: A safe and extensible ORM and query builder for Rust.
+3. **[Abscissa Framework](https://github.com/iqlusioninc/abscissa)**: A microframework for building Rust applications.
 
-To build and run the Zebra docker image:
+## Prerequisites
+
+- **Docker**: [Install Docker](https://www.docker.com/get-started)
+- **Rust & Cargo**: [Install Rust and Cargo](https://www.rust-lang.org/tools/install)
+- **Diesel CLI**: Installed via Cargo.
+
+## Getting Started
+
+### 1. Build and Run the Zebra Docker Image
+
+Open a terminal and execute the following commands:
 
 ```bash
+# Build the Docker image
 docker build -t qedit/zebra-regtest-txv6 .
 
+# Run the Docker container
 docker run -p 18232:18232 qedit/zebra-regtest-txv6
-``` 
-More details on how the docker file is created and synced: [Dockerfile](./Dockerfile)
+```
 
-In a different window, setup and run the Zcash transaction tool:
+For more details on how the Docker image is created and synchronized, refer to the [Dockerfile](./Dockerfile).
 
-A one time setup for Diesel is required:
+### 2. Set Up and Run the Zcash Transaction Tool
+
+In a separate terminal window, perform the following steps:
+
+#### One-Time Diesel Setup
+
+Install Diesel CLI and set up the database:
+
 ```bash
+# Install Diesel CLI with SQLite support
 cargo install diesel_cli --no-default-features --features sqlite
 
+# Set up the database
 diesel setup
 ```
-Build and run the orchardZSA test case using the Zcash transaction tool:
+
+#### Build and Run the Orchard ZSA Test Case
+
+Build and run the test case using the Zcash Transaction Tool:
+
 ```bash
+# Build and run with ZSA feature enabled
 RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
 ```
-To re-run the test scenario, you need to reset the Zebra node by shutting down the Zebra container and starting it again.
 
-The detailed script for the ZSA flow are in the file [test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs)
+**Note**: To re-run the test scenario, reset the Zebra node by stopping and restarting the Zebra Docker container.
 
-
+The detailed script for the ZSA flow can be found in [test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs).
 
 ## Configuration
 
-The path to the configuration file can be specified with the `--config` flag when running the application. The default filename is "config.toml"
+You can specify the path to the configuration file using the `--config` flag when running the application. The default configuration file name is `config.toml`.
 
-An example configuration file with default values can be found in `regtest_config.toml`
+An example configuration file with default values is provided in [`regtest_config.toml`](./regtest-config.toml).
 
+## Build Instructions
 
-## Build instructions
+To set up the Diesel database:
 
-To set the Diesel database up:
+1. **Install Diesel CLI**:
 
-1) Install diesel_cli: `cargo install diesel_cli --no-default-features --features sqlite`
+   ```bash
+   cargo install diesel_cli --no-default-features --features sqlite
+   ```
 
-2) Set up database: `diesel setup`
+2. **Set Up the Database**:
 
-To build the application, run:
+   ```bash
+   diesel setup
+   ```
 
-`cargo build`
+To build the application:
 
-Although release build is highly recommended for performance reasons:
+```bash
+# Debug build
+cargo build
 
-`cargo build --release`
+# Release build (recommended for performance)
+cargo build --release
+```
 
-To test ZSA functionality with the tool, the corresponding flag should be set:
+To test ZSA functionality with the tool, enable the corresponding feature flag:
 
 ```bash
 RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo build --release
 ```
 
-## ZSA Orchard test scenario
+## ZSA Orchard Test Scenario
 
-Main test scenario ([src/commands/test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs)) consists of the following steps:
+The main test scenario ([src/commands/test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs)) consists of the following steps:
 
-1) Issue an asset
-2) Transfer the asset to another account
-3) Burn the asset (x2)
+1. **Issue an Asset**: Create and issue a new ZSA.
+2. **Transfer the Asset**: Send the issued asset to another account.
+3. **Burn the Asset (Twice)**: Burn the asset in two separate transactions.
 
 To run the test scenario:
 
 ```bash
 RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
 ```
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Acknowledgements
+
+- **[Zcash](https://z.cash/)**: The privacy-protecting digital currency.
+- **[Zebra](https://github.com/ZcashFoundation/zebra)**: An independent Zcash node implementation.
+- **[librustzcash](https://github.com/zcash/librustzcash)**: The Rust library underpinning Zcash.
+- **[Diesel ORM Framework](https://diesel.rs/)**: For database interactions.
+- **[Abscissa Framework](https://github.com/iqlusioninc/abscissa)**: For application structure.
+
+---
+
+Feel free to contribute to this project by opening issues or submitting pull requests.
 
 [//]: # ()
 [//]: # (## Docker-based demo)
@@ -140,3 +206,4 @@ RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo run --release --package zcash_tx_to
 [//]: # (```)
 
 [//]: # (The '-it' parameter was added to allow the demo to be interactive.)
+
