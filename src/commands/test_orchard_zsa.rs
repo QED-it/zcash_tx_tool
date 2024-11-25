@@ -53,7 +53,7 @@ impl Runnable for TestOrchardZSACmd {
         mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]), true);
 
         let balances = TestBalances::get_asset(asset, &mut wallet);
-        print_balances("=== Balances after issuing ===", balances);
+        print_balances("=== Balances after issue ===", balances);
 
         // --------------------- ZSA transfer ---------------------
 
