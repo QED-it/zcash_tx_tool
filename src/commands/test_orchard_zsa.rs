@@ -4,7 +4,6 @@ use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
 
 use crate::commands::test_balances::{check_balances, print_balances, TestBalances};
-use crate::components::rpc_client::mock::MockZcashNode;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::sync_from_height;
 use crate::components::transactions::{
@@ -35,8 +34,7 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Issue asset ---------------------
 
-        let issue_tx =
-            create_issue_transaction(issuer, 1000, "WETH".as_bytes().to_vec(), &mut wallet);
+        let issue_tx = create_issue_transaction(issuer, 1000, b"WETH".into(), &mut wallet);
 
         let asset = issue_tx
             .issue_bundle()
@@ -47,28 +45,31 @@ impl Runnable for TestOrchardZSACmd {
             .first()
             .unwrap()
             .asset();
+
         let balances = TestBalances::get_asset(asset, &mut wallet);
         print_balances("=== Initial balances ===", balances);
 
         mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]), true);
 
         let balances = TestBalances::get_asset(asset, &mut wallet);
-        print_balances("=== Balances after issuing ===", balances);
+        print_balances("=== Balances after issue ===", balances);
 
         // --------------------- ZSA transfer ---------------------
 
-        let amount_to_transfer_1: i64 = 3;
+        let amount_to_transfer_1 = 3;
 
-        let transfer_tx_1 = create_transfer_transaction(
-            issuer,
-            alice,
-            amount_to_transfer_1 as u64,
-            asset,
+        let transfer_tx_1 =
+            create_transfer_transaction(issuer, alice, amount_to_transfer_1, asset, &mut wallet);
+        mine(
             &mut wallet,
+            &mut rpc_client,
+            Vec::from([transfer_tx_1]),
+            false,
         );
-        mine(&mut wallet, &mut rpc_client, Vec::from([transfer_tx_1]), false);
 
-        let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);
+        // transfer from issuer(account0) to alice(account1)
+        let expected_delta =
+            TestBalances::new(-(amount_to_transfer_1 as i64), amount_to_transfer_1 as i64);
         check_balances(
             "=== Balances after transfer ===",
             asset,
@@ -81,13 +82,13 @@ impl Runnable for TestOrchardZSACmd {
 
         let balances = TestBalances::get_asset(asset, &mut wallet);
 
-        let amount_to_burn_issuer: i64 = 7;
-        let amount_to_burn_alice: i64 = amount_to_transfer_1;
+        let amount_to_burn_issuer = 7;
+        let amount_to_burn_alice = amount_to_transfer_1 - 1;
 
         let burn_tx_issuer =
-            create_burn_transaction(issuer, amount_to_burn_issuer as u64, asset, &mut wallet);
+            create_burn_transaction(issuer, amount_to_burn_issuer, asset, &mut wallet);
         let burn_tx_alice =
-            create_burn_transaction(alice, amount_to_burn_alice as u64, asset, &mut wallet);
+            create_burn_transaction(alice, amount_to_burn_alice, asset, &mut wallet);
 
         mine(
             &mut wallet,
@@ -96,7 +97,11 @@ impl Runnable for TestOrchardZSACmd {
             false,
         );
 
-        let expected_delta = TestBalances::new(-amount_to_burn_issuer, -amount_to_burn_alice);
+        // burn from issuer(account0) and alice(account1)
+        let expected_delta = TestBalances::new(
+            -(amount_to_burn_issuer as i64),
+            -(amount_to_burn_alice as i64),
+        );
         check_balances(
             "=== Balances after burning ===",
             asset,

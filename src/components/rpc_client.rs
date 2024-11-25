@@ -7,7 +7,6 @@ use std::io;
 use std::io::Write;
 use zcash_encoding::{CompactSize, Vector};
 use zcash_primitives::block::{BlockHash, BlockHeader};
-use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::{Transaction, TxId};
 
 use crate::model::Block;
@@ -168,22 +167,31 @@ pub struct BlockTemplate {
     pub submit_old: Option<bool>,
 }
 
-
 impl BlockTemplate {
     /// Constructs a new `BlockTemplate` with default values.
     pub fn new(block_height: u32) -> Self {
         BlockTemplate {
             capabilities: vec![],
             version: 0,
-            previous_block_hash: String::from("029f11d80ef9765602235e1bc9727e3eb6ba20839319f761fee920d63401e327"),
-            block_commitments_hash: String::from("0000000000000000000000000000000000000000000000000000000000000000"),
-            light_client_root_hash: String::from("0000000000000000000000000000000000000000000000000000000000000000"),
-            final_sapling_root_hash: String::from("0000000000000000000000000000000000000000000000000000000000000000"),
+            previous_block_hash: String::from(
+                "029f11d80ef9765602235e1bc9727e3eb6ba20839319f761fee920d63401e327",
+            ),
+            block_commitments_hash: String::from(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            ),
+            light_client_root_hash: String::from(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            ),
+            final_sapling_root_hash: String::from(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            ),
             default_roots: DefaultRoots::default(), // Assuming DefaultRoots implements Default
             transactions: vec![],
             coinbase_txn: TransactionTemplate::default(), // Assuming TransactionTemplate implements Default
             long_poll_id: String::from("0000000000287c53b81296694002000000000000000000"),
-            target: String::from("0ca63f0000000000000000000000000000000000000000000000000000000000"),
+            target: String::from(
+                "0ca63f0000000000000000000000000000000000000000000000000000000000",
+            ),
             min_time: 0,
             mutable: vec![],
             nonce_range: String::from("00000000ffffffff"),
@@ -229,10 +237,14 @@ pub struct DefaultRoots {
 impl Default for DefaultRoots {
     fn default() -> Self {
         DefaultRoots {
-            merkle_root: "e775c092962a712a42ee5dd42091dd569e8651c5a2c529a738687ca4495be2ed".to_string(),
-            chain_history_root: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-            auth_data_root: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(),
-            block_commitments_hash: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            merkle_root: "e775c092962a712a42ee5dd42091dd569e8651c5a2c529a738687ca4495be2ed"
+                .to_string(),
+            chain_history_root: "0000000000000000000000000000000000000000000000000000000000000000"
+                .to_string(),
+            auth_data_root: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                .to_string(),
+            block_commitments_hash:
+                "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
         }
     }
 }

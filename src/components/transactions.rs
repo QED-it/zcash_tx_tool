@@ -3,7 +3,7 @@ use crate::components::wallet::Wallet;
 use crate::components::zebra_merkle::{
     block_commitment_from_parts, AuthDataRoot, Root, AUTH_COMMITMENT_PLACEHOLDER,
 };
-use crate::prelude::info;
+use crate::prelude::{debug, info};
 use orchard::issuance::IssueInfo;
 use orchard::note::AssetBase;
 use orchard::value::NoteValue;
@@ -21,7 +21,12 @@ use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
 
 /// Mine a block with the given transactions and sync the wallet
-pub fn mine(wallet: &mut Wallet, rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>, activate: bool) {
+pub fn mine(
+    wallet: &mut Wallet,
+    rpc_client: &mut dyn RpcClient,
+    txs: Vec<Transaction>,
+    activate: bool,
+) {
     let (block_height, _) = mine_block(rpc_client, BranchId::Nu5, txs, activate);
     sync_from_height(block_height, wallet, rpc_client);
 }
@@ -114,37 +119,35 @@ pub fn sync_from_height(from_height: u32, wallet: &mut Wallet, rpc: &mut dyn Rpc
     };
 
     loop {
-        let block = match rpc.get_block(next_height) {
-            Ok(block) => block,
+        match rpc.get_block(next_height) {
+            Ok(block) => {
+                // if block.prev_hash != wallet.last_block_hash
+                // Fork management is not implemented since block.prev_hash rpc is not yet implemented in Zebra
+
+                info!(
+                    "Adding transactions from block {} at height {}",
+                    block.hash, block.height
+                );
+                let transactions = block
+                    .tx_ids
+                    .into_iter()
+                    .map(|tx_id| rpc.get_transaction(&tx_id).unwrap())
+                    .collect();
+                wallet
+                    .add_notes_from_block(block.height, block.hash, transactions)
+                    .unwrap();
+                next_height += 1;
+            }
             Err(err) => {
-                info!("No block at height {}: {}", next_height, err);
+                info!(
+                    "No block at height {}. Synced up to height {}",
+                    next_height,
+                    next_height - 1
+                );
+                debug!("rpc.get_block err: {:?}", err);
                 return;
             }
-        };
-
-        // if block.prev_hash == wallet.last_block_hash
-        // {
-        info!(
-            "Adding transactions from block {} at height {}",
-            block.hash, block.height
-        );
-        let transactions = block
-            .tx_ids
-            .into_iter()
-            .map(|tx_id| rpc.get_transaction(&tx_id).unwrap())
-            .collect();
-        wallet
-            .add_notes_from_block(block.height, block.hash, transactions)
-            .unwrap();
-        next_height += 1;
-        // } else {
-        //     // Fork management is not implemented
-        //     error!(
-        //         "REORG: dropping block {} at height {}",
-        //         wallet.last_block_hash().unwrap(),
-        //         next_height
-        //     );
-        // }
+        }
     }
 }
 
