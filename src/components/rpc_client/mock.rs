@@ -1,5 +1,6 @@
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::model::Block;
+use crate::prelude::info;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::collections::BTreeMap;
@@ -9,7 +10,6 @@ use std::io::ErrorKind;
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, BranchId};
 use zcash_primitives::transaction::{Transaction, TxId};
-use crate::prelude::info;
 
 pub struct MockZcashNode {
     blockchain: Vec<Block>,
@@ -87,7 +87,6 @@ impl RpcClient for MockZcashNode {
     }
 
     fn submit_block(&mut self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
-
         let mut block_bytes = vec![];
         block.write(&mut block_bytes).unwrap();
         let serialized_block = hex::encode(block_bytes);
@@ -97,11 +96,15 @@ impl RpcClient for MockZcashNode {
         let len: usize = self.blockchain.len();
 
         // Step 1: Collect the encoded transactions and their IDs outside the closure
-        let transactions_to_insert: Vec<(TxId, String)> = block.transactions.iter().map(|tx| {
-            let mut tx_bytes = vec![];
-            tx.write(&mut tx_bytes).unwrap();
-            (tx.txid(), hex::encode(tx_bytes))
-        }).collect();
+        let transactions_to_insert: Vec<(TxId, String)> = block
+            .transactions
+            .iter()
+            .map(|tx| {
+                let mut tx_bytes = vec![];
+                tx.write(&mut tx_bytes).unwrap();
+                (tx.txid(), hex::encode(tx_bytes))
+            })
+            .collect();
 
         // Step 2: Create the new block and push it to the blockchain
         self.blockchain.push(Block {

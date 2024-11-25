@@ -66,7 +66,12 @@ impl Runnable for TestOrchardZSACmd {
             asset,
             &mut wallet,
         );
-        mine(&mut wallet, &mut rpc_client, Vec::from([transfer_tx_1]), false);
+        mine(
+            &mut wallet,
+            &mut rpc_client,
+            Vec::from([transfer_tx_1]),
+            false,
+        );
 
         let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);
         check_balances(

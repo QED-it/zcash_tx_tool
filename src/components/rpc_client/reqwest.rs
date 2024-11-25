@@ -47,11 +47,16 @@ impl ReqwestRpcClient {
             .text()?;
         let response_string = binding.as_str();
 
-        info!("Request {} Response: {}",
+        info!(
+            "Request {} Response: {}",
             trim_info_log_string(request.method),
-            trim_info_log_string(response_string));
+            trim_info_log_string(response_string)
+        );
 
-        debug!("Full Request {} Full Response: {}", request.method, response_string);
+        debug!(
+            "Full Request {} Full Response: {}",
+            request.method, response_string
+        );
 
         let rpc_result: RpcResponse<T> = serde_json::from_str(response_string)?;
 
