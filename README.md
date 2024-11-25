@@ -19,9 +19,9 @@ Core components include:
 To build and run the Zebra docker image:
 
 ```bash
-% docker build -t qedit/zebra-regtest-txv6 .
+docker build -t qedit/zebra-regtest-txv6 .
 
-% docker run -p 18232:18232 qedit/zebra-regtest-txv6
+docker run -p 18232:18232 qedit/zebra-regtest-txv6
 ``` 
 More details on how the docker file is created and synced: [Dockerfile](./Dockerfile)
 
@@ -29,13 +29,13 @@ In a different window, setup and run the Zcash transaction tool:
 
 A one time setup for Diesel is required:
 ```bash
-% cargo install diesel_cli --no-default-features --features sqlite
+cargo install diesel_cli --no-default-features --features sqlite
 
-% diesel setup
+diesel setup
 ```
 Build and run the orchardZSA test case using the Zcash transaction tool:
 ```bash
-% RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
+RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
 ```
 To re-run the test scenario, you need to reset the Zebra node by shutting down the Zebra container and starting it again.
 
@@ -69,7 +69,7 @@ Although release build is highly recommended for performance reasons:
 To test ZSA functionality with the tool, the corresponding flag should be set:
 
 ```bash
-% RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo build
+RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo build --release
 ```
 
 ## ZSA Orchard test scenario
@@ -83,7 +83,7 @@ Main test scenario ([src/commands/test_orchard_zsa.rs](src/commands/test_orchard
 To run the test scenario:
 
 ```bash
-% RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
+RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
 ```
 
 [//]: # ()
@@ -95,7 +95,7 @@ To run the test scenario:
 [//]: # ()
 [//]: # (```bash)
 
-[//]: # (% docker build -t zcash_tx_tool -f Dockerfile-demo .)
+[//]: # (docker build -t zcash_tx_tool -f Dockerfile-demo .)
 
 [//]: # (```)
 
@@ -113,7 +113,7 @@ To run the test scenario:
 
 [//]: # (```bash)
 
-[//]: # (% docker network create zcash-network)
+[//]: # (docker network create zcash-network)
 
 [//]: # (```)
 
@@ -121,7 +121,7 @@ To run the test scenario:
 
 [//]: # (```bash)
 
-[//]: # (% docker run --name zebra-node --network zcash-network -p 18232:18232 qedit/zebra-regtest-txv6)
+[//]: # (docker run --name zebra-node --network zcash-network -p 18232:18232 qedit/zebra-regtest-txv6)
 
 [//]: # (```)
 
@@ -131,11 +131,11 @@ To run the test scenario:
 [//]: # ()
 [//]: # (```bash)
 
-[//]: # (% docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=127.0.0.1 -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool)
+[//]: # (docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=127.0.0.1 -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool)
 
-[//]: # (% docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=zebra-node -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool)
+[//]: # (docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=zebra-node -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool)
 
-[//]: # (% docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=<Domain> -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool)
+[//]: # (docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=<Domain> -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool)
 
 [//]: # (```)
 
