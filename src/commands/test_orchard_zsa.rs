@@ -4,7 +4,6 @@ use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
 
 use crate::commands::test_balances::{check_balances, print_balances, TestBalances};
-use crate::components::rpc_client::mock::MockZcashNode;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::sync_from_height;
 use crate::components::transactions::{

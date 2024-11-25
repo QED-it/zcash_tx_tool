@@ -7,7 +7,6 @@ use std::io;
 use std::io::Write;
 use zcash_encoding::{CompactSize, Vector};
 use zcash_primitives::block::{BlockHash, BlockHeader};
-use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::{Transaction, TxId};
 
 use crate::model::Block;
