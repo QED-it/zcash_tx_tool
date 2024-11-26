@@ -27,6 +27,9 @@ This repository includes a simple Zebra Docker image that incorporates the Orcha
 - **ZSA Support**: Work with Zcash Shielded Assets (Orchard ZSA).
 - **Version Compatibility**: Supports transaction versions V5 and V6.
 
+## Supported systems
+- Tested on Ubuntu 22.04 LTS but should work on any Linux distribution that support the Prerequisites.
+
 ## Core Components
 
 1. **[librustzcash](https://github.com/zcash/librustzcash)**: Used for transaction creation and serialization. This version includes slight modifications for additional functionality.
@@ -38,6 +41,12 @@ This repository includes a simple Zebra Docker image that incorporates the Orcha
 - **Docker**: [Install Docker](https://www.docker.com/get-started)
 - **Rust & Cargo**: [Install Rust and Cargo](https://www.rust-lang.org/tools/install)
 - **Diesel CLI**: Installed via Cargo.
+- **Linux Dev tools**:
+```bash
+sudo apt update
+
+sudo apt install pkg-config libssl-dev libsqlite3-dev 
+```
 
 ## Getting Started
 
@@ -46,10 +55,10 @@ This repository includes a simple Zebra Docker image that incorporates the Orcha
 Open a terminal and execute the following commands:
 
 ```bash
-# Build the Docker image
+# Build the Zebra Docker image
 docker build -t qedit/zebra-regtest-txv6 .
 
-# Run the Docker container
+# Run the Zebra Docker container
 docker run -p 18232:18232 qedit/zebra-regtest-txv6
 ```
 
@@ -59,9 +68,9 @@ For more details on how the Docker image is created and synchronized, refer to t
 
 In a separate terminal window, perform the following steps:
 
-#### One-Time Diesel Setup
+#### One-Time Setup
 
-Install Diesel CLI and set up the database:
+Install Diesel CLI and set up the database and get Zcash Params for Sapling:
 
 ```bash
 # Install Diesel CLI with SQLite support
@@ -69,6 +78,9 @@ cargo install diesel_cli --no-default-features --features sqlite
 
 # Set up the database
 diesel setup
+
+# Get Zcash Params for Sapling (if needed)
+./zcutil/fetch-params.sh
 ```
 
 #### Build and Run the Orchard ZSA Test Case
