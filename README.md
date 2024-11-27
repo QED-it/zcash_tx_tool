@@ -30,6 +30,9 @@ This repository includes a simple Zebra Docker image that incorporates the Orcha
 ## Supported systems
 - Tested on Ubuntu 22.04 LTS but should work on any Linux distribution that support the Prerequisites.
 
+## Status
+- **Alpha** - Everything, including APIs and data structures, is subject to breaking changes. Feature set is incomplete.
+
 ## Core Components
 
 1. **[librustzcash](https://github.com/zcash/librustzcash)**: Used for transaction creation and serialization. This version includes slight modifications for additional functionality.
