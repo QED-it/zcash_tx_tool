@@ -92,7 +92,7 @@ Build and run the test case using the Zcash Transaction Tool:
 
 ```bash
 # Build and run with ZSA feature enabled
-RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
+cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
 ```
 
 **Note**: To re-run the test scenario, reset the Zebra node by stopping and restarting the Zebra Docker container.
@@ -134,7 +134,7 @@ cargo build --release
 To test ZSA functionality with the tool, enable the corresponding feature flag:
 
 ```bash
-RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo build --release
+cargo build --release
 ```
 
 ## ZSA Orchard Test Scenario
@@ -148,7 +148,7 @@ The main test scenario ([src/commands/test_orchard_zsa.rs](src/commands/test_orc
 To run the test scenario:
 
 ```bash
-RUSTFLAGS='--cfg zcash_unstable="nu6"' cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
+cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
 ```
 
 ## License
