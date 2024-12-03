@@ -164,7 +164,7 @@ pub fn create_transfer_transaction(
     let ovk = wallet.orchard_ovk();
 
     // Add inputs
-    let inputs = wallet.select_spendable_notes(sender, amount, Some(asset));
+    let inputs = wallet.select_spendable_notes(sender, amount, asset);
     let total_inputs_amount = inputs
         .iter()
         .fold(0, |acc, input| acc + input.note.value().inner());
@@ -218,7 +218,7 @@ pub fn create_burn_transaction(
     info!("Burn {} zatoshi", amount);
 
     // Add inputs
-    let inputs = wallet.select_spendable_notes(arsonist, amount, Some(asset));
+    let inputs = wallet.select_spendable_notes(arsonist, amount, asset);
     let total_inputs_amount = inputs
         .iter()
         .fold(0, |acc, input| acc + input.note.value().inner());

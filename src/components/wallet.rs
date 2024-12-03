@@ -128,9 +128,9 @@ impl Wallet {
         &mut self,
         address: Address,
         total_amount: u64,
-        _asset: Option<AssetBase>,
+        asset: AssetBase,
     ) -> Vec<NoteSpendMetadata> {
-        let all_notes = self.db.find_non_spent_notes(address);
+        let all_notes = self.db.find_non_spent_notes(address, asset);
         let mut selected_notes = Vec::new();
         let mut total_amount_selected = 0;
 
@@ -251,8 +251,8 @@ impl Wallet {
         self.balance(address, AssetBase::native())
     }
 
-    pub fn balance(&mut self, address: Address, _asset: AssetBase) -> u64 {
-        let all_notes = self.db.find_non_spent_notes(address);
+    pub fn balance(&mut self, address: Address, asset: AssetBase) -> u64 {
+        let all_notes = self.db.find_non_spent_notes(address, asset);
         let mut total_amount: i64 = 0;
 
         for note_data in all_notes {
