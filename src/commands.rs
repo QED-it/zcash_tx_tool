@@ -13,7 +13,9 @@
 mod test_balances;
 mod test_orchard;
 mod test_orchard_zsa;
+mod clean;
 
+use crate::commands::clean::CleanCmd;
 use crate::commands::test_orchard::TestOrchardCmd;
 use crate::commands::test_orchard_zsa::TestOrchardZSACmd;
 use crate::config::AppConfig;
@@ -28,6 +30,7 @@ pub const CONFIG_FILE: &str = "config.toml";
 pub enum AppCmd {
     TestOrchard(TestOrchardCmd),
     TestOrchardZSA(TestOrchardZSACmd),
+    Clean(CleanCmd),
 }
 
 /// Entry point for the application. It needs to be a struct to allow using subcommands!

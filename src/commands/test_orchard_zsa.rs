@@ -113,6 +113,5 @@ impl Runnable for TestOrchardZSACmd {
 }
 
 fn prepare_test(target_height: u32, wallet: &mut Wallet, rpc_client: &mut ReqwestRpcClient) {
-    wallet.reset();
     sync_from_height(target_height, wallet, rpc_client);
 }

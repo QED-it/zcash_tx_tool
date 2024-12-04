@@ -91,7 +91,6 @@ fn prepare_test(
     wallet: &mut Wallet,
     rpc_client: &mut ReqwestRpcClient,
 ) -> TxId {
-    wallet.reset();
     sync_from_height(target_height, wallet, rpc_client);
     let (_, coinbase_txid) = mine_empty_blocks(100, rpc_client); // coinbase maturity = 100
     coinbase_txid
