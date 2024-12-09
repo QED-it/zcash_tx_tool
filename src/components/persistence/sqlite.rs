@@ -35,7 +35,11 @@ impl SqliteDataStorage {
             .expect("Error loading notes")
     }
 
-    pub fn find_non_spent_notes(&mut self, recipient: Address, asset_base: AssetBase) -> Vec<NoteData> {
+    pub fn find_non_spent_notes(
+        &mut self,
+        recipient: Address,
+        asset_base: AssetBase,
+    ) -> Vec<NoteData> {
         notes
             .filter(
                 spend_tx_id

@@ -52,7 +52,12 @@ impl Runnable for TestOrchardZSACmd {
         print_balances("=== Initial balances ===", asset, balances);
 
         let current_height = (&mut wallet).last_block_height();
-        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]), current_height.is_none());
+        mine(
+            &mut wallet,
+            &mut rpc_client,
+            Vec::from([issue_tx]),
+            current_height.is_none(),
+        );
 
         let balances = TestBalances::get_asset(asset, &mut wallet);
         print_balances("=== Balances after issue ===", asset, balances);

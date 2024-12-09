@@ -141,7 +141,6 @@ pub struct Wallet {
 }
 
 impl Wallet {
-
     pub fn new(seed_phrase: &String, miner_seed_phrase: &String) -> Self {
         Wallet {
             db: SqliteDataStorage::new(),
@@ -150,7 +149,9 @@ impl Wallet {
             last_block_height: None,
             last_block_hash: None,
             seed: Mnemonic::from_phrase(seed_phrase).unwrap().to_seed(""),
-            miner_seed: Mnemonic::from_phrase(miner_seed_phrase).unwrap().to_seed(""),
+            miner_seed: Mnemonic::from_phrase(miner_seed_phrase)
+                .unwrap()
+                .to_seed(""),
         }
     }
 
@@ -166,7 +167,9 @@ impl Wallet {
             last_block_height: None,
             last_block_hash: None,
             seed: seed_random_bytes,
-            miner_seed: Mnemonic::from_phrase(miner_seed_phrase).unwrap().to_seed(""),
+            miner_seed: Mnemonic::from_phrase(miner_seed_phrase)
+                .unwrap()
+                .to_seed(""),
         }
     }
 
@@ -295,12 +298,13 @@ impl Wallet {
     // Hack for claiming coinbase
     pub fn miner_address(&self) -> TransparentAddress {
         let account = AccountId::try_from(0).unwrap();
-        let pubkey = legacy::keys::AccountPrivKey::from_seed(&REGTEST_NETWORK, &self.miner_seed, account)
-            .unwrap()
-            .derive_external_secret_key(NonHardenedChildIndex::ZERO)
-            .unwrap()
-            .public_key(&Secp256k1::new())
-            .serialize();
+        let pubkey =
+            legacy::keys::AccountPrivKey::from_seed(&REGTEST_NETWORK, &self.miner_seed, account)
+                .unwrap()
+                .derive_external_secret_key(NonHardenedChildIndex::ZERO)
+                .unwrap()
+                .public_key(&Secp256k1::new())
+                .serialize();
         let hash = &Ripemd160::digest(Sha256::digest(pubkey))[..];
         TransparentAddress::PublicKeyHash(hash.try_into().unwrap())
     }

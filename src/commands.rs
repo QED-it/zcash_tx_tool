@@ -10,10 +10,10 @@
 //! See the `impl Configurable` below for how to specify the path to the
 //! application's configuration file.
 
+mod clean;
 mod test_balances;
 mod test_orchard;
 mod test_orchard_zsa;
-mod clean;
 
 use crate::commands::clean::CleanCmd;
 use crate::commands::test_orchard::TestOrchardCmd;
