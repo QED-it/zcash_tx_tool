@@ -21,7 +21,9 @@ impl Runnable for TestOrchardZSACmd {
     fn run(&self) {
         let config = APP.config();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = Wallet::new(&config.wallet.seed_phrase);
+        let mut wallet = Wallet::random(&config.wallet.miner_seed_phrase);
+
+        wallet.reset();
 
         let issuer = wallet.address_for_account(0, External);
         let alice = wallet.address_for_account(1, External);
@@ -49,7 +51,8 @@ impl Runnable for TestOrchardZSACmd {
         let balances = TestBalances::get_asset(asset, &mut wallet);
         print_balances("=== Initial balances ===", balances);
 
-        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]), true);
+        let current_height = (&mut wallet).last_block_height();
+        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]), current_height.is_none());
 
         let balances = TestBalances::get_asset(asset, &mut wallet);
         print_balances("=== Balances after issue ===", balances);

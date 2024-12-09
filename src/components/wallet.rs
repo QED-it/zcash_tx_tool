@@ -21,6 +21,7 @@ use orchard::orchard_flavor::{OrchardVanilla, OrchardZSA};
 use orchard::tree::{MerkleHashOrchard, MerklePath};
 use orchard::value::NoteValue;
 use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
+use rand::Rng;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
 use sha2::Sha256;
@@ -39,6 +40,28 @@ use zcash_primitives::zip339::Mnemonic;
 
 pub const MAX_CHECKPOINTS: usize = 100;
 pub const NOTE_COMMITMENT_TREE_DEPTH: u8 = 32;
+
+#[derive(Debug, Clone)]
+pub enum WalletError {
+    OutOfOrder(BlockHeight, usize),
+    NoteCommitmentTreeFull,
+}
+
+#[derive(Debug, Clone)]
+pub enum BundleLoadError {
+    /// The action at the specified index failed to decrypt with
+    /// the provided IVK.
+    ActionDecryptionFailed(usize),
+    /// The wallet did not contain the full viewing key corresponding
+    /// to the incoming viewing key that successfully decrypted a
+    /// note.
+    FvkNotFound(IncomingViewingKey),
+    /// An action index identified as potentially spending one of our
+    /// notes is not a valid action index for the bundle.
+    InvalidActionIndex(usize),
+    /// Invalid Transaction data format
+    InvalidTransactionFormat,
+}
 
 #[derive(Debug)]
 pub struct NoteSpendMetadata {
@@ -113,9 +136,52 @@ pub struct Wallet {
     last_block_hash: Option<BlockHash>,
     /// The seed used to derive the wallet's keys.
     seed: [u8; 64],
+    /// The seed used to derive the miner's keys. This is a hack for claiming coinbase.
+    miner_seed: [u8; 64],
 }
 
 impl Wallet {
+
+    pub fn new(seed_phrase: &String, miner_seed_phrase: &String) -> Self {
+        Wallet {
+            db: SqliteDataStorage::new(),
+            key_store: KeyStore::empty(),
+            commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
+            last_block_height: None,
+            last_block_hash: None,
+            seed: Mnemonic::from_phrase(seed_phrase).unwrap().to_seed(""),
+            miner_seed: Mnemonic::from_phrase(miner_seed_phrase).unwrap().to_seed(""),
+        }
+    }
+
+    pub fn random(miner_seed_phrase: &String) -> Self {
+        let mut rng = rand::thread_rng();
+        let mut seed_random_bytes = [0u8; 64];
+        rng.fill(&mut seed_random_bytes);
+
+        Wallet {
+            db: SqliteDataStorage::new(),
+            key_store: KeyStore::empty(),
+            commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
+            last_block_height: None,
+            last_block_hash: None,
+            seed: seed_random_bytes,
+            miner_seed: Mnemonic::from_phrase(miner_seed_phrase).unwrap().to_seed(""),
+        }
+    }
+
+    /// Reset the state of the wallet to be suitable for rescan from the NU5 activation
+    /// height.  This removes all witness and spentness information from the wallet. The
+    /// keystore is unmodified and decrypted note, nullifier, and conflict data are left
+    /// in place with the expectation that they will be overwritten and/or updated in
+    /// the rescan process.
+    pub fn reset(&mut self) {
+        self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
+        self.last_block_height = None;
+        self.last_block_hash = None;
+        self.db.delete_all_notes();
+    }
+
     pub fn last_block_hash(&self) -> Option<BlockHash> {
         self.last_block_hash
     }
@@ -229,7 +295,7 @@ impl Wallet {
     // Hack for claiming coinbase
     pub fn miner_address(&self) -> TransparentAddress {
         let account = AccountId::try_from(0).unwrap();
-        let pubkey = legacy::keys::AccountPrivKey::from_seed(&REGTEST_NETWORK, &self.seed, account)
+        let pubkey = legacy::keys::AccountPrivKey::from_seed(&REGTEST_NETWORK, &self.miner_seed, account)
             .unwrap()
             .derive_external_secret_key(NonHardenedChildIndex::ZERO)
             .unwrap()
@@ -239,9 +305,10 @@ impl Wallet {
         TransparentAddress::PublicKeyHash(hash.try_into().unwrap())
     }
 
+    // Hack for claiming coinbase
     pub fn miner_sk(&self) -> SecretKey {
         let account = AccountId::try_from(0).unwrap();
-        legacy::keys::AccountPrivKey::from_seed(&REGTEST_NETWORK, &self.seed, account)
+        legacy::keys::AccountPrivKey::from_seed(&REGTEST_NETWORK, &self.miner_seed, account)
             .unwrap()
             .derive_external_secret_key(NonHardenedChildIndex::ZERO)
             .unwrap()
@@ -259,53 +326,6 @@ impl Wallet {
             total_amount += note_data.amount;
         }
         total_amount as u64
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum WalletError {
-    OutOfOrder(BlockHeight, usize),
-    NoteCommitmentTreeFull,
-}
-
-#[derive(Debug, Clone)]
-pub enum BundleLoadError {
-    /// The action at the specified index failed to decrypt with
-    /// the provided IVK.
-    ActionDecryptionFailed(usize),
-    /// The wallet did not contain the full viewing key corresponding
-    /// to the incoming viewing key that successfully decrypted a
-    /// note.
-    FvkNotFound(IncomingViewingKey),
-    /// An action index identified as potentially spending one of our
-    /// notes is not a valid action index for the bundle.
-    InvalidActionIndex(usize),
-    /// Invalid Transaction data format
-    InvalidTransactionFormat,
-}
-
-impl Wallet {
-    pub fn new(seed_phrase: &String) -> Self {
-        Wallet {
-            db: SqliteDataStorage::new(),
-            key_store: KeyStore::empty(),
-            commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
-            last_block_height: None,
-            last_block_hash: None,
-            seed: Mnemonic::from_phrase(seed_phrase).unwrap().to_seed(""),
-        }
-    }
-
-    /// Reset the state of the wallet to be suitable for rescan from the NU5 activation
-    /// height.  This removes all witness and spentness information from the wallet. The
-    /// keystore is unmodified and decrypted note, nullifier, and conflict data are left
-    /// in place with the expectation that they will be overwritten and/or updated in
-    /// the rescan process.
-    pub fn reset(&mut self) {
-        self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
-        self.last_block_height = None;
-        self.last_block_hash = None;
-        self.db.delete_all_notes();
     }
 
     /// Add note data from all V5 transactions of the block to the wallet.
@@ -479,7 +499,6 @@ impl Wallet {
         orchard_zsa_bundle_opt: Option<&Bundle<Authorized, Amount, OrchardZSA>>,
         issue_bundle_opt: Option<&IssueBundle<Signed>>,
     ) -> Result<(), WalletError> {
-        // update the block height recorded for the transaction
         let my_notes_for_tx: Vec<NoteData> = self.db.find_notes_for_tx(txid);
 
         // Process note commitments

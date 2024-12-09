@@ -50,12 +50,12 @@ pub fn mine_block(
 }
 
 /// Mine the given number of empty blocks and return the block height and coinbase txid of the first block
-pub fn mine_empty_blocks(num_blocks: u32, rpc_client: &mut dyn RpcClient) -> (u32, TxId) {
+pub fn mine_empty_blocks(num_blocks: u32, rpc_client: &mut dyn RpcClient, activate: bool) -> (u32, TxId) {
     if num_blocks == 0 {
         panic!("num_blocks must be greater than 0")
     }
 
-    let (block_height, coinbase_txid) = mine_block(rpc_client, BranchId::Nu5, vec![], false);
+    let (block_height, coinbase_txid) = mine_block(rpc_client, BranchId::Nu5, vec![], activate);
 
     for _ in 1..num_blocks {
         mine_block(rpc_client, BranchId::Nu5, vec![], false);

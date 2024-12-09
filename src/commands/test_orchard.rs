@@ -24,7 +24,9 @@ impl Runnable for TestOrchardCmd {
     fn run(&self) {
         let config = APP.config();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = Wallet::new(&config.wallet.seed_phrase);
+        let mut wallet = Wallet::random(&config.wallet.miner_seed_phrase);
+
+        wallet.reset();
 
         let miner = wallet.address_for_account(0, External);
         let alice = wallet.address_for_account(1, External);
@@ -45,10 +47,10 @@ impl Runnable for TestOrchardCmd {
             &mut wallet,
             &mut rpc_client,
             Vec::from([shielding_tx]),
-            true,
+            false,
         );
 
-        let expected_delta = TestBalances::new(500_000_000 /*coinbase_reward*/, 0);
+        let expected_delta = TestBalances::new(625_000_000 /*coinbase_reward*/, 0);
         balances = check_balances(
             "=== Balances after shielding ===",
             AssetBase::native(),
@@ -92,6 +94,7 @@ fn prepare_test(
     rpc_client: &mut ReqwestRpcClient,
 ) -> TxId {
     sync_from_height(target_height, wallet, rpc_client);
-    let (_, coinbase_txid) = mine_empty_blocks(100, rpc_client); // coinbase maturity = 100
+    let activate = wallet.last_block_height().is_none();
+    let (_, coinbase_txid) = mine_empty_blocks(100, rpc_client, activate); // coinbase maturity = 100
     coinbase_txid
 }

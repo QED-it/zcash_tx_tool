@@ -17,3 +17,16 @@ diesel::table! {
         spend_action_index -> Integer,
     }
 }
+
+diesel::table! {
+    params (params_id) {
+        params_id -> Integer,
+        last_block_height -> Nullable<Integer>,
+        last_block_hash -> Nullable<Binary>,
+    }
+}
+
+diesel::allow_tables_to_appear_in_same_query!(
+    notes,
+    params,
+);

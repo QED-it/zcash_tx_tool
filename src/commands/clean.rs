@@ -13,7 +13,7 @@ impl Runnable for CleanCmd {
     /// Run the `clean` subcommand.
     fn run(&self) {
         let config = APP.config();
-        let mut wallet = Wallet::new(&config.wallet.seed_phrase);
+        let mut wallet = Wallet::new(&config.wallet.seed_phrase, &config.wallet.miner_seed_phrase);
 
         wallet.reset();
     }
