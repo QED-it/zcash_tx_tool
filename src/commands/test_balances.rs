@@ -40,7 +40,7 @@ pub(crate) fn check_balances(
     wallet: &mut Wallet,
 ) -> TestBalances {
     let actual_balances = TestBalances::get_asset(asset, wallet);
-    print_balances(header, actual_balances);
+    print_balances(header, asset, actual_balances);
     assert_eq!(
         actual_balances.account0,
         initial.account0 + expected_delta.account0
@@ -52,8 +52,9 @@ pub(crate) fn check_balances(
     actual_balances
 }
 
-pub(crate) fn print_balances(header: &str, balances: TestBalances) {
+pub(crate) fn print_balances(header: &str, asset: AssetBase, balances: TestBalances) {
     info!("{}", header);
+    info!("AssetBase: {}", hex::encode(asset.to_bytes()).as_str());
     info!("Account 0 balance: {}", balances.account0);
     info!("Account 1 balance: {}", balances.account1);
 }

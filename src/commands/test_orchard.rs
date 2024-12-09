@@ -38,7 +38,7 @@ impl Runnable for TestOrchardCmd {
         );
 
         let mut balances = TestBalances::get_zec(&mut wallet);
-        print_balances("=== Initial balances ===", balances);
+        print_balances("=== Initial balances ===", AssetBase::native(), balances);
 
         // --------------------- Shield miner's reward ---------------------
 
