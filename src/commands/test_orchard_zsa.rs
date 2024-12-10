@@ -28,6 +28,7 @@ impl Runnable for TestOrchardZSACmd {
         let issuer = wallet.address_for_account(0, External);
         let alice = wallet.address_for_account(1, External);
 
+        let asset_description = b"WETH".to_vec();
         prepare_test(
             config.chain.v6_activation_height,
             &mut wallet,
@@ -36,7 +37,8 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Issue asset ---------------------
 
-        let issue_tx = create_issue_transaction(issuer, 1000, b"WETH".into(), &mut wallet);
+        let issue_tx =
+            create_issue_transaction(issuer, 1000, asset_description.clone(), &mut wallet);
 
         let asset = issue_tx
             .issue_bundle()
@@ -117,6 +119,26 @@ impl Runnable for TestOrchardZSACmd {
             expected_delta,
             &mut wallet,
         );
+
+        // --------------------- Finalization ---------------------
+        // TODO - uncomment when finalization is implemented
+        // let finalization_tx = create_finalization_transaction(asset_description.clone(), &mut wallet);
+        // mine(
+        //     &mut wallet,
+        //     &mut rpc_client,
+        //     Vec::from([finalization_tx]),
+        //     false,
+        // );
+        //
+        // let invalid_issue_tx = create_issue_transaction(issuer, 2000, asset_description, &mut wallet);
+        // mine(
+        //     &mut wallet,
+        //     &mut rpc_client,
+        //     Vec::from([invalid_issue_tx]),
+        //     false,
+        // ); // TODO expect failure
+        //
+        // panic!("Invalid issue transaction was accepted");
     }
 }
 

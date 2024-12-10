@@ -284,6 +284,17 @@ pub fn create_issue_transaction(
     build_tx(tx)
 }
 
+/// Create a transaction that issues a new asset
+pub fn create_finalization_transaction(asset_desc: Vec<u8>, wallet: &mut Wallet) -> Transaction {
+    info!("Finalize asset");
+    let mut tx = create_tx(wallet);
+    tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc.clone(), None)
+        .unwrap();
+    tx.finalize_asset::<FeeError>(asset_desc.as_slice())
+        .unwrap();
+    build_tx(tx)
+}
+
 /// Convert a block template and a list of transactions into a block proposal
 pub fn template_into_proposal(
     block_template: BlockTemplate,
