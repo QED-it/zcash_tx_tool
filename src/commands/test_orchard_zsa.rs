@@ -51,7 +51,7 @@ impl Runnable for TestOrchardZSACmd {
         let balances = TestBalances::get_asset(asset, &mut wallet);
         print_balances("=== Initial balances ===", asset, balances);
 
-        let current_height = (&mut wallet).last_block_height();
+        let current_height = wallet.last_block_height();
         mine(
             &mut wallet,
             &mut rpc_client,

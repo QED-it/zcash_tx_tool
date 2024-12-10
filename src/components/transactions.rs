@@ -10,6 +10,7 @@ use orchard::value::NoteValue;
 use orchard::Address;
 use rand::rngs::OsRng;
 use std::convert::TryFrom;
+use std::ops::Add;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
 use zcash_primitives::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
 use zcash_primitives::memo::MemoBytes;
@@ -27,8 +28,8 @@ pub fn mine(
     txs: Vec<Transaction>,
     activate: bool,
 ) {
-    let (block_height, _) = mine_block(rpc_client, BranchId::Nu5, txs, activate);
-    sync_from_height(block_height, wallet, rpc_client);
+    let (_, _) = mine_block(rpc_client, BranchId::Nu5, txs, activate);
+    sync(wallet, rpc_client);
 }
 
 /// Mine a block with the given transactions and return the block height and coinbase txid
@@ -107,7 +108,10 @@ pub fn create_shield_coinbase_transaction(
 
 /// Sync the wallet with the node
 pub fn sync(wallet: &mut Wallet, rpc: &mut dyn RpcClient) {
-    let current_height = wallet.last_block_height().map_or(0, |h| h.into());
+    let current_height = match wallet.last_block_height() {
+        None => 0,
+        Some(height) => height.add(1).into(),
+    };
     sync_from_height(current_height, wallet, rpc);
 }
 
