@@ -28,7 +28,7 @@ use sha2::Sha256;
 
 use crate::components::persistence::model::NoteData;
 use crate::components::persistence::sqlite::SqliteDataStorage;
-use crate::components::wallet::structs::OrderedAddress;
+use crate::components::user::structs::OrderedAddress;
 use zcash_primitives::block::BlockHash;
 use zcash_primitives::consensus::{BlockHeight, REGTEST_NETWORK};
 use zcash_primitives::legacy::keys::NonHardenedChildIndex;
@@ -52,7 +52,7 @@ pub enum BundleLoadError {
     /// The action at the specified index failed to decrypt with
     /// the provided IVK.
     ActionDecryptionFailed(usize),
-    /// The wallet did not contain the full viewing key corresponding
+    /// The user did not contain the full viewing key corresponding
     /// to the incoming viewing key that successfully decrypted a
     /// note.
     FvkNotFound(IncomingViewingKey),
@@ -102,8 +102,8 @@ impl KeyStore {
         self.spending_keys.insert(fvk, sk);
     }
 
-    /// Adds an address/ivk pair to the wallet, and returns `true` if the IVK
-    /// corresponds to a FVK known by this wallet, `false` otherwise.
+    /// Adds an address/ivk pair to the user, and returns `true` if the IVK
+    /// corresponds to a FVK known by this user, `false` otherwise.
     pub fn add_raw_address(&mut self, addr: Address, ivk: IncomingViewingKey) -> bool {
         let has_fvk = self.viewing_keys.contains_key(&ivk);
         self.payment_addresses
@@ -122,27 +122,27 @@ impl KeyStore {
     }
 }
 
-pub struct Wallet {
-    /// The database used to store the wallet's state.
+pub struct User {
+    /// The database used to store the user's state.
     db: SqliteDataStorage,
-    /// The in-memory index of keys and addresses known to the wallet.
+    /// The in-memory index of keys and addresses known to the user.
     key_store: KeyStore,
     /// The incremental Merkle tree used to track note commitments and witnesses for notes
-    /// belonging to the wallet.
+    /// belonging to the user.
     commitment_tree: BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH>,
     /// The block height at which the last checkpoint was created, if any.
     last_block_height: Option<BlockHeight>,
     /// The block hash at which the last checkpoint was created, if any.
     last_block_hash: Option<BlockHash>,
-    /// The seed used to derive the wallet's keys.
+    /// The seed used to derive the user's keys.
     seed: [u8; 64],
     /// The seed used to derive the miner's keys. This is a hack for claiming coinbase.
     miner_seed: [u8; 64],
 }
 
-impl Wallet {
+impl User {
     pub fn new(seed_phrase: &String, miner_seed_phrase: &String) -> Self {
-        Wallet {
+        User {
             db: SqliteDataStorage::new(),
             key_store: KeyStore::empty(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
@@ -160,7 +160,7 @@ impl Wallet {
         let mut seed_random_bytes = [0u8; 64];
         rng.fill(&mut seed_random_bytes);
 
-        Wallet {
+        User {
             db: SqliteDataStorage::new(),
             key_store: KeyStore::empty(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
@@ -173,8 +173,8 @@ impl Wallet {
         }
     }
 
-    /// Reset the state of the wallet to be suitable for rescan from the NU5 activation
-    /// height.  This removes all witness and spentness information from the wallet. The
+    /// Reset the state of the user to be suitable for rescan from the NU5 activation
+    /// height.  This removes all witness and spentness information from the user. The
     /// keystore is unmodified and decrypted note, nullifier, and conflict data are left
     /// in place with the expectation that they will be overwritten and/or updated in
     /// the rescan process.
@@ -332,7 +332,7 @@ impl Wallet {
         total_amount as u64
     }
 
-    /// Add note data from all V5 transactions of the block to the wallet.
+    /// Add note data from all V5 transactions of the block to the user.
     /// Versions other than V5 are ignored.
     pub fn add_notes_from_block(
         &mut self,
@@ -352,8 +352,8 @@ impl Wallet {
         Ok(())
     }
 
-    /// Add note data to the wallet, and return a data structure that describes
-    /// the actions that are involved with this wallet.
+    /// Add note data to the user, and return a data structure that describes
+    /// the actions that are involved with this user.
     pub fn add_notes_from_tx(&mut self, tx: Transaction) -> Result<(), BundleLoadError> {
         let mut issued_notes_offset = 0;
 
@@ -390,10 +390,10 @@ impl Wallet {
         Ok(())
     }
 
-    /// Add note data for those notes that are decryptable with one of this wallet's
-    /// incoming viewing keys to the wallet, and return a data structure that describes
-    /// the actions that are involved with this wallet, either spending notes belonging
-    /// to this wallet or creating new notes owned by this wallet.
+    /// Add note data for those notes that are decryptable with one of this user's
+    /// incoming viewing keys to the user, and return a data structure that describes
+    /// the actions that are involved with this user, either spending notes belonging
+    /// to this user or creating new notes owned by this user.
     fn add_notes_from_orchard_bundle<O: OrchardDomainCommon>(
         &mut self,
         txid: &TxId,
@@ -413,8 +413,8 @@ impl Wallet {
         }
     }
 
-    /// Add note data to the wallet, and return a data structure that describes
-    /// the actions that are involved with this wallet.
+    /// Add note data to the user, and return a data structure that describes
+    /// the actions that are involved with this user.
     fn add_notes_from_issue_bundle(
         &mut self,
         txid: &TxId,
@@ -447,7 +447,7 @@ impl Wallet {
         memo_bytes: [u8; 512],
     ) -> Result<(), BundleLoadError> {
         if let Some(fvk) = self.key_store.viewing_keys.get(&ivk) {
-            info!("Adding decrypted note to the wallet");
+            info!("Adding decrypted note to the user");
 
             let mut note_bytes = vec![];
             write_note(&mut note_bytes, &note).unwrap();
@@ -474,7 +474,7 @@ impl Wallet {
             self.key_store.add_raw_address(recipient, ivk.clone());
             Ok(())
         } else {
-            info!("Can't add decrypted note to the wallet, missing FVK");
+            info!("Can't add decrypted note to the user, missing FVK");
             Err(BundleLoadError::FvkNotFound(ivk.clone()))
         }
     }
@@ -494,7 +494,7 @@ impl Wallet {
     }
 
     /// Add note commitments for the Orchard components of a transaction to the note
-    /// commitment tree, and mark the tree at the notes decryptable by this wallet so that
+    /// commitment tree, and mark the tree at the notes decryptable by this user so that
     /// in the future we can produce authentication paths to those notes.
     pub fn add_note_commitments(
         &mut self,

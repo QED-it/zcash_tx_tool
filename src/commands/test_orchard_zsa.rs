@@ -9,7 +9,7 @@ use crate::components::transactions::sync_from_height;
 use crate::components::transactions::{
     create_burn_transaction, create_issue_transaction, create_transfer_transaction, mine,
 };
-use crate::components::wallet::Wallet;
+use crate::components::user::User;
 use crate::prelude::*;
 
 /// Run the E2E test
@@ -21,7 +21,7 @@ impl Runnable for TestOrchardZSACmd {
     fn run(&self) {
         let config = APP.config();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = Wallet::random(&config.wallet.miner_seed_phrase);
+        let mut wallet = User::random(&config.wallet.miner_seed_phrase);
 
         wallet.reset();
 
@@ -122,17 +122,17 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Finalization ---------------------
         // TODO - uncomment when finalization is implemented
-        // let finalization_tx = create_finalization_transaction(asset_description.clone(), &mut wallet);
+        // let finalization_tx = create_finalization_transaction(asset_description.clone(), &mut user);
         // mine(
-        //     &mut wallet,
+        //     &mut user,
         //     &mut rpc_client,
         //     Vec::from([finalization_tx]),
         //     false,
         // );
         //
-        // let invalid_issue_tx = create_issue_transaction(issuer, 2000, asset_description, &mut wallet);
+        // let invalid_issue_tx = create_issue_transaction(issuer, 2000, asset_description, &mut user);
         // mine(
-        //     &mut wallet,
+        //     &mut user,
         //     &mut rpc_client,
         //     Vec::from([invalid_issue_tx]),
         //     false,
@@ -142,6 +142,6 @@ impl Runnable for TestOrchardZSACmd {
     }
 }
 
-fn prepare_test(target_height: u32, wallet: &mut Wallet, rpc_client: &mut ReqwestRpcClient) {
+fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) {
     sync_from_height(target_height, wallet, rpc_client);
 }

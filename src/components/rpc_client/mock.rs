@@ -78,7 +78,7 @@ impl RpcClient for MockZcashNode {
             .get(txid)
             .ok_or(io::Error::new(ErrorKind::NotFound, "Transaction not found").into())
             .map(|tx_string| {
-                Transaction::read(&hex::decode(tx_string).unwrap()[..], BranchId::Nu5).unwrap()
+                Transaction::read(&hex::decode(tx_string).unwrap()[..], BranchId::Nu6).unwrap()
             })
     }
 

@@ -12,7 +12,7 @@ use crate::components::transactions::mine;
 use crate::components::transactions::{
     create_shield_coinbase_transaction, mine_empty_blocks, sync_from_height,
 };
-use crate::components::wallet::Wallet;
+use crate::components::user::User;
 use crate::prelude::*;
 
 /// Run the E2E test
@@ -24,7 +24,7 @@ impl Runnable for TestOrchardCmd {
     fn run(&self) {
         let config = APP.config();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = Wallet::random(&config.wallet.miner_seed_phrase);
+        let mut wallet = User::random(&config.wallet.miner_seed_phrase);
 
         wallet.reset();
 
@@ -88,11 +88,7 @@ impl Runnable for TestOrchardCmd {
     }
 }
 
-fn prepare_test(
-    target_height: u32,
-    wallet: &mut Wallet,
-    rpc_client: &mut ReqwestRpcClient,
-) -> TxId {
+fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) -> TxId {
     sync_from_height(target_height, wallet, rpc_client);
     let activate = wallet.last_block_height().is_none();
     let (_, coinbase_txid) = mine_empty_blocks(100, rpc_client, activate); // coinbase maturity = 100

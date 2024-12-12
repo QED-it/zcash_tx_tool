@@ -1,4 +1,4 @@
-use crate::components::wallet::Wallet;
+use crate::components::user::User;
 use crate::prelude::info;
 use orchard::keys::Scope::External;
 use orchard::note::AssetBase;
@@ -14,11 +14,11 @@ impl TestBalances {
         TestBalances { account0, account1 }
     }
 
-    pub(crate) fn get_zec(wallet: &mut Wallet) -> TestBalances {
-        Self::get_asset(AssetBase::native(), wallet)
+    pub(crate) fn get_zec(user: &mut User) -> TestBalances {
+        Self::get_asset(AssetBase::native(), user)
     }
 
-    pub(crate) fn get_asset(asset: AssetBase, wallet: &mut Wallet) -> TestBalances {
+    pub(crate) fn get_asset(asset: AssetBase, wallet: &mut User) -> TestBalances {
         let address0 = wallet.address_for_account(0, External);
         let address1 = wallet.address_for_account(1, External);
 
@@ -37,9 +37,9 @@ pub(crate) fn check_balances(
     asset: AssetBase,
     initial: TestBalances,
     expected_delta: TestBalances,
-    wallet: &mut Wallet,
+    user: &mut User,
 ) -> TestBalances {
-    let actual_balances = TestBalances::get_asset(asset, wallet);
+    let actual_balances = TestBalances::get_asset(asset, user);
     print_balances(header, asset, actual_balances);
     assert_eq!(
         actual_balances.account0,
@@ -54,7 +54,16 @@ pub(crate) fn check_balances(
 
 pub(crate) fn print_balances(header: &str, asset: AssetBase, balances: TestBalances) {
     info!("{}", header);
-    info!("AssetBase: {}", hex::encode(asset.to_bytes()).as_str());
+    if asset.is_native().into() {
+        info!("AssetBase: Native ZEC");
+    } else {
+        let trimmed_asset_base = hex::encode(asset.to_bytes())
+            .as_str()
+            .chars()
+            .take(8)
+            .collect::<String>();
+        info!("AssetBase: {}", trimmed_asset_base);
+    }
     info!("Account 0 balance: {}", balances.account0);
     info!("Account 1 balance: {}", balances.account1);
 }

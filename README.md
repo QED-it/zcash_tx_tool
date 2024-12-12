@@ -6,6 +6,8 @@ The **Zcash Transaction Tool** is designed to create and send Zcash transactions
 
 This repository includes a simple Zebra Docker image that incorporates the OrchardZSA version of Zebra and runs in regtest mode.
 
+WARNING: This tool is not a wallet and should not be used as a wallet. This tool is in the early stages of development and should not be used in production environments.
+
 ## Table of Contents
 
 - [Features](#features)

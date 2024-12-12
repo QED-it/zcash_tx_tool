@@ -126,7 +126,7 @@ impl RpcClient for ReqwestRpcClient {
         let tx_hex: String =
             self.request(&RpcRequest::new_with_params("getrawtransaction", params))?;
         let tx_bytes = hex::decode(tx_hex).unwrap();
-        Ok(Transaction::read(tx_bytes.as_slice(), BranchId::Nu5).unwrap())
+        Ok(Transaction::read(tx_bytes.as_slice(), BranchId::Nu6).unwrap())
     }
 
     fn get_block_template(&self) -> Result<BlockTemplate, Box<dyn Error>> {
