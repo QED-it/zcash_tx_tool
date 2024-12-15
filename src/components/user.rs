@@ -52,7 +52,7 @@ pub enum BundleLoadError {
     /// The action at the specified index failed to decrypt with
     /// the provided IVK.
     ActionDecryptionFailed(usize),
-    /// The user did not contain the full viewing key corresponding
+    /// The keystore did not contain the full viewing key corresponding
     /// to the incoming viewing key that successfully decrypted a
     /// note.
     FvkNotFound(IncomingViewingKey),
@@ -102,8 +102,8 @@ impl KeyStore {
         self.spending_keys.insert(fvk, sk);
     }
 
-    /// Adds an address/ivk pair to the user, and returns `true` if the IVK
-    /// corresponds to a FVK known by this user, `false` otherwise.
+    /// Adds an address/ivk pair and returns `true` if the IVK
+    /// corresponds to a known FVK, `false` otherwise.
     pub fn add_raw_address(&mut self, addr: Address, ivk: IncomingViewingKey) -> bool {
         let has_fvk = self.viewing_keys.contains_key(&ivk);
         self.payment_addresses
@@ -173,7 +173,7 @@ impl User {
         }
     }
 
-    /// Reset the state of the user to be suitable for rescan from the NU5 activation
+    /// Reset the state to be suitable for rescan from the NU5 activation
     /// height.  This removes all witness and spentness information from the user. The
     /// keystore is unmodified and decrypted note, nullifier, and conflict data are left
     /// in place with the expectation that they will be overwritten and/or updated in
@@ -391,7 +391,7 @@ impl User {
     }
 
     /// Add note data for those notes that are decryptable with one of this user's
-    /// incoming viewing keys to the user, and return a data structure that describes
+    /// incoming viewing keys, and return a data structure that describes
     /// the actions that are involved with this user, either spending notes belonging
     /// to this user or creating new notes owned by this user.
     fn add_notes_from_orchard_bundle<O: OrchardDomainCommon>(
@@ -474,7 +474,7 @@ impl User {
             self.key_store.add_raw_address(recipient, ivk.clone());
             Ok(())
         } else {
-            info!("Can't add decrypted note to the user, missing FVK");
+            info!("Can't add decrypted note, missing FVK");
             Err(BundleLoadError::FvkNotFound(ivk.clone()))
         }
     }
