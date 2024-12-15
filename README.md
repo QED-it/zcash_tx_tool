@@ -1,116 +1,226 @@
-# Zcash transaction tool
+# Zcash Transaction Tool
 
-The tool is designed to create and send Zcash transactions to a node (e.g., Zebra). Currently, it supports V5 transactions only.
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The repo includes a simple Zebra docker image with a few changes to the original Zebra code to support the tool's test scenario.
+The **Zcash Transaction Tool** is designed to create and send Zcash transactions to a node (e.g., Zebra). It currently supports transaction versions V5 and V6, including the Orchard ZSA (Zcash Shielded Assets) functionality.
 
-Core components include:
+This repository includes a simple Zebra Docker image that incorporates the OrchardZSA version of Zebra and runs in regtest mode.
 
-1) librustzcash for transaction creation and serialization [[Link](https://github.com/zcash/librustzcash)]. Slightly modified with additional functionality.
+WARNING: This tool is not a wallet and should not be used as a wallet. This tool is in the early stages of development and should not be used in production environments.
 
-2) Diesel ORM framework [[Link](https://diesel.rs/)] 
+## Table of Contents
 
-3) Abscissa framework [[Link](https://github.com/iqlusioninc/abscissa)]
+- [Features](#features)
+- [Core Components](#core-components)
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+    - [1. Build and Run the Zebra Docker Image](#1-build-and-run-the-zebra-docker-image)
+    - [2. Set Up and Run the Zcash Transaction Tool](#2-set-up-and-run-the-zcash-transaction-tool)
+- [Configuration](#configuration)
+- [Build Instructions](#build-instructions)
+- [ZSA Orchard Test Scenario](#zsa-orchard-test-scenario)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
 
+## Features
 
+- **Transaction Creation**: Craft custom Zcash transactions.
+- **Transaction Submission**: Send transactions to a Zcash node.
+- **ZSA Support**: Work with Zcash Shielded Assets (Orchard ZSA).
+- **Version Compatibility**: Supports transaction versions V5 and V6.
 
-## Zebra node 
+## Supported systems
+- Tested on Ubuntu 22.04 LTS but should work on any Linux distribution that support the Prerequisites.
 
-Before testing, we need to bring up the desired node and ensure that V5 transactions are activated (NU5 is active).
+## Status
+- **Alpha** - Everything, including APIs and data structures, is subject to breaking changes. Feature set is incomplete.
 
-Currently, we use a custom Zebra build. There are several changes compared to the upstream node:
+## Core Components
 
-- Activation height is set to `1,060,755`
+1. **[librustzcash](https://github.com/zcash/librustzcash)**: Used for transaction creation and serialization. This version includes slight modifications for additional functionality.
+2. **[Diesel ORM Framework](https://diesel.rs/)**: A safe and extensible ORM and query builder for Rust.
+3. **[Abscissa Framework](https://github.com/iqlusioninc/abscissa)**: A microframework for building Rust applications.
 
-- PoW is disabled 
+## Prerequisites
 
-- Consensus branch id is set to custom value. This is done to fork from the main chain
+- **Docker**: [Install Docker](https://www.docker.com/get-started)
+- **Rust & Cargo**: [Install Rust and Cargo](https://www.rust-lang.org/tools/install)
+- **Diesel CLI**: Installed via Cargo.
+- **Linux Dev tools**:
+```bash
+sudo apt update
 
-- Peers lists are empty, meaning that a node will not connect to any other nodes
+sudo apt install pkg-config libssl-dev libsqlite3-dev 
+```
 
-- Blocks up to new activation height are pre-mined and stored in the database that is built into the docker image to avoid long initial sync time
+## Getting Started
 
-To build and run the docker image:
+### 1. Build and Run the Zebra Docker Image
+
+Open a terminal and execute the following commands:
 
 ```bash
-docker build -t qedit/zebra-regtest-txv5 .
+# Build the Zebra Docker image
+docker build -t qedit/zebra-regtest-txv6 .
 
-docker run -p 18232:18232 qedit/zebra-regtest-txv5
-``` 
+# Run the Zebra Docker container
+docker run -p 18232:18232 qedit/zebra-regtest-txv6
+```
 
-More details on how the docker file is created and synced: [Link](https://github.com/QED-it/zcash_tx_tool/blob/main/Dockerfile)
+For more details on how the Docker image is created and synchronized, refer to the [Dockerfile](./Dockerfile).
 
+### 2. Set Up and Run the Zcash Transaction Tool
+
+In a separate terminal window, perform the following steps:
+
+#### One-Time Setup
+
+Install Diesel CLI and set up the database and get Zcash Params for Sapling:
+
+```bash
+# Install Diesel CLI with SQLite support
+cargo install diesel_cli --no-default-features --features sqlite
+
+# Set up the database
+diesel setup
+
+# Get Zcash Params for Sapling (if needed)
+./zcutil/fetch-params.sh
+```
+
+#### Build and Run the Orchard ZSA Test Case
+
+Build and run the test case using the Zcash Transaction Tool:
+
+```bash
+# Build and run with ZSA feature enabled
+cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
+```
+
+**Note**: To re-run the test scenario, reset the Zebra node by stopping and restarting the Zebra Docker container.
+
+The detailed script for the ZSA flow can be found in [test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs).
 
 ## Configuration
 
-The path to the configuration file can be specified with the `--config` flag when running the application. The default filename is "config.toml"
+You can specify the path to the configuration file using the `--config` flag when running the application. The default configuration file name is `config.toml`.
 
-An example configuration file with default values can be found in `example_config.toml`
+An example configuration file with default values is provided in [`regtest_config.toml`](./regtest-config.toml).
 
+## Build Instructions
 
-## Build instructions
+To set up the Diesel database:
 
-To set the Diesel database up:
+1. **Install Diesel CLI**:
 
-1) Install diesel_cli: `cargo install diesel_cli --no-default-features --features sqlite`
+   ```bash
+   cargo install diesel_cli --no-default-features --features sqlite
+   ```
 
-2) Run migrations: `diesel migration run`
+2. **Set Up the Database**:
 
-To build the application, run:
+   ```bash
+   diesel setup
+   ```
 
-```cargo build```
+To build the application:
 
-Although release build is highly recommended for performance reasons:
+```bash
+# Debug build
+cargo build
 
-`cargo build --release`
+# Release build (recommended for performance)
+cargo build --release
+```
 
+To test ZSA functionality with the tool, enable the corresponding feature flag:
 
-## Main test scenario
+```bash
+cargo build --release
+```
 
-Main test scenario ([src/commands/test.rs](src/commands/test.rs)) consists of the following steps:
+## ZSA Orchard Test Scenario
 
-1) Mine 100 empty blocks to be able to use transparent coinbase output
-2) Create and mine a new shielding transaction with a transparent input and a shielded output
-3) Create and mine a new transfer transaction with shielded inputs and outputs
-4) Assert balances for the selected accounts
+The main test scenario ([src/commands/test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs)) consists of the following steps:
+
+1. **Issue an Asset**: Create and issue a new ZSA.
+2. **Transfer the Asset**: Send the issued asset to another account.
+3. **Burn the Asset (Twice)**: Burn the asset in two separate transactions.
 
 To run the test scenario:
 
 ```bash
-cargo run --package zcash_tx_tool --bin zcash_tx_tool test
+cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
 ```
 
-With optional, but recommended `--release` flag, or simply 
+## License
 
-```bash
-zcash_tx_tool test
-```
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-You can also run the tests using docker. To do that you'll need first to build the docker image
+## Acknowledgements
 
-```bash
-docker build -t zcash_tx_tool -f Dockerfile-demo .
-```
+- **[Zcash](https://z.cash/)**: The privacy-protecting digital currency.
+- **[Zebra](https://github.com/ZcashFoundation/zebra)**: An independent Zcash node implementation.
+- **[librustzcash](https://github.com/zcash/librustzcash)**: The Rust library underpinning Zcash.
+- **[Diesel ORM Framework](https://diesel.rs/)**: For database interactions.
+- **[Abscissa Framework](https://github.com/iqlusioninc/abscissa)**: For application structure.
 
-And after that run the image itself.
-The default connection parameters are set to connect to the zebra-node running on the machine itself (127.0.0.1)
-If you ran the node in a docker container with the command above, you named that container "zebra-node", so you should use that as the ZCASH_NODE_ADDRESS.
-If the node is running on the ECS server, you can connect to it by setting the ZCASH_NODE_ADDRESS=<Domain>.
+---
 
-First, make sure you created the network:
-```bash
-docker network create zcash-network
-```
-And started the node with the network argument, like this
-```bash
-docker run --name zebra-node --network zcash-network -p 18232:18232 qedit/zebra-singlenode-txv5
-```
+Feel free to contribute to this project by opening issues or submitting pull requests.
 
-Here are the 3 options (No parameters will default to the first configuration)
+[//]: # ()
+[//]: # (## Docker-based demo)
 
-```bash
-docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=127.0.0.1 -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool
-docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=zebra-node -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool
-docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=<Domain> -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool
-```
-The '-it' parameter was added to allow the demo to be interactive.
+[//]: # ()
+[//]: # (You can also run the tests using docker. To do that you'll need first to build the docker image)
+
+[//]: # ()
+[//]: # (```bash)
+
+[//]: # (docker build -t zcash_tx_tool -f Dockerfile-demo .)
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (And after that run the image itself.)
+
+[//]: # (The default connection parameters are set to connect to the zebra-node running on the machine itself &#40;127.0.0.1&#41;)
+
+[//]: # (If you ran the node in a docker container with the command above, you named that container "zebra-node", so you should use that as the ZCASH_NODE_ADDRESS.)
+
+[//]: # (If the node is running on the ECS server, you can connect to it by setting the ZCASH_NODE_ADDRESS=<Domain>.)
+
+[//]: # ()
+[//]: # (First, make sure you created the network:)
+
+[//]: # (```bash)
+
+[//]: # (docker network create zcash-network)
+
+[//]: # (```)
+
+[//]: # (And started the node with the network argument, like this)
+
+[//]: # (```bash)
+
+[//]: # (docker run --name zebra-node --network zcash-network -p 18232:18232 qedit/zebra-regtest-txv6)
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (Here are the 3 options &#40;No parameters will default to the first configuration&#41;)
+
+[//]: # ()
+[//]: # (```bash)
+
+[//]: # (docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=127.0.0.1 -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool)
+
+[//]: # (docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=zebra-node -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool)
+
+[//]: # (docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=<Domain> -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool)
+
+[//]: # (```)
+
+[//]: # (The '-it' parameter was added to allow the demo to be interactive.)
+

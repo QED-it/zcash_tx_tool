@@ -1,6 +1,6 @@
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, GetBlock, RpcClient};
 use crate::model::Block;
-use crate::prelude::info;
+use crate::prelude::{debug, info};
 use reqwest::blocking::Client;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,18 @@ impl ReqwestRpcClient {
     where
         T: DeserializeOwned,
     {
+        info!(
+            "Request {} Body: {}",
+            request.method,
+            trim_info_log_string(&serde_json::to_string(&request.params).unwrap())
+        );
+
+        debug!(
+            "Full Request {} Full Body: {}",
+            request.method,
+            serde_json::to_string(&request.params).unwrap()
+        );
+
         let binding = self
             .client
             .post(&self.node_url)
@@ -35,7 +47,16 @@ impl ReqwestRpcClient {
             .text()?;
         let response_string = binding.as_str();
 
-        info!("Request {} Response: {}", request.method, response_string);
+        info!(
+            "Request {} Response: {}",
+            trim_info_log_string(request.method),
+            trim_info_log_string(response_string)
+        );
+
+        debug!(
+            "Full Request {} Full Response: {}",
+            request.method, response_string
+        );
 
         let rpc_result: RpcResponse<T> = serde_json::from_str(response_string)?;
 
@@ -105,14 +126,14 @@ impl RpcClient for ReqwestRpcClient {
         let tx_hex: String =
             self.request(&RpcRequest::new_with_params("getrawtransaction", params))?;
         let tx_bytes = hex::decode(tx_hex).unwrap();
-        Ok(Transaction::read(tx_bytes.as_slice(), BranchId::Nu5).unwrap())
+        Ok(Transaction::read(tx_bytes.as_slice(), BranchId::Nu6).unwrap())
     }
 
     fn get_block_template(&self) -> Result<BlockTemplate, Box<dyn Error>> {
         self.request(&RpcRequest::new("getblocktemplate"))
     }
 
-    fn submit_block(&self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
+    fn submit_block(&mut self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
         let mut block_bytes = vec![];
         block.write(&mut block_bytes).unwrap();
 
@@ -173,4 +194,15 @@ impl RpcRequest {
 #[derive(Deserialize)]
 struct RpcResponse<T> {
     result: T,
+}
+
+// Trim the log string if longer than INFO_MAX_LEN
+fn trim_info_log_string(s: &str) -> String {
+    const INFO_MAX_LEN: usize = 50;
+
+    if s.len() > INFO_MAX_LEN {
+        format!("{}...", &s.chars().take(INFO_MAX_LEN).collect::<String>())
+    } else {
+        s.to_string()
+    }
 }

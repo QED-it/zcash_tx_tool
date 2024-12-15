@@ -35,12 +35,15 @@ impl Default for AppConfig {
 pub struct WalletSection {
     /// Wallet seed phrase as defined in BIP-39
     pub seed_phrase: String,
+    /// Miner seed phrase as defined in BIP-39
+    pub miner_seed_phrase: String,
 }
 
 impl Default for WalletSection {
     fn default() -> Self {
         Self {
             seed_phrase: "fabric dilemma shift time border road fork license among uniform early laundry caution deer stamp".to_string(), // tmLTZegcJN5zaufWQBARHkvqC62mTumm3jR
+            miner_seed_phrase: "fabric dilemma shift time border road fork license among uniform early laundry caution deer stamp".to_string(), // tmLTZegcJN5zaufWQBARHkvqC62mTumm3jR
         }
     }
 }
@@ -80,12 +83,14 @@ impl NetworkConfig {
 #[serde(deny_unknown_fields, default)]
 pub struct ChainConfig {
     pub nu5_activation_height: u32,
+    pub v6_activation_height: u32,
 }
 
 impl Default for ChainConfig {
     fn default() -> Self {
         Self {
             nu5_activation_height: 1, // NU5 activation height for regtest, should be in sync with node's chain params
+            v6_activation_height: 1, // V6 activation height for regtest, should be in sync with node's chain params
         }
     }
 }

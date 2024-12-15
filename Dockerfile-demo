@@ -46,4 +46,4 @@ ENV ZCASH_NODE_PORT=18232
 ENV ZCASH_NODE_PROTOCOL=http
 
 # Set the entrypoint
-ENTRYPOINT ["cargo", "run", "--release", "--package", "zcash_tx_tool", "--bin", "zcash_tx_tool", "test"]
+ENTRYPOINT ["cargo", "run", "--release", "--package", "zcash_tx_tool", "--bin", "zcash_tx_tool", "test-orchard-zsa"]

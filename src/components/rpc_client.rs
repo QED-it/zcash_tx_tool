@@ -17,7 +17,7 @@ pub trait RpcClient {
     fn send_transaction(&mut self, tx: Transaction) -> Result<TxId, Box<dyn Error>>;
     fn get_transaction(&self, txid: &TxId) -> Result<Transaction, Box<dyn Error>>;
     fn get_block_template(&self) -> Result<BlockTemplate, Box<dyn Error>>;
-    fn submit_block(&self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>>;
+    fn submit_block(&mut self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>>;
 }
 
 /// =========================== Messages (copied fom Zebra RPC) ===========================
@@ -167,6 +167,45 @@ pub struct BlockTemplate {
     pub submit_old: Option<bool>,
 }
 
+impl BlockTemplate {
+    /// Constructs a new `BlockTemplate` with default values.
+    pub fn new(block_height: u32) -> Self {
+        BlockTemplate {
+            capabilities: vec![],
+            version: 0,
+            previous_block_hash: String::from(
+                "029f11d80ef9765602235e1bc9727e3eb6ba20839319f761fee920d63401e327",
+            ),
+            block_commitments_hash: String::from(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            ),
+            light_client_root_hash: String::from(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            ),
+            final_sapling_root_hash: String::from(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            ),
+            default_roots: DefaultRoots::default(), // Assuming DefaultRoots implements Default
+            transactions: vec![],
+            coinbase_txn: TransactionTemplate::default(), // Assuming TransactionTemplate implements Default
+            long_poll_id: String::from("0000000000287c53b81296694002000000000000000000"),
+            target: String::from(
+                "0ca63f0000000000000000000000000000000000000000000000000000000000",
+            ),
+            min_time: 0,
+            mutable: vec![],
+            nonce_range: String::from("00000000ffffffff"),
+            sigop_limit: 0,
+            size_limit: 0,
+            cur_time: 0,
+            bits: String::from("200ca63f"),
+            height: block_height,
+            max_time: 0,
+            submit_old: None,
+        }
+    }
+}
+
 /// The block header roots for [`GetBlockTemplate.transactions`].
 ///
 /// If the transactions in the block template are modified, these roots must be recalculated
@@ -193,6 +232,21 @@ pub struct DefaultRoots {
     /// `merkle_root` has its own field in the block header.
     #[serde(rename = "blockcommitmentshash")]
     pub block_commitments_hash: String,
+}
+
+impl Default for DefaultRoots {
+    fn default() -> Self {
+        DefaultRoots {
+            merkle_root: "e775c092962a712a42ee5dd42091dd569e8651c5a2c529a738687ca4495be2ed"
+                .to_string(),
+            chain_history_root: "0000000000000000000000000000000000000000000000000000000000000000"
+                .to_string(),
+            auth_data_root: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                .to_string(),
+            block_commitments_hash:
+                "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+        }
+    }
 }
 
 /// Transaction data and fields needed to generate blocks using the `getblocktemplate` RPC.
@@ -230,6 +284,20 @@ pub struct TransactionTemplate {
     ///
     /// Coinbase transactions are required, all other transactions are not.
     pub(crate) required: bool,
+}
+
+impl Default for TransactionTemplate {
+    fn default() -> Self {
+        TransactionTemplate {
+            data: String::from("0400008085202f89010000000000000000000000000000000000000000000000000000000000000000ffffffff025100ffffffff0140be4025000000001976a91475dd6d7f4bef95aa1ff1a711e5bfd853b4c6aaf888ac00000000010000000000000000000000000000"),
+            hash: String::from("e775c092962a712a42ee5dd42091dd569e8651c5a2c529a738687ca4495be2ed"),
+            auth_digest: String::from("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+            depends: vec![],
+            fee: 0,
+            sigops: 1,
+            required: true,
+        }
+    }
 }
 
 pub struct BlockProposal {

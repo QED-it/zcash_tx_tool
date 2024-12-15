@@ -1,14 +1,14 @@
-FROM rust:1.76.0
+FROM rust:1.81.0
 
 # Set up Rust and cargo
 RUN apt-get update && apt-get install git build-essential clang -y
 
 # Checkout and build custom branch of the zebra repository
-RUN git clone https://github.com/QED-it/zebra.git
+ARG branch=zsa-integration-demo
+ADD https://api.github.com/repos/QED-it/zebra/git/refs/heads/$branch version.json
+RUN git clone -b $branch --single-branch https://github.com/QED-it/zebra.git
 
 WORKDIR zebra
-
-RUN git switch zsa1
 
 RUN cargo build --release --package zebrad --bin zebrad --features="getblocktemplate-rpcs"
 

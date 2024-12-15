@@ -1,5 +1,6 @@
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::model::Block;
+use crate::prelude::info;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::collections::BTreeMap;
@@ -25,16 +26,8 @@ impl MockZcashNode {
             previous_block_hash: BlockHash::from_slice(&[0; 32]),
         };
 
-        let second = Block {
-            hash: BlockHash::from_slice(&[34; 32]),
-            height: BlockHeight::from_u32(1),
-            confirmations: 0,
-            tx_ids: vec![],
-            previous_block_hash: BlockHash::from_slice(&[1; 32]),
-        };
-
         Self {
-            blockchain: vec![genesis, second],
+            blockchain: vec![genesis],
             transactions: BTreeMap::new(),
         }
     }
@@ -58,7 +51,7 @@ impl RpcClient for MockZcashNode {
         self.blockchain
             .get(height as usize)
             .ok_or(io::Error::new(ErrorKind::NotFound, "Block not found").into())
-            .map(|b| b.clone())
+            .cloned()
     }
 
     fn send_transaction(&mut self, tx: Transaction) -> Result<TxId, Box<dyn Error>> {
@@ -68,7 +61,7 @@ impl RpcClient for MockZcashNode {
         self.transactions.insert(txid, hex::encode(tx_bytes));
         // We create block per transaction for now
         let mut block_hash: [u8; 32] = [0; 32];
-        OsRng::default().fill_bytes(block_hash.as_mut_slice());
+        OsRng.fill_bytes(block_hash.as_mut_slice());
 
         self.blockchain.push(Block {
             hash: BlockHash::from_slice(block_hash.as_slice()),
@@ -85,15 +78,48 @@ impl RpcClient for MockZcashNode {
             .get(txid)
             .ok_or(io::Error::new(ErrorKind::NotFound, "Transaction not found").into())
             .map(|tx_string| {
-                Transaction::read(&hex::decode(tx_string).unwrap()[..], BranchId::Nu5).unwrap()
+                Transaction::read(&hex::decode(tx_string).unwrap()[..], BranchId::Nu6).unwrap()
             })
     }
 
     fn get_block_template(&self) -> Result<BlockTemplate, Box<dyn Error>> {
-        todo!()
+        Ok(BlockTemplate::new(self.blockchain.len() as u32))
     }
 
-    fn submit_block(&self, _block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
-        todo!()
+    fn submit_block(&mut self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
+        let mut block_bytes = vec![];
+        block.write(&mut block_bytes).unwrap();
+        let serialized_block = hex::encode(block_bytes);
+
+        info!("Submit block \"{}\"", serialized_block);
+
+        let len: usize = self.blockchain.len();
+
+        // Step 1: Collect the encoded transactions and their IDs outside the closure
+        let transactions_to_insert: Vec<(TxId, String)> = block
+            .transactions
+            .iter()
+            .map(|tx| {
+                let mut tx_bytes = vec![];
+                tx.write(&mut tx_bytes).unwrap();
+                (tx.txid(), hex::encode(tx_bytes))
+            })
+            .collect();
+
+        // Step 2: Create the new block and push it to the blockchain
+        self.blockchain.push(Block {
+            hash: BlockHash::from_slice(&[len as u8; 32]),
+            height: BlockHeight::from_u32(len as u32),
+            confirmations: 0,
+            tx_ids: block.transactions.iter().map(|tx| tx.txid()).collect(),
+            previous_block_hash: BlockHash::from_slice(&[len as u8; 32]),
+        });
+
+        // Step 3: Insert the collected transactions into the self.transactions map
+        for (txid, encoded_tx) in transactions_to_insert {
+            self.transactions.insert(txid, encoded_tx);
+        }
+
+        Ok(Some("".to_string()))
     }
 }
