@@ -14,9 +14,9 @@ use crate::prelude::*;
 
 /// Run the E2E test
 #[derive(clap::Parser, Command, Debug)]
-pub struct TestOrchardZSACmd {}
+pub struct DemoOrchardZSACmd {}
 
-impl Runnable for TestOrchardZSACmd {
+impl Runnable for DemoOrchardZSACmd {
     /// Run the `test` subcommand.
     fn run(&self) {
         let config = APP.config();
@@ -25,10 +25,11 @@ impl Runnable for TestOrchardZSACmd {
 
         wallet.reset();
 
-        let issuer = wallet.address_for_account(0, External);
-        let alice = wallet.address_for_account(1, External);
+        let manufacturer = wallet.address_for_account(0, External);
+        let purchaser = wallet.address_for_account(1, External);
+        let supplier = wallet.address_for_account(2, External);
 
-        let asset_description = b"WETH".to_vec();
+        let asset_description = b"MED".to_vec();
         prepare_test(
             config.chain.v6_activation_height,
             &mut wallet,
@@ -38,7 +39,7 @@ impl Runnable for TestOrchardZSACmd {
         // --------------------- Issue asset ---------------------
 
         let issue_tx =
-            create_issue_transaction(issuer, 1000, asset_description.clone(), &mut wallet);
+            create_issue_transaction(manufacturer, 1000, asset_description.clone(), &mut wallet);
 
         let asset = issue_tx
             .issue_bundle()
@@ -51,7 +52,7 @@ impl Runnable for TestOrchardZSACmd {
             .asset();
 
         let balances = TestBalances::get_asset(asset, &mut wallet);
-        print_balances("=== Initial balances ===", asset, balances);
+        print_balances("\n\n=== Initial balances ===", asset, balances);
 
         let current_height = wallet.last_block_height();
         mine(
@@ -62,14 +63,19 @@ impl Runnable for TestOrchardZSACmd {
         );
 
         let balances = TestBalances::get_asset(asset, &mut wallet);
-        print_balances("=== Balances after issue ===", asset, balances);
+        print_balances("\n\n=== Balances after issue ===", asset, balances);
 
-        // --------------------- ZSA transfer ---------------------
+        // --------------------- ZSA transfer from manufacturer to purchaser ---------------------
 
         let amount_to_transfer_1 = 3;
 
-        let transfer_tx_1 =
-            create_transfer_transaction(issuer, alice, amount_to_transfer_1, asset, &mut wallet);
+        let transfer_tx_1 = create_transfer_transaction(
+            manufacturer,
+            purchaser,
+            amount_to_transfer_1,
+            asset,
+            &mut wallet,
+        );
         mine(
             &mut wallet,
             &mut rpc_client,
@@ -77,14 +83,48 @@ impl Runnable for TestOrchardZSACmd {
             false,
         );
 
-        // transfer from issuer(account0) to alice(account1)
+        // transfer from manufacturer(account0) to purchaser(account1)
         let expected_delta = TestBalances::new(
             -(amount_to_transfer_1 as i64),
             amount_to_transfer_1 as i64,
             0,
         );
         check_balances(
-            "=== Balances after transfer ===",
+            "\n\n=== Balances after transfer to purchaser ===",
+            asset,
+            balances,
+            expected_delta,
+            &mut wallet,
+        );
+
+        // --------------------- ZSA transfer from purchaser to supplier ---------------------
+
+        let balances = TestBalances::get_asset(asset, &mut wallet);
+
+        let amount_to_transfer_2 = 1;
+
+        let transfer_tx_2 = create_transfer_transaction(
+            purchaser,
+            supplier,
+            amount_to_transfer_2,
+            asset,
+            &mut wallet,
+        );
+        mine(
+            &mut wallet,
+            &mut rpc_client,
+            Vec::from([transfer_tx_2]),
+            false,
+        );
+
+        // transfer from purchaser(account1) to supplier(account2)
+        let expected_delta = TestBalances::new(
+            0,
+            -(amount_to_transfer_2 as i64),
+            amount_to_transfer_2 as i64,
+        );
+        check_balances(
+            "\n\n=== Balances after transfer to supplier ===",
             asset,
             balances,
             expected_delta,
@@ -95,29 +135,22 @@ impl Runnable for TestOrchardZSACmd {
 
         let balances = TestBalances::get_asset(asset, &mut wallet);
 
-        let amount_to_burn_issuer = 7;
-        let amount_to_burn_alice = amount_to_transfer_1 - 1;
+        let amount_to_burn_supplier = 1;
 
-        let burn_tx_issuer =
-            create_burn_transaction(issuer, amount_to_burn_issuer, asset, &mut wallet);
-        let burn_tx_alice =
-            create_burn_transaction(alice, amount_to_burn_alice, asset, &mut wallet);
+        let burn_tx_supplier =
+            create_burn_transaction(supplier, amount_to_burn_supplier, asset, &mut wallet);
 
         mine(
             &mut wallet,
             &mut rpc_client,
-            Vec::from([burn_tx_issuer, burn_tx_alice]),
+            Vec::from([burn_tx_supplier]),
             false,
         );
 
-        // burn from issuer(account0) and alice(account1)
-        let expected_delta = TestBalances::new(
-            -(amount_to_burn_issuer as i64),
-            -(amount_to_burn_alice as i64),
-            0,
-        );
+        // burn from supplier(account2)
+        let expected_delta = TestBalances::new(0, 0, -(amount_to_burn_supplier as i64));
         check_balances(
-            "=== Balances after burning ===",
+            "\n\n=== Balances after burning ===",
             asset,
             balances,
             expected_delta,

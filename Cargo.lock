@@ -3378,7 +3378,7 @@ dependencies = [
 [[package]]
 name = "zcash_proofs"
 version = "0.15.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa1#bb65c0503ed65df794222a4eff50f0e643464a3d"
+source = "git+https://github.com/QED-it/librustzcash?branch=zsa1#b61b7f2ae05648da97edd4ad513fead707274563"
 dependencies = [
  "bellman",
  "blake2b_simd",
