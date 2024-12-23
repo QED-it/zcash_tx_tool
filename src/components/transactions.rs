@@ -1,4 +1,7 @@
+pub(crate) mod regtest_v5;
+
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
+use crate::components::transactions::regtest_v5::REGTEST_NETWORK_V5;
 use crate::components::user::User;
 use crate::components::zebra_merkle::{
     block_commitment_from_parts, AuthDataRoot, Root, AUTH_COMMITMENT_PLACEHOLDER,
@@ -12,7 +15,9 @@ use rand::rngs::OsRng;
 use std::convert::TryFrom;
 use std::ops::Add;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
-use zcash_primitives::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
+use zcash_primitives::consensus::{
+    BlockHeight, BranchId, NetworkUpgrade, Parameters, REGTEST_NETWORK,
+};
 use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::transaction::builder::{BuildConfig, Builder};
 use zcash_primitives::transaction::components::amount::NonNegativeAmount;
@@ -28,7 +33,7 @@ pub fn mine(
     txs: Vec<Transaction>,
     activate: bool,
 ) {
-    let (_, _) = mine_block(rpc_client, txs, activate);
+    let (_, _, _) = mine_block(rpc_client, txs, activate);
     sync(wallet, rpc_client);
 }
 
@@ -37,16 +42,26 @@ pub fn mine_block(
     rpc_client: &mut dyn RpcClient,
     txs: Vec<Transaction>,
     activate: bool,
-) -> (u32, TxId) {
+) -> (u32, TxId, u64) {
     let block_template = rpc_client.get_block_template().unwrap();
     let block_height = block_template.height;
 
     let block_proposal = template_into_proposal(block_template, txs, activate);
     let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
-
+    let coinbase_value = block_proposal
+        .transactions
+        .first()
+        .unwrap()
+        .transparent_bundle()
+        .unwrap()
+        .vout
+        .first()
+        .unwrap()
+        .value
+        .into_u64();
     rpc_client.submit_block(block_proposal).unwrap();
 
-    (block_height, coinbase_txid)
+    (block_height, coinbase_txid, coinbase_value)
 }
 
 /// Mine the given number of empty blocks and return the block height and coinbase txid of the first block
@@ -54,31 +69,31 @@ pub fn mine_empty_blocks(
     num_blocks: u32,
     rpc_client: &mut dyn RpcClient,
     activate: bool,
-) -> (u32, TxId) {
+) -> (u32, TxId, u64) {
     if num_blocks == 0 {
         panic!("num_blocks must be greater than 0")
     }
 
-    let (block_height, coinbase_txid) = mine_block(rpc_client, vec![], activate);
+    let (block_height, coinbase_txid, coinbase_value) = mine_block(rpc_client, vec![], activate);
 
     for _ in 1..num_blocks {
         mine_block(rpc_client, vec![], false);
     }
 
-    (block_height, coinbase_txid)
+    (block_height, coinbase_txid, coinbase_value)
 }
 
 /// Create a shielded coinbase transaction
 pub fn create_shield_coinbase_transaction(
     recipient: Address,
     coinbase_txid: TxId,
+    coinbase_value: u64,
     wallet: &mut User,
 ) -> Transaction {
     info!("Shielding coinbase output from tx {}", coinbase_txid);
 
-    let mut tx = create_tx(wallet);
+    let mut tx = create_tx(wallet, REGTEST_NETWORK_V5);
 
-    let coinbase_value = 625_000_000;
     let coinbase_amount = NonNegativeAmount::from_u64(coinbase_value).unwrap();
     let miner_taddr = wallet.miner_address();
 
@@ -118,9 +133,9 @@ pub fn sync(wallet: &mut User, rpc: &mut dyn RpcClient) {
 pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcClient) {
     info!("Starting sync from height {}", from_height);
 
-    let wallet_last_block_height = wallet.last_block_height().map_or(0, |h| h.into());
-    let mut next_height = if from_height < wallet_last_block_height {
-        wallet_last_block_height
+    let wallet_next_block_height = wallet.last_block_height().map_or(0, |h| h.into()) + 1;
+    let mut next_height = if from_height < wallet_next_block_height {
+        wallet_next_block_height
     } else {
         from_height
     };
@@ -159,12 +174,13 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
 }
 
 /// Create a transfer transaction
-pub fn create_transfer_transaction(
+pub fn create_transfer_transaction<N: Parameters>(
     sender: Address,
     recipient: Address,
     amount: u64,
     asset: AssetBase,
     wallet: &mut User,
+    network: N,
 ) -> Transaction {
     info!("Transfer {} zatoshi", amount);
 
@@ -181,7 +197,7 @@ pub fn create_transfer_transaction(
         total_inputs_amount, amount
     );
 
-    let mut tx = create_tx(wallet);
+    let mut tx = create_tx(wallet, network);
 
     inputs.into_iter().for_each(|input| {
         tx.add_orchard_spend::<FeeError>(&input.sk, input.note, input.merkle_path)
@@ -235,7 +251,7 @@ pub fn create_burn_transaction(
         total_inputs_amount, amount
     );
 
-    let mut tx = create_tx(wallet);
+    let mut tx = create_tx(wallet, REGTEST_NETWORK);
 
     inputs.into_iter().for_each(|input| {
         tx.add_orchard_spend::<FeeError>(&input.sk, input.note, input.merkle_path)
@@ -270,7 +286,7 @@ pub fn create_issue_transaction(
     wallet: &mut User,
 ) -> Transaction {
     info!("Issue {} asset", amount);
-    let mut tx = create_tx(wallet);
+    let mut tx = create_tx(wallet, REGTEST_NETWORK);
     tx.init_issuance_bundle::<FeeError>(
         wallet.issuance_key(),
         asset_desc,
@@ -286,7 +302,7 @@ pub fn create_issue_transaction(
 /// Create a transaction that issues a new asset
 pub fn create_finalization_transaction(asset_desc: Vec<u8>, wallet: &mut User) -> Transaction {
     info!("Finalize asset");
-    let mut tx = create_tx(wallet);
+    let mut tx = create_tx(wallet, REGTEST_NETWORK);
     tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc.clone(), None)
         .unwrap();
     tx.finalize_asset::<FeeError>(asset_desc.as_slice())
@@ -364,20 +380,29 @@ pub fn template_into_proposal(
     }
 }
 
-fn create_tx(wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
-    let build_config = BuildConfig::Zsa {
-        sapling_anchor: None,
-        orchard_anchor: wallet.orchard_anchor(),
+fn create_tx<N: Parameters>(user: &User, network: N) -> Builder<'_, N, ()> {
+    let build_config = if network.activation_height(NetworkUpgrade::Nu7).is_none() {
+        BuildConfig::Standard {
+            sapling_anchor: None,
+            orchard_anchor: user.orchard_anchor(),
+        }
+    } else {
+        BuildConfig::Zsa {
+            sapling_anchor: None,
+            orchard_anchor: user.orchard_anchor(),
+        }
     };
     let tx = Builder::new(
-        REGTEST_NETWORK,
-        /*user.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_420),
+        network,
+        user.last_block_height()
+            .unwrap_or(BlockHeight::from_u32(0))
+            .add(1),
         build_config,
     );
     tx
 }
 
-fn build_tx(builder: Builder<'_, RegtestNetwork, ()>) -> Transaction {
+fn build_tx<N: Parameters>(builder: Builder<'_, N, ()>) -> Transaction {
     let fee_rule =
         &FeeRule::non_standard(NonNegativeAmount::from_u64(0).unwrap(), 20, 150, 34).unwrap();
     let prover = LocalTxProver::with_default_location();
