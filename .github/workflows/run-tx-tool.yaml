@@ -1,0 +1,57 @@
+name: Run tx-tool from ECR
+
+on:
+  workflow_dispatch:
+    inputs:
+      zcash_node_address:
+        description: "Zcash node address"
+        required: false
+        default: "127.0.0.1"
+      zcash_node_port:
+        description: "Zcash node port"
+        required: false
+        default: "18232"
+      zcash_node_protocol:
+        description: "Zcash node protocol"
+        required: false
+        default: "http"
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+
+jobs:
+  run-container:
+    name: Run Container from ECR
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Pull Docker image from ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: latest
+        run: |
+          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Run Docker container
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: latest
+        run: |
+          docker run \
+            -e ZCASH_NODE_ADDRESS="${{ github.event.inputs.zcash_node_address }}" \
+            -e ZCASH_NODE_PORT="${{ github.event.inputs.zcash_node_port }}" \
+            -e ZCASH_NODE_PROTOCOL="${{ github.event.inputs.zcash_node_protocol }}" \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
