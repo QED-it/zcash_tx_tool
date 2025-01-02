@@ -32,10 +32,10 @@ RUN wget https://dist.ipfs.io/go-ipfs/v0.9.1/go-ipfs_v0.9.1_linux-amd64.tar.gz &
     rm -rf go-ipfs go-ipfs_v0.9.1_linux-amd64.tar.gz
 
 # Make fetch-params.sh executable
-RUN chmod +x fetch-params.sh
+RUN chmod +x ./zcutil/fetch-params.sh
 
 # Run fetch-params.sh
-RUN ./fetch-params.sh
+RUN ./zcutil/fetch-params.sh
 
 # Create necessary directories
 RUN mkdir -p /root/.local/share/ZcashParams
