@@ -58,14 +58,22 @@ pub struct NetworkConfig {
 
 impl Default for NetworkConfig {
     fn default() -> Self {
+        let node_address = env::var("ZCASH_NODE_ADDRESS").unwrap_or_else(|_| "127.0.0.1".to_string());
+        let node_port = env::var("ZCASH_NODE_PORT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(18232);
+        let protocol = env::var("ZCASH_NODE_PROTOCOL").unwrap_or_else(|_| "http".to_string());
+
+        println!(
+            "Using NetworkConfig: node_address = {}, node_port = {}, protocol = {}",
+            node_address, node_port, protocol
+        );
+
         Self {
-            node_address: env::var("ZCASH_NODE_ADDRESS")
-                .unwrap_or_else(|_| "127.0.0.1".to_string()),
-            node_port: env::var("ZCASH_NODE_PORT")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(18232),
-            protocol: env::var("ZCASH_NODE_PROTOCOL").unwrap_or_else(|_| "http".to_string()),
+            node_address,
+            node_port,
+            protocol,
         }
     }
 }
