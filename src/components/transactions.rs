@@ -267,6 +267,7 @@ pub fn create_issue_transaction(
     recipient: Address,
     amount: u64,
     asset_desc: Vec<u8>,
+    first_issuance: bool,
     wallet: &mut User,
 ) -> Transaction {
     info!("Issue {} asset", amount);
@@ -278,6 +279,7 @@ pub fn create_issue_transaction(
             recipient,
             value: NoteValue::from_raw(amount),
         }),
+        first_issuance,
     )
     .unwrap();
     build_tx(tx)
