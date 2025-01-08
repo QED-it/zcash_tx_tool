@@ -67,6 +67,16 @@ docker build -t qedit/zebra-regtest-txv6 .
 docker run -p 18232:18232 qedit/zebra-regtest-txv6
 ```
 
+Or, if you want to test Nu5/V5 Orchard transactions:
+
+```bash
+# Build the Zebra Docker image
+docker build -f Dockerfile-nu5 -t qedit/zebra-regtest-txv5 .
+
+# Run the Zebra Docker container
+docker run -p 18232:18232 qedit/zebra-regtest-txv5
+```
+
 For more details on how the Docker image is created and synchronized, refer to the [Dockerfile](./Dockerfile).
 
 ### 2. Set Up and Run the Zcash Transaction Tool
