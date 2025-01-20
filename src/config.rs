@@ -58,7 +58,8 @@ pub struct NetworkConfig {
 
 impl Default for NetworkConfig {
     fn default() -> Self {
-        let node_address = env::var("ZCASH_NODE_ADDRESS").unwrap_or_else(|_| "127.0.0.1".to_string());
+        let node_address =
+            env::var("ZCASH_NODE_ADDRESS").unwrap_or_else(|_| "127.0.0.1".to_string());
         let node_port = env::var("ZCASH_NODE_PORT")
             .ok()
             .and_then(|s| s.parse().ok())
