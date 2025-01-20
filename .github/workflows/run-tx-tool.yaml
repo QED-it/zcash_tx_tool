@@ -15,6 +15,10 @@ on:
         description: "Zcash node protocol"
         required: false
         default: "http"
+      image_tag:
+        description: "Docker image tag"
+        required: false
+        default: "latest"
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
@@ -41,17 +45,15 @@ jobs:
       - name: Pull Docker image from ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: latest
         run: |
-          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.event.inputs.image_tag }}
 
       - name: Run Docker container
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: latest
         run: |
           docker run \
             -e ZCASH_NODE_ADDRESS="${{ github.event.inputs.zcash_node_address }}" \
             -e ZCASH_NODE_PORT="${{ github.event.inputs.zcash_node_port }}" \
             -e ZCASH_NODE_PROTOCOL="${{ github.event.inputs.zcash_node_protocol }}" \
-            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+            $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.event.inputs.image_tag }}
