@@ -6,7 +6,7 @@ on:
       zcash_node_address:
         description: "Zcash node address"
         required: false
-        default: "127.0.0.1"
+        default: "https://dev.zebra.zsa-test.net"
       zcash_node_port:
         description: "Zcash node port"
         required: false
@@ -19,6 +19,8 @@ on:
         description: "Docker image tag"
         required: false
         default: "latest"
+  schedule:
+    - cron: "0 0 * * *" # Runs daily at midnight UTC
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
@@ -57,3 +59,21 @@ jobs:
             -e ZCASH_NODE_PORT="${{ github.event.inputs.zcash_node_port }}" \
             -e ZCASH_NODE_PROTOCOL="${{ github.event.inputs.zcash_node_protocol }}" \
             $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.event.inputs.image_tag }}
+
+      - name: Notify Slack on Success
+        if: success() && github.event_name == 'schedule'
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          message: "✅ Docker run completed successfully in workflow: ${{ github.workflow }} on branch: ${{ github.ref_name }}."
+          color: good
+
+      - name: Notify Slack on Failure
+        if: failure() && github.event_name == 'schedule'
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          message: "🚨 Docker run failed in workflow: ${{ github.workflow }} on branch: ${{ github.ref_name }}. Check logs for details."
+          color: danger

@@ -28,24 +28,29 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@62f4f872db3836360b72999f4b87f1ff13310f3a
 
-      - name: Get short commit hash
+      - name: Get last Git tag
         id: vars
-        run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        run: |
+          # Fetch all tags
+          git fetch --tags
+          # Get the latest tag
+          TAG=$(git describe --tags --abbrev=0)
+          echo "TAG=$TAG" >> $GITHUB_ENV
 
       - name: Build, tag, and push image to Amazon ECR
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG_LATEST: latest
-          IMAGE_TAG_COMMIT: ${{ env.SHORT_SHA }}
+          IMAGE_TAG_TAG: ${{ env.TAG }}
         run: |
           # Build a docker container
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_COMMIT -f Dockerfile-demo .
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_TAG -f Dockerfile-demo .
           
           # Push both tags to ECR
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_COMMIT
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_TAG
 
           # Output the image URIs
           echo "image_latest=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST" >> $GITHUB_OUTPUT
-          echo "image_commit=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_COMMIT" >> $GITHUB_OUTPUT
+          echo "image_tag=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_TAG" >> $GITHUB_OUTPUT
