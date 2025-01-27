@@ -67,7 +67,7 @@ impl Default for NetworkConfig {
         let protocol = env::var("ZCASH_NODE_PROTOCOL").unwrap_or_else(|_| "http".to_string());
 
         println!(
-            "Using NetworkConfig: node_address = {}, node_port = {}, protocol = {}",
+            "Using NetworkConfig: node_address = {} ; node_port = {} ; protocol = {}",
             node_address, node_port, protocol
         );
 
