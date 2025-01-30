@@ -1,56 +1,57 @@
-name: Push to Amazon ECR
-
+name: Push to Amazon Public ECR
 on:
   workflow_dispatch:
-
 env:
-  AWS_REGION: ${{ vars.AWS_REGION }}                   # set this to your preferred AWS region, e.g. us-west-1
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}           # set this to your Amazon ECR repository name
+  AWS_REGION: us-east-1  # Must be us-east-1 for ECR Public
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  ECR_REGISTRY_ALIAS: ${{ vars.ECR_REGISTRY_ALIAS }}
 
 jobs:
   push-deploy:
     name: Push and Deploy
     runs-on: ubuntu-latest
     environment: dev
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@0e613a0980cbf65ed5b322eb7a1e075d28913a83
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@62f4f872db3836360b72999f4b87f1ff13310f3a
+      - name: Login to Amazon ECR Public
+        id: login-ecr-public
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+          region: us-east-1
 
       - name: Get last Git tag
         id: vars
         run: |
-          # Fetch all tags
           git fetch --tags
-          # Get the latest tag
-          TAG=$(git describe --tags --abbrev=0)
+          TAG=$(git describe --tags --always --abbrev=0)
           echo "TAG=$TAG" >> $GITHUB_ENV
 
-      - name: Build, tag, and push image to Amazon ECR
+      - name: Build, tag, and push image to Amazon ECR Public
         id: build-image
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_PUBLIC_REGISTRY: public.ecr.aws
           IMAGE_TAG_LATEST: latest
           IMAGE_TAG_TAG: ${{ env.TAG }}
         run: |
-          # Build a docker container
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_TAG -f Dockerfile-demo .
+          # Build a docker container with public ECR URI format
+          docker build -t $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_LATEST \
+                      -t $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_TAG \
+                      -f Dockerfile-demo .
           
-          # Push both tags to ECR
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_TAG
-
+          # Push both tags to ECR Public
+          docker push $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_LATEST
+          docker push $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_TAG
+          
           # Output the image URIs
-          echo "image_latest=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST" >> $GITHUB_OUTPUT
-          echo "image_tag=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_TAG" >> $GITHUB_OUTPUT
+          echo "image_latest=$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_LATEST" >> $GITHUB_OUTPUT
+          echo "image_tag=$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_TAG" >> $GITHUB_OUTPUT
