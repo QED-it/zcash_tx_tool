@@ -24,3 +24,13 @@ This workflow is designed to run a Docker container from an image stored in Amaz
 Similarly, this workflow is manually triggered, allowing users to specify when and with which parameters the container runs.
 
 These workflows leverage GitHub Actions for continuous integration and deployment processes, ensuring consistent operations across various environments.
+
+# Repository Variables
+
+Default repository variables used in these workflows:
+
+* `AWS_REGION`: AWS region for ECR and other services. Default: `eu-central-1`
+* `ECR_REGISTRY_ALIAS`: ECR registry alias/ID. Default: `j7v0v6n9` 
+* `ECR_REPOSITORY`: ECR repository name. Default: `tx-tool`
+
+These variables ensure consistency and maintainability by reducing hardcoded values.
