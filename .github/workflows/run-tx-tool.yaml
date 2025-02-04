@@ -23,10 +23,10 @@ on:
     - cron: "0 */2 * * *" # Runs every 2 hours
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'tx-tool' }}
   ECR_PUBLIC_REGISTRY: public.ecr.aws
-  ECR_REGISTRY_ALIAS: ${{ vars.ECR_REGISTRY_ALIAS }}
+  ECR_REGISTRY_ALIAS: ${{ vars.ECR_REGISTRY_ALIAS || 'j7v0v6n9' }}
 
 jobs:
   run-container:
@@ -76,7 +76,7 @@ jobs:
             $ECR_IMAGE
 
       - name: Notify Slack on Success
-        if: success() && secrets.SLACK_WEBHOOK # Runs only if the previous steps succeed and we have the SLACK webhook set
+        if: success() # Runs only if the previous steps succeed
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
@@ -85,7 +85,7 @@ jobs:
           SLACK_COLOR: ${{ job.status }}
 
       - name: Notify Slack on Failure
-        if: failure() && secrets.SLACK_WEBHOOK_FAIL # Runs only if the previous steps fail and we have the SLACK webhook for failure set
+        if: failure() # Runs only if the previous steps fail
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_FAIL }}
