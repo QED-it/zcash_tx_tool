@@ -1,0 +1,94 @@
+name: Run tx-tool from ECR
+
+on:
+  workflow_dispatch:
+    inputs:
+      zcash_node_address:
+        description: "Zcash node address"
+        required: false
+        default: "dev.zebra.zsa-test.net"
+      zcash_node_port:
+        description: "Zcash node port"
+        required: false
+        default: "18232"
+      zcash_node_protocol:
+        description: "Zcash node protocol"
+        required: false
+        default: "http"
+      image_tag:
+        description: "Docker image tag"
+        required: false
+        default: "latest"
+  schedule:
+    - cron: "0 */2 * * *" # Runs every 2 hours
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'tx-tool' }}
+  ECR_PUBLIC_REGISTRY: public.ecr.aws
+  ECR_REGISTRY_ALIAS: ${{ vars.ECR_REGISTRY_ALIAS || 'j7v0v6n9' }}
+
+jobs:
+  run-container:
+    name: Run Container from ECR
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - name: Print initial configuration values
+        run: |
+          echo "Initial Configuration Values:"
+          echo "ZCASH_NODE_ADDRESS: ${{ github.event.inputs.zcash_node_address }}"
+          echo "ZCASH_NODE_PORT: ${{ github.event.inputs.zcash_node_port }}"
+          echo "ZCASH_NODE_PROTOCOL: ${{ github.event.inputs.zcash_node_protocol }}"
+          echo "IMAGE_TAG: ${{ github.event.inputs.image_tag }}"
+
+      - name: Set default values if not set
+        id: set-defaults
+        run: |
+          echo "ZCASH_NODE_ADDRESS=${{ github.event.inputs.zcash_node_address || 'dev.zebra.zsa-test.net' }}" >> $GITHUB_ENV
+          echo "ZCASH_NODE_PORT=${{ github.event.inputs.zcash_node_port || '18232' }}" >> $GITHUB_ENV
+          echo "ZCASH_NODE_PROTOCOL=${{ github.event.inputs.zcash_node_protocol || 'http' }}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${{ github.event.inputs.image_tag || 'latest' }}" >> $GITHUB_ENV
+          echo "::set-output name=image_tag::${{ github.event.inputs.image_tag || 'latest' }}"
+
+      - name: Print updated configuration values
+        run: |
+          echo "Updated Configuration Values:"
+          echo "ZCASH_NODE_ADDRESS: $ZCASH_NODE_ADDRESS"
+          echo "ZCASH_NODE_PORT: $ZCASH_NODE_PORT"
+          echo "ZCASH_NODE_PROTOCOL: $ZCASH_NODE_PROTOCOL"
+          echo "IMAGE_TAG: $IMAGE_TAG"
+          # Define and persist the full ECR image path
+          echo "ECR_IMAGE=$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
+          echo "ECR_IMAGE: $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Pull Docker image from ECR
+        run: |
+          docker pull $ECR_IMAGE
+
+      - name: Run Docker container
+        run: |
+          docker run \
+            -e ZCASH_NODE_ADDRESS="$ZCASH_NODE_ADDRESS" \
+            -e ZCASH_NODE_PORT="$ZCASH_NODE_PORT" \
+            -e ZCASH_NODE_PROTOCOL="$ZCASH_NODE_PROTOCOL" \
+            $ECR_IMAGE
+
+      - name: Notify Slack on Success
+        if: success() && secrets.SLACK_WEBHOOK != '' # Runs only if the previous steps succeed and the SLACK WEBHOOK is set
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_TITLE: "tx-tool"
+          SLACK_MESSAGE: "✅ Docker run completed successfully with Docker tag '${{ steps.set-defaults.outputs.image_tag }}'."
+          SLACK_COLOR: ${{ job.status }}
+
+      - name: Notify Slack on Failure
+        if: failure() && secrets.SLACK_WEBHOOK_FAIL != '' # Runs only if the previous steps fail and the SLACK FAIL WEBHOOK is set
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_FAIL }}
+          SLACK_TITLE: "tx-tool"
+          SLACK_MESSAGE: "🚨 Docker run failed with Docker tag '${{ steps.set-defaults.outputs.image_tag }}'. Check logs in Github for details."
+          SLACK_COLOR: ${{ job.status }}
