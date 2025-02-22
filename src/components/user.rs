@@ -17,6 +17,7 @@ use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
 use orchard::tree::{MerkleHashOrchard, MerklePath};
 use orchard::value::NoteValue;
 use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
+use orchard::bundle::Authorization;
 use rand::Rng;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
@@ -391,6 +392,13 @@ impl User {
                     self.add_notes_from_orchard_bundle(&tx.txid(), b);
                     self.mark_potential_spends(&tx.txid(), b);
                 }
+                OrchardBundle::OrchardSwap(b) => {
+                    b.action_groups().iter().for_each(|group| {
+                        issued_notes_offset += group.action_group().actions().len();
+                        self.add_notes_from_orchard_bundle(&tx.txid(), group.action_group());
+                        self.mark_potential_spends(&tx.txid(), group.action_group());
+                    });
+                }
             }
         };
 
@@ -528,6 +536,13 @@ impl User {
                     }
                     OrchardBundle::OrchardZSA(b) => {
                         b.actions().iter().map(|action| *action.cmx()).collect()
+                    }
+                    OrchardBundle::OrchardSwap(b) => {
+                        b.action_groups()
+                            .iter()
+                            .flat_map(|group| group.action_group().actions())
+                            .map(|action| *action.cmx())
+                            .collect()
                     }
                 }
             } else {
