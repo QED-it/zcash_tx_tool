@@ -20,6 +20,7 @@ use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
 use orchard::tree::{MerkleHashOrchard, MerklePath};
 use orchard::value::NoteValue;
 use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
+use orchard::bundle::Authorization;
 use rand::Rng;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
@@ -369,6 +370,13 @@ impl User {
                     self.add_notes_from_orchard_bundle(&tx.txid(), b);
                     self.mark_potential_spends(&tx.txid(), b);
                 }
+                OrchardBundle::OrchardSwap(b) => {
+                    b.action_groups().iter().for_each(|group| {
+                        issued_notes_offset += group.action_group().actions().len();
+                        self.add_notes_from_orchard_bundle(&tx.txid(), group.action_group());
+                        self.mark_potential_spends(&tx.txid(), group.action_group());
+                    });
+                }
             }
         };
 
@@ -386,10 +394,10 @@ impl User {
     /// incoming viewing keys, and return a data structure that describes
     /// the actions that are involved with this user, either spending notes belonging
     /// to this user or creating new notes owned by this user.
-    fn add_notes_from_orchard_bundle<O: OrchardDomainCommon>(
+    fn add_notes_from_orchard_bundle<O: OrchardDomainCommon, A: Authorization>(
         &mut self,
         txid: &TxId,
-        bundle: &Bundle<Authorized, Amount, O>,
+        bundle: &Bundle<A, Amount, O>,
     ) {
         let keys = self
             .key_store
@@ -471,10 +479,10 @@ impl User {
         }
     }
 
-    fn mark_potential_spends<O: OrchardDomainCommon>(
+    fn mark_potential_spends<O: OrchardDomainCommon, A: Authorization>(
         &mut self,
         txid: &TxId,
-        orchard_bundle: &Bundle<Authorized, Amount, O>,
+        orchard_bundle: &Bundle<A, Amount, O>,
     ) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {
@@ -505,6 +513,13 @@ impl User {
                     }
                     OrchardBundle::OrchardZSA(b) => {
                         b.actions().iter().map(|action| *action.cmx()).collect()
+                    }
+                    OrchardBundle::OrchardSwap(b) => {
+                        b.action_groups()
+                            .iter()
+                            .flat_map(|group| group.action_group().actions())
+                            .map(|action| *action.cmx())
+                            .collect()
                     }
                 }
             } else {
