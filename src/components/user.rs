@@ -10,14 +10,13 @@ use abscissa_core::prelude::info;
 
 use zcash_primitives::{constants, legacy, transaction::components::Amount};
 
+use orchard::domain::OrchardDomainCommon;
 use orchard::issuance::{IssueBundle, Signed};
 use orchard::keys::{
     FullViewingKey, IncomingViewingKey, IssuanceAuthorizingKey, OutgoingViewingKey, Scope,
     SpendingKey,
 };
 use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
-use orchard::note_encryption::OrchardDomainCommon;
-use orchard::orchard_flavor::{OrchardVanilla, OrchardZSA};
 use orchard::tree::{MerkleHashOrchard, MerklePath};
 use orchard::value::NoteValue;
 use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
@@ -34,7 +33,7 @@ use zcash_primitives::consensus::{BlockHeight, REGTEST_NETWORK};
 use zcash_primitives::legacy::keys::NonHardenedChildIndex;
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::transaction::components::issuance::write_note;
-use zcash_primitives::transaction::{Transaction, TxId};
+use zcash_primitives::transaction::{OrchardBundle, Transaction, TxId};
 use zcash_primitives::zip32::AccountId;
 use zcash_primitives::zip339::Mnemonic;
 
@@ -357,21 +356,20 @@ impl User {
     pub fn add_notes_from_tx(&mut self, tx: Transaction) -> Result<(), BundleLoadError> {
         let mut issued_notes_offset = 0;
 
-        assert!(
-            tx.orchard_bundle().is_none() || tx.orchard_zsa_bundle().is_none(),
-            "Error: Both Orchard and Orchard ZSA bundles are present in the transaction"
-        );
-
         if let Some(orchard_bundle) = tx.orchard_bundle() {
             // Add notes from Orchard bundle
-            issued_notes_offset = orchard_bundle.actions().len();
-            self.add_notes_from_orchard_bundle(&tx.txid(), orchard_bundle);
-            self.mark_potential_spends(&tx.txid(), orchard_bundle);
-        } else if let Some(orchard_zsa_bundle) = tx.orchard_zsa_bundle() {
-            // Add notes from Orchard ZSA bundle
-            issued_notes_offset = orchard_zsa_bundle.actions().len();
-            self.add_notes_from_orchard_bundle(&tx.txid(), orchard_zsa_bundle);
-            self.mark_potential_spends(&tx.txid(), orchard_zsa_bundle);
+            match orchard_bundle {
+                OrchardBundle::OrchardVanilla(b) => {
+                    issued_notes_offset = b.actions().len();
+                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
+                    self.mark_potential_spends(&tx.txid(), b);
+                }
+                OrchardBundle::OrchardZSA(b) => {
+                    issued_notes_offset = b.actions().len();
+                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
+                    self.mark_potential_spends(&tx.txid(), b);
+                }
+            }
         };
 
         // Add notes from Issue bundle
@@ -379,13 +377,7 @@ impl User {
             self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, issued_notes_offset);
         };
 
-        self.add_note_commitments(
-            &tx.txid(),
-            tx.orchard_bundle(),
-            tx.orchard_zsa_bundle(),
-            tx.issue_bundle(),
-        )
-        .unwrap();
+        self.add_note_commitments(&tx.txid(), tx.orchard_bundle(), tx.issue_bundle()).unwrap();
 
         Ok(())
     }
@@ -499,8 +491,7 @@ impl User {
     pub fn add_note_commitments(
         &mut self,
         txid: &TxId,
-        orchard_bundle_opt: Option<&Bundle<Authorized, Amount, OrchardVanilla>>,
-        orchard_zsa_bundle_opt: Option<&Bundle<Authorized, Amount, OrchardZSA>>,
+        orchard_bundle_opt: Option<&OrchardBundle<Authorized>>,
         issue_bundle_opt: Option<&IssueBundle<Signed>>,
     ) -> Result<(), WalletError> {
         let my_notes_for_tx: Vec<NoteData> = self.db.find_notes_for_tx(txid);
@@ -508,17 +499,14 @@ impl User {
         // Process note commitments
         let mut note_commitments: Vec<ExtractedNoteCommitment> =
             if let Some(bundle) = orchard_bundle_opt {
-                bundle
-                    .actions()
-                    .iter()
-                    .map(|action| *action.cmx())
-                    .collect()
-            } else if let Some(zsa_bundle) = orchard_zsa_bundle_opt {
-                zsa_bundle
-                    .actions()
-                    .iter()
-                    .map(|action| *action.cmx())
-                    .collect()
+                match bundle {
+                    OrchardBundle::OrchardVanilla(b) => {
+                        b.actions().iter().map(|action| *action.cmx()).collect()
+                    }
+                    OrchardBundle::OrchardZSA(b) => {
+                        b.actions().iter().map(|action| *action.cmx()).collect()
+                    }
+                }
             } else {
                 Vec::new()
             };
