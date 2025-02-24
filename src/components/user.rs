@@ -13,10 +13,9 @@ use orchard::keys::{
     FullViewingKey, IncomingViewingKey, IssuanceAuthorizingKey, OutgoingViewingKey, Scope,
     SpendingKey,
 };
-use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
+use orchard::note::{AssetBase, ExtractedNoteCommitment};
 use orchard::tree::{MerkleHashOrchard, MerklePath};
-use orchard::value::NoteValue;
-use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
+use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note, ReferenceKeys};
 use orchard::bundle::Authorization;
 use rand::Rng;
 use ripemd::{Digest, Ripemd160};
@@ -205,19 +204,8 @@ impl User {
         let mut total_amount_selected = 0;
 
         for note_data in all_notes {
-            let rho = Rho::from_bytes(note_data.rho.as_slice().try_into().unwrap()).unwrap();
-            let note = Note::from_parts(
-                Address::from_raw_address_bytes(
-                    note_data.recipient_address.as_slice().try_into().unwrap(),
-                )
-                .unwrap(),
-                NoteValue::from_raw(note_data.amount as u64),
-                AssetBase::from_bytes(note_data.asset.as_slice().try_into().unwrap()).unwrap(),
-                rho,
-                RandomSeed::from_bytes(note_data.rseed.as_slice().try_into().unwrap(), &rho)
-                    .unwrap(),
-            )
-            .unwrap();
+            let note_position = note_data.position;
+            let note: Note = note_data.into();
 
             let note_value = note.value().inner();
             let sk = self
@@ -230,9 +218,9 @@ impl User {
                 .expect("SpendingKey not found for IVK");
 
             let merkle_path = MerklePath::from_parts(
-                note_data.position as u32,
+                note_position as u32,
                 self.commitment_tree
-                    .witness(Position::from(note_data.position as u64), 0)
+                    .witness(Position::from(note_position as u64), 0)
                     .unwrap()
                     .try_into()
                     .unwrap(),
@@ -259,9 +247,27 @@ impl User {
         selected_notes
     }
 
+    pub(crate) fn find_reference_note(&mut self, asset: AssetBase) -> Option<NoteSpendMetadata> {
+        self.db.find_reference_note(asset).map(|note_data| {
+            let merkle_path = MerklePath::from_parts(
+                note_data.position as u32,
+                self.commitment_tree
+                    .witness(Position::from(note_data.position as u64), 0)
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            );
+
+            NoteSpendMetadata {
+                note: note_data.into(),
+                sk: ReferenceKeys::sk(),
+                merkle_path,
+            }
+        })
+    }
+
     pub fn address_for_account(&mut self, account: usize, scope: Scope) -> Address {
-        let account = account as u32;
-        match self.key_store.accounts.get(&(account)) {
+        match self.key_store.accounts.get(&account) {
             Some(addr) => *addr,
             None => {
                 let sk = SpendingKey::from_zip32_seed(
@@ -472,9 +478,6 @@ impl User {
         if let Some(fvk) = self.key_store.viewing_keys.get(&ivk) {
             info!("Adding decrypted note to the user");
 
-            let mut note_bytes = vec![];
-            write_note(&mut note_bytes, &note).unwrap();
-
             let note_data = NoteData {
                 id: 0,
                 amount: note.value().inner() as i64,
@@ -537,13 +540,12 @@ impl User {
                     OrchardBundle::OrchardZSA(b) => {
                         b.actions().iter().map(|action| *action.cmx()).collect()
                     }
-                    OrchardBundle::OrchardSwap(b) => {
-                        b.action_groups()
-                            .iter()
-                            .flat_map(|group| group.action_group().actions())
-                            .map(|action| *action.cmx())
-                            .collect()
-                    }
+                    OrchardBundle::OrchardSwap(b) => b
+                        .action_groups()
+                        .iter()
+                        .flat_map(|group| group.action_group().actions())
+                        .map(|action| *action.cmx())
+                        .collect(),
                 }
             } else {
                 Vec::new()

@@ -5,7 +5,7 @@ use diesel::associations::HasTable;
 use diesel::prelude::*;
 use dotenvy::dotenv;
 use orchard::note::{AssetBase, Nullifier};
-use orchard::Address;
+use orchard::{Address, ReferenceKeys};
 use std::env;
 use zcash_primitives::transaction::TxId;
 
@@ -63,6 +63,25 @@ impl SqliteDataStorage {
     pub fn find_by_nullifier(&mut self, nf: &Nullifier) -> Option<NoteData> {
         notes
             .filter(nullifier.eq(nf.to_bytes().to_vec()))
+            .select(NoteData::as_select())
+            .limit(1)
+            .load(&mut self.connection)
+            .expect("Error loading notes")
+            .pop()
+    }
+
+    pub fn find_reference_note(&mut self, asset_base: AssetBase) -> Option<NoteData> {
+        notes
+            .filter(
+                asset
+                    .eq(asset_base.to_bytes().to_vec())
+                    .and(amount.eq(0))
+                    .and(rho.eq([0u8; 32].to_vec()))
+                    .and(
+                        recipient_address
+                            .eq(ReferenceKeys::recipient().to_raw_address_bytes().to_vec()),
+                    ),
+            )
             .select(NoteData::as_select())
             .limit(1)
             .load(&mut self.connection)
