@@ -11,12 +11,16 @@ use orchard::Address;
 use rand::rngs::OsRng;
 use std::convert::TryFrom;
 use std::ops::Add;
+use orchard::builder::BundleType;
+use orchard::keys::SpendAuthorizingKey;
+use orchard::orchard_flavor::OrchardZSA;
+use orchard::swap_bundle::{ActionGroup, ActionGroupAuthorized};
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
 use zcash_primitives::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
 use zcash_primitives::memo::MemoBytes;
 use zcash_primitives::transaction::builder::{BuildConfig, Builder};
 use zcash_primitives::transaction::components::amount::NonNegativeAmount;
-use zcash_primitives::transaction::components::{transparent, TxOut};
+use zcash_primitives::transaction::components::{transparent, Amount, TxOut};
 use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
@@ -294,6 +298,94 @@ pub fn create_finalization_transaction(asset_desc: Vec<u8>, wallet: &mut User) -
     tx.finalize_asset::<FeeError>(asset_desc.as_slice())
         .unwrap();
     build_tx(tx)
+}
+
+/// Create a swap transaction
+pub fn create_swap_transaction(
+    party_a: Address,
+    party_b: Address,
+    amount_asset_a: u64,
+    asset_a: AssetBase,
+    amount_asset_b: u64,
+    asset_b: AssetBase,
+    wallet: &mut User,
+) -> Transaction {
+    info!("Swap {} to {}", amount_asset_a, amount_asset_b);
+
+    let swap_order_1 = create_swap_order(party_a, amount_asset_a, asset_a, amount_asset_b, asset_b, wallet);
+    let swap_order_2 = create_swap_order(party_b, amount_asset_b, asset_b, amount_asset_a, asset_a, wallet);
+
+    let mut tx = create_tx(wallet);
+    tx.add_action_group(swap_order_1).unwrap();
+    tx.add_action_group(swap_order_2).unwrap();
+    build_tx(tx)
+}
+
+fn create_swap_order(
+    address: Address,
+    amount_to_send: u64,
+    asset_to_send: AssetBase,
+    amount_to_receive: u64,
+    asset_to_receive: AssetBase,
+    wallet: &mut User,
+) -> ActionGroup<ActionGroupAuthorized, Amount>{
+    let ovk = wallet.orchard_ovk();
+
+    // Find input notes for asset A
+    let inputs_a = wallet.select_spendable_notes(address, amount_to_send, asset_to_send);
+    let total_inputs_amount = inputs_a
+        .iter()
+        .fold(0, |acc, input| acc + input.note.value().inner());
+
+    let mut ag_builder =
+        orchard::builder::Builder::new(BundleType::DEFAULT_SWAP, wallet.orchard_anchor().unwrap());
+
+    let mut orchard_saks = Vec::new();
+    inputs_a.into_iter().for_each(|input| {
+        orchard_saks.push(SpendAuthorizingKey::from(&input.sk));
+        ag_builder
+            .add_spend(input.sk.into(), input.note, input.merkle_path)
+            .unwrap();
+    });
+
+    // TODO Add reference nore for asset B
+
+    // Add main desired output
+    ag_builder
+        .add_output(
+            Some(ovk.clone()),
+            address,
+            NoteValue(amount_to_receive),
+            asset_to_receive,
+            None,
+        )
+        .unwrap();
+
+    // Add change output
+    let change_amount = total_inputs_amount - amount_to_send;
+    if change_amount != 0 {
+        ag_builder
+            .add_output(
+                Some(ovk),
+                address,
+                NoteValue(change_amount),
+                asset_to_send,
+                None,
+            )
+            .unwrap();
+    }
+
+    // Build Swap Order
+    let (action_group, _) = ag_builder.build_action_group(OsRng, 10).unwrap();
+    let commitment = action_group.commitment().into();
+    action_group
+        .create_proof(
+            &orchard::circuit::ProvingKey::build::<OrchardZSA>(),
+            &mut OsRng,
+        )
+        .unwrap()
+        .apply_signatures(&mut OsRng, commitment, &orchard_saks)
+        .unwrap()
 }
 
 /// Convert a block template and a list of transactions into a block proposal

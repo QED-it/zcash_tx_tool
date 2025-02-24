@@ -5,7 +5,7 @@ use orchard::keys::Scope::External;
 
 use crate::commands::test_balances::{check_balances, print_balances, TestBalances};
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::sync_from_height;
+use crate::components::transactions::{create_swap_transaction, sync_from_height};
 use crate::components::transactions::{
     create_burn_transaction, create_issue_transaction, create_transfer_transaction, mine,
 };
@@ -139,6 +139,59 @@ impl Runnable for TestOrchardZSACmd {
         // ); // TODO expect failure
         //
         // panic!("Invalid issue transaction was accepted");
+
+        // --------------------- Swap ---------------------
+
+        // Issue a new type of asset
+        let asset_description_2 = b"WBTC".to_vec();
+        let issue_tx_2 =
+            create_issue_transaction(alice, 5, asset_description_2.clone(), true, &mut wallet);
+
+        let asset_2 = issue_tx_2
+            .issue_bundle()
+            .unwrap()
+            .actions()
+            .head
+            .notes()
+            .first()
+            .unwrap()
+            .asset();
+
+        let balances = TestBalances::get_asset(asset, &mut wallet);
+        let balances_2 = TestBalances::get_asset(asset_2, &mut wallet);
+
+        let swap_tx = create_swap_transaction(issuer, alice, 10, asset, 5, asset_2, &mut wallet);
+
+        mine(
+            &mut wallet,
+            &mut rpc_client,
+            Vec::from([swap_tx]),
+            false,
+        );
+
+        let expected_delta = TestBalances::new(
+            -10,
+            10,
+        );
+        check_balances(
+            "=== Balances after swap for the first asset ===",
+            asset,
+            balances,
+            expected_delta,
+            &mut wallet,
+        );
+
+        let expected_delta_2 = TestBalances::new(
+            5,
+            -5,
+        );
+        check_balances(
+            "=== Balances after swap for the second asset ===",
+            asset_2,
+            balances_2,
+            expected_delta_2,
+            &mut wallet,
+        );
     }
 }
 
