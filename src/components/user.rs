@@ -377,7 +377,8 @@ impl User {
             self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, issued_notes_offset);
         };
 
-        self.add_note_commitments(&tx.txid(), tx.orchard_bundle(), tx.issue_bundle()).unwrap();
+        self.add_note_commitments(&tx.txid(), tx.orchard_bundle(), tx.issue_bundle())
+            .unwrap();
 
         Ok(())
     }
