@@ -162,17 +162,9 @@ impl Runnable for TestOrchardZSACmd {
 
         let swap_tx = create_swap_transaction(issuer, alice, 10, asset, 5, asset_2, &mut wallet);
 
-        mine(
-            &mut wallet,
-            &mut rpc_client,
-            Vec::from([swap_tx]),
-            false,
-        );
+        mine(&mut wallet, &mut rpc_client, Vec::from([swap_tx]), false);
 
-        let expected_delta = TestBalances::new(
-            -10,
-            10,
-        );
+        let expected_delta = TestBalances::new(-10, 10);
         check_balances(
             "=== Balances after swap for the first asset ===",
             asset,
@@ -181,10 +173,7 @@ impl Runnable for TestOrchardZSACmd {
             &mut wallet,
         );
 
-        let expected_delta_2 = TestBalances::new(
-            5,
-            -5,
-        );
+        let expected_delta_2 = TestBalances::new(5, -5);
         check_balances(
             "=== Balances after swap for the second asset ===",
             asset_2,

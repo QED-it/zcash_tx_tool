@@ -7,12 +7,12 @@ use crate::prelude::{debug, info};
 use orchard::issuance::IssueInfo;
 use orchard::note::AssetBase;
 use orchard::value::NoteValue;
-use orchard::Address;
+use orchard::{Address, ReferenceKeys};
 use rand::rngs::OsRng;
 use std::convert::TryFrom;
 use std::ops::Add;
 use orchard::builder::BundleType;
-use orchard::keys::SpendAuthorizingKey;
+use orchard::keys::{FullViewingKey, SpendAuthorizingKey};
 use orchard::orchard_flavor::OrchardZSA;
 use orchard::swap_bundle::{ActionGroup, ActionGroupAuthorized};
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
@@ -312,12 +312,26 @@ pub fn create_swap_transaction(
 ) -> Transaction {
     info!("Swap {} to {}", amount_asset_a, amount_asset_b);
 
-    let swap_order_1 = create_swap_order(party_a, amount_asset_a, asset_a, amount_asset_b, asset_b, wallet);
-    let swap_order_2 = create_swap_order(party_b, amount_asset_b, asset_b, amount_asset_a, asset_a, wallet);
+    let swap_order_1 = create_swap_order(
+        party_a,
+        amount_asset_a,
+        asset_a,
+        amount_asset_b,
+        asset_b,
+        wallet,
+    );
+    let swap_order_2 = create_swap_order(
+        party_b,
+        amount_asset_b,
+        asset_b,
+        amount_asset_a,
+        asset_a,
+        wallet,
+    );
 
     let mut tx = create_tx(wallet);
-    tx.add_action_group(swap_order_1).unwrap();
-    tx.add_action_group(swap_order_2).unwrap();
+    tx.add_action_group::<FeeError>(swap_order_1).unwrap();
+    tx.add_action_group::<FeeError>(swap_order_2).unwrap();
     build_tx(tx)
 }
 
@@ -328,7 +342,7 @@ fn create_swap_order(
     amount_to_receive: u64,
     asset_to_receive: AssetBase,
     wallet: &mut User,
-) -> ActionGroup<ActionGroupAuthorized, Amount>{
+) -> ActionGroup<ActionGroupAuthorized, Amount> {
     let ovk = wallet.orchard_ovk();
 
     // Find input notes for asset A
@@ -344,18 +358,30 @@ fn create_swap_order(
     inputs_a.into_iter().for_each(|input| {
         orchard_saks.push(SpendAuthorizingKey::from(&input.sk));
         ag_builder
-            .add_spend(input.sk.into(), input.note, input.merkle_path)
+            .add_spend(
+                FullViewingKey::from(&input.sk),
+                input.note,
+                input.merkle_path,
+            )
             .unwrap();
     });
 
-    // TODO Add reference nore for asset B
+    // Add reference input note for asset B
+    let reference_note = wallet.find_reference_note(asset_to_receive).unwrap();
+    ag_builder
+        .add_spend(
+            ReferenceKeys::fvk(),
+            reference_note.note,
+            reference_note.merkle_path,
+        )
+        .unwrap();
 
     // Add main desired output
     ag_builder
         .add_output(
             Some(ovk.clone()),
             address,
-            NoteValue(amount_to_receive),
+            NoteValue::from_raw(amount_to_receive),
             asset_to_receive,
             None,
         )
@@ -368,7 +394,7 @@ fn create_swap_order(
             .add_output(
                 Some(ovk),
                 address,
-                NoteValue(change_amount),
+                NoteValue::from_raw(change_amount),
                 asset_to_send,
                 None,
             )
@@ -384,7 +410,7 @@ fn create_swap_order(
             &mut OsRng,
         )
         .unwrap()
-        .apply_signatures(&mut OsRng, commitment, &orchard_saks)
+        .apply_signatures(OsRng, commitment, &orchard_saks)
         .unwrap()
 }
 
