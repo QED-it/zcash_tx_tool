@@ -3,12 +3,15 @@
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
 use orchard::note::AssetBase;
+use std::ops::Add;
+use zcash_primitives::consensus::BlockHeight;
 use zcash_primitives::transaction::TxId;
 
 use crate::commands::test_balances::{check_balances, print_balances, TestBalances};
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::create_transfer_transaction;
 use crate::components::transactions::mine;
+use crate::components::transactions::regtest_v5::REGTEST_NETWORK_V5;
 use crate::components::transactions::{
     create_shield_coinbase_transaction, mine_empty_blocks, sync_from_height,
 };
@@ -31,7 +34,7 @@ impl Runnable for TestOrchardCmd {
         let miner = wallet.address_for_account(0, External);
         let alice = wallet.address_for_account(1, External);
 
-        let coinbase_txid = prepare_test(
+        let (coinbase_txid, coinbase_value) = prepare_test(
             config.chain.nu5_activation_height,
             &mut wallet,
             &mut rpc_client,
@@ -42,7 +45,8 @@ impl Runnable for TestOrchardCmd {
 
         // --------------------- Shield miner's reward ---------------------
 
-        let shielding_tx = create_shield_coinbase_transaction(miner, coinbase_txid, &mut wallet);
+        let shielding_tx =
+            create_shield_coinbase_transaction(miner, coinbase_txid, coinbase_value, &mut wallet);
         mine(
             &mut wallet,
             &mut rpc_client,
@@ -50,7 +54,7 @@ impl Runnable for TestOrchardCmd {
             false,
         );
 
-        let expected_delta = TestBalances::new(625_000_000 /*coinbase_reward*/, 0);
+        let expected_delta = TestBalances::new(coinbase_value as i64, 0);
         balances = check_balances(
             "=== Balances after shielding ===",
             AssetBase::native(),
@@ -69,6 +73,7 @@ impl Runnable for TestOrchardCmd {
             amount_to_transfer_1 as u64,
             AssetBase::native(),
             &mut wallet,
+            REGTEST_NETWORK_V5,
         );
         mine(
             &mut wallet,
@@ -88,9 +93,22 @@ impl Runnable for TestOrchardCmd {
     }
 }
 
-fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) -> TxId {
+fn prepare_test(
+    target_height: u32,
+    wallet: &mut User,
+    rpc_client: &mut ReqwestRpcClient,
+) -> (TxId, u64) {
     sync_from_height(target_height, wallet, rpc_client);
     let activate = wallet.last_block_height().is_none();
-    let (_, coinbase_txid) = mine_empty_blocks(100, rpc_client, activate); // coinbase maturity = 100
-    coinbase_txid
+    let (_, coinbase_txid, coinbase_value) = mine_empty_blocks(100, rpc_client, activate); // coinbase maturity = 100
+    sync_from_height(
+        wallet
+            .last_block_height()
+            .unwrap_or(BlockHeight::from_u32(0))
+            .add(1)
+            .into(),
+        wallet,
+        rpc_client,
+    );
+    (coinbase_txid, coinbase_value)
 }

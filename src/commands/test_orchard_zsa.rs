@@ -1,8 +1,5 @@
 //! `test` - happy e2e flow that issues, transfers and burns an asset
 
-use abscissa_core::{Command, Runnable};
-use orchard::keys::Scope::External;
-
 use crate::commands::test_balances::{check_balances, print_balances, TestBalances};
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::sync_from_height;
@@ -11,6 +8,9 @@ use crate::components::transactions::{
 };
 use crate::components::user::User;
 use crate::prelude::*;
+use abscissa_core::{Command, Runnable};
+use orchard::keys::Scope::External;
+use zcash_primitives::consensus::REGTEST_NETWORK;
 
 /// Run the E2E test
 #[derive(clap::Parser, Command, Debug)]
@@ -68,8 +68,14 @@ impl Runnable for TestOrchardZSACmd {
 
         let amount_to_transfer_1 = 3;
 
-        let transfer_tx_1 =
-            create_transfer_transaction(issuer, alice, amount_to_transfer_1, asset, &mut wallet);
+        let transfer_tx_1 = create_transfer_transaction(
+            issuer,
+            alice,
+            amount_to_transfer_1,
+            asset,
+            &mut wallet,
+            REGTEST_NETWORK,
+        );
         mine(
             &mut wallet,
             &mut rpc_client,
