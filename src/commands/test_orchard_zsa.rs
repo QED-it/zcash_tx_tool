@@ -96,7 +96,78 @@ impl Runnable for TestOrchardZSACmd {
         // burn from issuer(account0) and alice(account1)
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
-        print_balances("=== Balances after burning ===", asset, &expected_balances);
+        // --------------------- Finalization ---------------------
+        // TODO - uncomment when finalization is implemented
+        // let finalization_tx = create_finalization_transaction(asset_description.clone(), &mut user);
+        // mine(
+        //     &mut user,
+        //     &mut rpc_client,
+        //     Vec::from([finalization_tx]),
+        //     false,
+        // );
+        //
+        // let invalid_issue_tx = create_issue_transaction(issuer, 2000, asset_description, &mut user);
+        // mine(
+        //     &mut user,
+        //     &mut rpc_client,
+        //     Vec::from([invalid_issue_tx]),
+        //     false,
+        // ); // TODO expect failure
+        //
+        // panic!("Invalid issue transaction was accepted");
+
+        // --------------------- Swap ---------------------
+
+        // Issue a new type of asset
+        let asset_description_2 = b"WBTC".to_vec();
+        let issue_tx_2 =
+            create_issue_transaction(alice, 5, asset_description_2.clone(), true, &mut wallet);
+
+        let asset_2 = issue_tx_2
+            .issue_bundle()
+            .unwrap()
+            .actions()
+            .head
+            .notes()
+            .first()
+            .unwrap()
+            .asset();
+
+        let balances = TestBalances::get_asset(asset, &mut wallet);
+        let balances_2 = TestBalances::get_asset(asset_2, &mut wallet);
+
+        let swap_tx = create_swap_transaction(issuer, alice, 10, asset, 5, asset_2, &mut wallet);
+
+        mine(
+            &mut wallet,
+            &mut rpc_client,
+            Vec::from([swap_tx]),
+            false,
+        );
+
+        let expected_delta = TestBalances::new(
+            -10,
+            10,
+        );
+        check_balances(
+            "=== Balances after swap for the first asset ===",
+            asset,
+            balances,
+            expected_delta,
+            &mut wallet,
+        );
+
+        let expected_delta_2 = TestBalances::new(
+            5,
+            -5,
+        );
+        check_balances(
+            "=== Balances after swap for the second asset ===",
+            asset_2,
+            balances_2,
+            expected_delta_2,
+            &mut wallet,
+        );
     }
 }
 
