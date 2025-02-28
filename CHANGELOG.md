@@ -9,3 +9,9 @@ and this library adheres to Rust's notion of
 
 ## [0.1.0] - 2025-01-06
 Initial release.
+
+## [0.2.0] - 2025-02-28
+### Added
+- OrchardBundle enum
+- first_issuance flag
+- action-group-based serialization

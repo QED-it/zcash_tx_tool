@@ -38,7 +38,7 @@ impl Runnable for TestOrchardZSACmd {
         // --------------------- Issue asset ---------------------
 
         let issue_tx =
-            create_issue_transaction(issuer, 1000, asset_description.clone(), &mut wallet);
+            create_issue_transaction(issuer, 1000, asset_description.clone(), true, &mut wallet);
 
         let asset = issue_tx
             .issue_bundle()
