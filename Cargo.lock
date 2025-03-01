@@ -3340,7 +3340,7 @@ dependencies = [
 [[package]]
 name = "zcash_primitives"
 version = "0.15.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#c6ece3580e92f3e01f56291d663132c651ec9380"
+source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#e039ec599f73087b563aae4d5fe8a9689cf30bc9"
 dependencies = [
  "aes",
  "bip0039",
@@ -3358,6 +3358,7 @@ dependencies = [
  "memuse",
  "nonempty",
  "orchard",
+ "pasta_curves",
  "rand",
  "rand_core",
  "redjubjub",
