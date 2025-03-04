@@ -7,11 +7,16 @@ use orchard::note::AssetBase;
 pub(crate) struct TestBalances {
     account0: i64,
     account1: i64,
+    account2: i64,
 }
 
 impl TestBalances {
-    pub(crate) fn new(account0: i64, account1: i64) -> Self {
-        TestBalances { account0, account1 }
+    pub(crate) fn new(account0: i64, account1: i64, account2: i64) -> Self {
+        TestBalances {
+            account0,
+            account1,
+            account2,
+        }
     }
 
     pub(crate) fn get_zec(user: &mut User) -> TestBalances {
@@ -21,13 +26,16 @@ impl TestBalances {
     pub(crate) fn get_asset(asset: AssetBase, wallet: &mut User) -> TestBalances {
         let address0 = wallet.address_for_account(0, External);
         let address1 = wallet.address_for_account(1, External);
+        let address2 = wallet.address_for_account(2, External);
 
         let balance0 = wallet.balance(address0, asset) as i64;
         let balance1 = wallet.balance(address1, asset) as i64;
+        let balance2 = wallet.balance(address2, asset) as i64;
 
         TestBalances {
             account0: balance0,
             account1: balance1,
+            account2: balance2,
         }
     }
 }
@@ -49,6 +57,10 @@ pub(crate) fn check_balances(
         actual_balances.account1,
         initial.account1 + expected_delta.account1
     );
+    assert_eq!(
+        actual_balances.account2,
+        initial.account2 + expected_delta.account2
+    );
     actual_balances
 }
 
@@ -66,4 +78,5 @@ pub(crate) fn print_balances(header: &str, asset: AssetBase, balances: TestBalan
     }
     info!("Account 0 balance: {}", balances.account0);
     info!("Account 1 balance: {}", balances.account1);
+    info!("Account 2 balance: {}", balances.account2);
 }

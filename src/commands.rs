@@ -11,11 +11,13 @@
 //! application's configuration file.
 
 mod clean;
+mod demo_orchard_zsa;
 mod test_balances;
 mod test_orchard;
 mod test_orchard_zsa;
 
 use crate::commands::clean::CleanCmd;
+use crate::commands::demo_orchard_zsa::DemoOrchardZSACmd;
 use crate::commands::test_orchard::TestOrchardCmd;
 use crate::commands::test_orchard_zsa::TestOrchardZSACmd;
 use crate::config::AppConfig;
@@ -30,6 +32,7 @@ pub const CONFIG_FILE: &str = "config.toml";
 pub enum AppCmd {
     TestOrchard(TestOrchardCmd),
     TestOrchardZSA(TestOrchardZSACmd),
+    DemoOrchardZSA(DemoOrchardZSACmd),
     Clean(CleanCmd),
 }
 

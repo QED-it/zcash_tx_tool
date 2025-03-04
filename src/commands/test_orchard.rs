@@ -30,6 +30,7 @@ impl Runnable for TestOrchardCmd {
 
         let miner = wallet.address_for_account(0, External);
         let alice = wallet.address_for_account(1, External);
+        let _bob = wallet.address_for_account(2, External);
 
         let coinbase_txid = prepare_test(
             config.chain.nu5_activation_height,
@@ -50,7 +51,7 @@ impl Runnable for TestOrchardCmd {
             false,
         );
 
-        let expected_delta = TestBalances::new(625_000_000 /*coinbase_reward*/, 0);
+        let expected_delta = TestBalances::new(625_000_000 /*coinbase_reward*/, 0, 0);
         balances = check_balances(
             "=== Balances after shielding ===",
             AssetBase::native(),
@@ -77,7 +78,7 @@ impl Runnable for TestOrchardCmd {
             false,
         );
 
-        let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);
+        let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1, 0);
         check_balances(
             "=== Balances after transfer ===",
             AssetBase::native(),

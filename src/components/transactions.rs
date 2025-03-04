@@ -166,7 +166,7 @@ pub fn create_transfer_transaction(
     asset: AssetBase,
     wallet: &mut User,
 ) -> Transaction {
-    info!("Transfer {} zatoshi", amount);
+    info!("Transfer {} tokens", amount);
 
     let ovk = wallet.orchard_ovk();
 
@@ -222,7 +222,7 @@ pub fn create_burn_transaction(
     asset: AssetBase,
     wallet: &mut User,
 ) -> Transaction {
-    info!("Burn {} zatoshi", amount);
+    info!("Burn {} tokens", amount);
 
     // Add inputs
     let inputs = wallet.select_spendable_notes(arsonist, amount, asset);
