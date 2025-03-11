@@ -71,7 +71,7 @@ impl BurnInfo {
 
 pub(crate) fn update_balances_after_transfer(
     balances: &TestBalances,
-    transfer_info_vec: &Vec<TransferInfo>,
+    transfer_info_vec: &[TransferInfo],
 ) -> TestBalances {
     let new_balances = transfer_info_vec
         .iter()
@@ -85,7 +85,7 @@ pub(crate) fn update_balances_after_transfer(
 
 pub(crate) fn update_balances_after_burn(
     balances: &TestBalances,
-    burn_vec: &Vec<BurnInfo>,
+    burn_vec: &[BurnInfo],
 ) -> TestBalances {
     let new_balances = burn_vec
         .iter()
