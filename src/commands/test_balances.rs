@@ -10,10 +10,10 @@ pub(crate) struct TestBalances(Vec<i64>);
 
 impl TestBalances {
     pub(crate) fn add_balances(&mut self, balances: Vec<(u32, i64)>) {
-        for (index, balance) in balances {
-            assert!((index as usize) < self.0.len());
-            self.0[index as usize] += balance;
-        }
+        balances.iter().for_each(|(index, balance)| {
+            assert!((*index as usize) < self.0.len());
+            self.0[*index as usize] += *balance;
+        });
     }
 
     pub(crate) fn get_zec(user: &mut User, num_users: u32) -> TestBalances {
@@ -21,12 +21,12 @@ impl TestBalances {
     }
 
     pub(crate) fn get_asset(asset: AssetBase, wallet: &mut User, num_users: u32) -> TestBalances {
-        let mut balance_vec = vec![];
-        for i in 0..num_users {
-            let address = wallet.address_for_account(i, External);
-            let balance = wallet.balance(address, asset) as i64;
-            balance_vec.push(balance);
-        }
+        let balance_vec = (0..num_users)
+            .map(|i| {
+                let address = wallet.address_for_account(i, External);
+                wallet.balance(address, asset) as i64
+            })
+            .collect();
 
         TestBalances(balance_vec)
     }
@@ -73,11 +73,13 @@ pub(crate) fn update_balances_after_transfer(
     balances: &TestBalances,
     transfer_info_vec: &Vec<TransferInfo>,
 ) -> TestBalances {
-    let mut new_balances = balances.clone();
-    for transfer_info in transfer_info_vec {
-        new_balances.0[transfer_info.index_from as usize] -= transfer_info.amount as i64;
-        new_balances.0[transfer_info.index_to as usize] += transfer_info.amount as i64;
-    }
+    let new_balances = transfer_info_vec
+        .iter()
+        .fold(balances.clone(), |mut acc, transfer_info| {
+            acc.0[transfer_info.index_from as usize] -= transfer_info.amount as i64;
+            acc.0[transfer_info.index_to as usize] += transfer_info.amount as i64;
+            acc
+        });
     new_balances
 }
 
@@ -85,10 +87,12 @@ pub(crate) fn update_balances_after_burn(
     balances: &TestBalances,
     burn_vec: &Vec<BurnInfo>,
 ) -> TestBalances {
-    let mut new_balances = balances.clone();
-    for burn_info in burn_vec {
-        new_balances.0[burn_info.index as usize] -= burn_info.amount as i64;
-    }
+    let new_balances = burn_vec
+        .iter()
+        .fold(balances.clone(), |mut acc, burn_info| {
+            acc.0[burn_info.index as usize] -= burn_info.amount as i64;
+            acc
+        });
     new_balances
 }
 
@@ -116,7 +120,7 @@ pub(crate) fn print_balances(header: &str, asset: AssetBase, balances: &TestBala
             .collect::<String>();
         info!("AssetBase: {}", trimmed_asset_base);
     }
-    for (i, balance) in balances.0.iter().enumerate() {
+    balances.0.iter().enumerate().for_each(|(i, balance)| {
         info!("Account {} balance: {}", i, balance);
-    }
+    });
 }
