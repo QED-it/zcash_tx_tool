@@ -267,6 +267,7 @@ pub fn create_issue_transaction(
     recipient: Address,
     amount: u64,
     asset_desc: Vec<u8>,
+    first_issuance: bool,
     wallet: &mut User,
 ) -> Transaction {
     info!("Issue {} asset", amount);
@@ -278,6 +279,7 @@ pub fn create_issue_transaction(
             recipient,
             value: NoteValue::from_raw(amount),
         }),
+        first_issuance,
     )
     .unwrap();
     build_tx(tx)
@@ -287,7 +289,7 @@ pub fn create_issue_transaction(
 pub fn create_finalization_transaction(asset_desc: Vec<u8>, wallet: &mut User) -> Transaction {
     info!("Finalize asset");
     let mut tx = create_tx(wallet);
-    tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc.clone(), None)
+    tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc.clone(), None, false)
         .unwrap();
     tx.finalize_asset::<FeeError>(asset_desc.as_slice())
         .unwrap();
