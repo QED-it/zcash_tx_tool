@@ -14,6 +14,7 @@ mod clean;
 mod test_balances;
 mod test_orchard;
 mod test_orchard_zsa;
+mod test_scenario_1;
 
 use crate::commands::clean::CleanCmd;
 use crate::commands::test_orchard::TestOrchardCmd;
