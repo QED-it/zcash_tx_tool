@@ -55,7 +55,7 @@ impl Runnable for TestOrchardZSACmd {
             .unwrap()
             .asset();
 
-        let balances = TestBalances::get_asset(asset, &mut wallet, num_users);
+        let balances = TestBalances::get_asset(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
 
         let current_height = wallet.last_block_height();
@@ -66,7 +66,7 @@ impl Runnable for TestOrchardZSACmd {
             current_height.is_none(),
         );
 
-        let balances = TestBalances::get_asset(asset, &mut wallet, num_users);
+        let balances = TestBalances::get_asset(asset, num_users, &mut wallet);
         print_balances("=== Balances after issue ===", asset, &balances);
 
         // --------------------- ZSA transfer ---------------------
@@ -97,7 +97,7 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Burn asset ---------------------
 
-        let balances = TestBalances::get_asset(asset, &mut wallet, num_users);
+        let balances = TestBalances::get_asset(asset, num_users, &mut wallet);
 
         let amount_to_burn_issuer = 7;
         let amount_to_burn_alice = amount_to_transfer_1 - 1;

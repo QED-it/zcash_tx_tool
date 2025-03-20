@@ -1,4 +1,9 @@
-//! `test` - Scenario 1: Three parties,
+//! `test` - Scenario: Three parties, a manufacturer of prescription medicines,
+//! a purchaser of the medicines, and a supplier of the medicines. The manufacturer issues a ZSA
+//! for every dose of medicine produced. On purchase, the manufacturer transfers the corresponding
+//! number of ZSAs to the purchaser. The purchaser then transfers the ZSAs to the supplier, in
+//! exchange for the physical doses. The supplier burns the ZSAs after receiving them to signal the
+//! sale of the medicines.
 
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
@@ -13,11 +18,11 @@ use crate::components::transactions::{create_issue_transaction, mine};
 use crate::components::user::User;
 use crate::prelude::*;
 
-/// Run the test scenario 1
+/// Run the test scenario
 #[derive(clap::Parser, Command, Debug)]
-pub struct TestScenarioOneCmd {}
+pub struct TestThreePartyCmd {}
 
-impl Runnable for TestScenarioOneCmd {
+impl Runnable for TestThreePartyCmd {
     /// Run the `test` subcommand.
     fn run(&self) {
         let config = APP.config();
@@ -61,7 +66,7 @@ impl Runnable for TestScenarioOneCmd {
             .unwrap()
             .asset();
 
-        let balances = TestBalances::get_asset(asset, &mut wallet, num_users);
+        let balances = TestBalances::get_asset(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
 
         let current_height = wallet.last_block_height();
@@ -72,7 +77,7 @@ impl Runnable for TestScenarioOneCmd {
             current_height.is_none(),
         );
 
-        let balances = TestBalances::get_asset(asset, &mut wallet, num_users);
+        let balances = TestBalances::get_asset(asset, num_users, &mut wallet);
         print_balances("=== Balances after issue ===", asset, &balances);
 
         // --------------------- ZSA transfer from manufacturer to purchaser ---------------------
@@ -102,6 +107,7 @@ impl Runnable for TestScenarioOneCmd {
 
         // --------------------- ZSA transfer from purchaser to supplier ---------------------
 
+        let balances = TestBalances::get_asset(asset, num_users, &mut wallet);
         let amount_to_transfer_2 = 1;
 
         let transfer_info_vec = vec![TransferInfo::new(
@@ -130,8 +136,7 @@ impl Runnable for TestScenarioOneCmd {
 
         // --------------------- Supplier burning asset ---------------------
 
-        let balances = TestBalances::get_asset(asset, &mut wallet, num_users);
-
+        let balances = TestBalances::get_asset(asset, num_users, &mut wallet);
         let amount_to_burn_supplier = 1;
 
         let burn_vec = vec![BurnInfo::new(supplier_index, amount_to_burn_supplier)];
