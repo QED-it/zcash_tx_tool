@@ -7,6 +7,7 @@ use zcash_primitives::transaction::TxId;
 
 use crate::commands::test_balances::{
     check_balances, print_balances, update_balances_after_transfer, TestBalances, TransferInfo,
+    update_balances_after_mine,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::create_transfer_transaction;
@@ -44,7 +45,7 @@ impl Runnable for TestOrchardCmd {
             &mut rpc_client,
         );
 
-        let balances = TestBalances::get_zec(&mut wallet, num_users);
+        let balances = TestBalances::get_zec(num_users, &mut wallet);
         print_balances("=== Initial balances ===", AssetBase::native(), &balances);
 
         // --------------------- Shield miner's reward ---------------------
@@ -57,8 +58,7 @@ impl Runnable for TestOrchardCmd {
             false,
         );
 
-        let mut expected_balances = balances.clone();
-        expected_balances.add_balances(vec![(0, 625_000_000)]);
+        let expected_balances = update_balances_after_mine(&balances, 0);
         check_balances(
             "=== Balances after shielding ===",
             AssetBase::native(),
@@ -70,7 +70,7 @@ impl Runnable for TestOrchardCmd {
         // --------------------- Create transfer ---------------------
 
         let amount_to_transfer_1: u64 = 2;
-        let balances = TestBalances::get_zec(&mut wallet, num_users);
+        let balances = TestBalances::get_zec(num_users, &mut wallet);
         let transfer_info_vec = vec![TransferInfo::new(
             miner_index,
             alice_index,

@@ -9,18 +9,11 @@ use zcash_primitives::transaction::Transaction;
 pub(crate) struct TestBalances(Vec<i64>);
 
 impl TestBalances {
-    pub(crate) fn add_balances(&mut self, balances: Vec<(u32, i64)>) {
-        balances.iter().for_each(|(index, balance)| {
-            assert!((*index as usize) < self.0.len());
-            self.0[*index as usize] += *balance;
-        });
+    pub(crate) fn get_zec(num_users: u32, user: &mut User) -> TestBalances {
+        Self::get_asset(AssetBase::native(), num_users, user)
     }
 
-    pub(crate) fn get_zec(user: &mut User, num_users: u32) -> TestBalances {
-        Self::get_asset(AssetBase::native(), user, num_users)
-    }
-
-    pub(crate) fn get_asset(asset: AssetBase, wallet: &mut User, num_users: u32) -> TestBalances {
+    pub(crate) fn get_asset(asset: AssetBase, num_users: u32, wallet: &mut User) -> TestBalances {
         let balance_vec = (0..num_users)
             .map(|i| {
                 let address = wallet.address_for_account(i, External);
@@ -69,6 +62,14 @@ impl BurnInfo {
     }
 }
 
+pub(crate) fn update_balances_after_mine(
+    balances: &TestBalances,
+    miner_index: u32,
+) -> TestBalances {
+    let mut new_balances = balances.clone();
+    new_balances.0[miner_index as usize] += 625_000_000;
+    new_balances
+}
 pub(crate) fn update_balances_after_transfer(
     balances: &TestBalances,
     transfer_info_vec: &[TransferInfo],
@@ -103,7 +104,7 @@ pub(crate) fn check_balances(
     user: &mut User,
     num_users: u32,
 ) {
-    let actual_balances = TestBalances::get_asset(asset, user, num_users);
+    let actual_balances = TestBalances::get_asset(asset, num_users, user);
     print_balances(header, asset, &actual_balances);
     assert_eq!(actual_balances, expected_balances);
 }
