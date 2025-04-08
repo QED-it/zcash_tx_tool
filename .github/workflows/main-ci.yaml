@@ -1,4 +1,4 @@
-name: Docker CI
+name: Check tx-tool against Zebra
 
 on:
   push:
@@ -34,7 +34,7 @@ jobs:
         sleep 30
         echo "Finished waiting for Zebra node..."
         
-    - name: Build Transaction Tool
+    - name: Build tx-tool
       uses: docker/build-push-action@v4
       with:
         context: .
@@ -43,7 +43,7 @@ jobs:
         push: false
         load: true
         
-    - name: Run Transaction Tool and verify success
+    - name: Run tx-tool and verify success
       run: |
         # Create a network to connect the containers
         docker network create zcash-net
@@ -64,10 +64,10 @@ jobs:
         
         # Check if the tx_tool succeeded
         if [ $EXIT_CODE -eq 0 ]; then
-          echo "Transaction tool completed successfully!"
+          echo "tx-tool completed successfully!"
           exit 0
         else
-          echo "Transaction tool failed with exit code $EXIT_CODE"
+          echo "tx-tool failed with exit code $EXIT_CODE"
           echo "Printing container logs for debugging:"
           docker logs zcash-tx-tool
           exit 1

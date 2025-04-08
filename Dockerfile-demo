@@ -3,10 +3,18 @@ FROM rust:1.81.0
 # Set up Rust and cargo
 RUN apt-get update && apt-get install git build-essential clang -y
 
-# Checkout and build custom branch of the zebra repository
-ARG branch=zsa-integration-demo-ag
-ADD https://api.github.com/repos/QED-it/zebra/git/refs/heads/$branch version.json
-RUN git clone -b $branch --single-branch https://github.com/QED-it/zebra.git
+# Checkout and build custom branch, tag, or commit of the zebra repository
+ARG ref=zsa-integration-demo-ag
+
+# Add a simple cache busting mechanism
+# This will invalidate the cache whenever the repository is updated
+ADD https://api.github.com/repos/QED-it/zebra/commits/HEAD version.json
+
+# Clone the repository and checkout the specified reference
+RUN git clone https://github.com/QED-it/zebra.git && \
+    cd zebra && \
+    git fetch --all --tags && \
+    git checkout ${ref}
 
 WORKDIR zebra
 
