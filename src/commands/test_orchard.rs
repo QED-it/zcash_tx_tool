@@ -1,4 +1,4 @@
-//! `test` - happy e2e flow that issues, transfers and burns an asset
+//! `test-orchard` - happy e2e flow that issues, transfers and burns an asset
 
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
@@ -6,8 +6,8 @@ use orchard::note::AssetBase;
 use zcash_primitives::transaction::TxId;
 
 use crate::commands::test_balances::{
-    check_balances, print_balances, update_balances_after_transfer, TestBalances, TransferInfo,
-    update_balances_after_mine,
+    check_balances, print_balances, expected_balances_after_transfer, TestBalances, TransferInfo,
+    expected_balances_after_mine,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::create_transfer_transaction;
@@ -33,11 +33,11 @@ impl Runnable for TestOrchardCmd {
 
         let num_users = 2;
 
-        let miner_index: u32 = 0;
-        let alice_index: u32 = 1;
+        let miner_idx: u32 = 0;
+        let alice_idx: u32 = 1;
 
-        let miner = wallet.address_for_account(miner_index, External);
-        let alice = wallet.address_for_account(alice_index, External);
+        let miner_ad = wallet.address_for_account(miner_idx, External);
+        let alice_ad = wallet.address_for_account(alice_idx, External);
 
         let coinbase_txid = prepare_test(
             config.chain.nu5_activation_height,
@@ -45,12 +45,12 @@ impl Runnable for TestOrchardCmd {
             &mut rpc_client,
         );
 
-        let balances = TestBalances::get_zec(num_users, &mut wallet);
+        let balances = TestBalances::get_native_balances(num_users, &mut wallet);
         print_balances("=== Initial balances ===", AssetBase::native(), &balances);
 
         // --------------------- Shield miner's reward ---------------------
 
-        let shielding_tx = create_shield_coinbase_transaction(miner, coinbase_txid, &mut wallet);
+        let shielding_tx = create_shield_coinbase_transaction(miner_ad, coinbase_txid, &mut wallet);
         mine(
             &mut wallet,
             &mut rpc_client,
@@ -58,30 +58,35 @@ impl Runnable for TestOrchardCmd {
             false,
         );
 
-        let expected_balances = update_balances_after_mine(&balances, 0);
+        let expected_balances = expected_balances_after_mine(&balances, 0);
         check_balances(
-            "=== Balances after shielding ===",
             AssetBase::native(),
-            expected_balances,
+            &expected_balances,
             &mut wallet,
             num_users,
+        );
+
+        print_balances(
+            "=== Balances after shielding ===",
+            AssetBase::native(),
+            &expected_balances,
         );
 
         // --------------------- Create transfer ---------------------
 
         let amount_to_transfer_1: u64 = 2;
-        let balances = TestBalances::get_zec(num_users, &mut wallet);
-        let transfer_info_vec = vec![TransferInfo::new(
-            miner_index,
-            alice_index,
+        let balances = TestBalances::get_native_balances(num_users, &mut wallet);
+        let transfers = vec![TransferInfo::new(
+            miner_idx,
+            alice_idx,
             amount_to_transfer_1,
         )];
 
-        let expected_balances = update_balances_after_transfer(&balances, &transfer_info_vec);
+        let expected_balances = expected_balances_after_transfer(&balances, &transfers);
 
         let transfer_tx_1 = create_transfer_transaction(
-            miner,
-            alice,
+            miner_ad,
+            alice_ad,
             amount_to_transfer_1,
             AssetBase::native(),
             &mut wallet,
@@ -94,11 +99,16 @@ impl Runnable for TestOrchardCmd {
         );
 
         check_balances(
-            "=== Balances after transfer ===",
             AssetBase::native(),
-            expected_balances,
+            &expected_balances,
             &mut wallet,
             num_users,
+        );
+
+        print_balances(
+            "=== Balances after transfer ===",
+            AssetBase::native(),
+            &expected_balances,
         );
     }
 }

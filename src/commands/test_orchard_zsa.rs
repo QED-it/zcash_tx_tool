@@ -1,10 +1,10 @@
-//! `test` - happy e2e flow that issues, transfers and burns an asset
+//! `test-orchard-zsa` - happy e2e flow that issues, transfers and burns an asset
 
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
-
+use orchard::note::AssetBase;
 use crate::commands::test_balances::{
-    check_balances, print_balances, update_balances_after_burn, update_balances_after_transfer,
+    check_balances, print_balances, expected_balances_after_burn, expected_balances_after_transfer,
     BurnInfo, TestBalances, TransferInfo,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
@@ -28,10 +28,10 @@ impl Runnable for TestOrchardZSACmd {
 
         let num_users = 2;
 
-        let issuer_index = 0;
-        let alice_index: u32 = 1;
+        let issuer_idx = 0;
+        let alice_idx: u32 = 1;
 
-        let issuer = wallet.address_for_account(issuer_index, External);
+        let issuer_ad = wallet.address_for_account(issuer_idx, External);
 
         let asset_description = b"WETH".to_vec();
         prepare_test(
@@ -42,8 +42,13 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Issue asset ---------------------
 
-        let issue_tx =
-            create_issue_transaction(issuer, 1000, asset_description.clone(), true, &mut wallet);
+        let issue_tx = create_issue_transaction(
+            issuer_ad,
+            1000,
+            asset_description.clone(),
+            true,
+            &mut wallet,
+        );
 
         let asset = issue_tx
             .issue_bundle()
@@ -55,7 +60,7 @@ impl Runnable for TestOrchardZSACmd {
             .unwrap()
             .asset();
 
-        let balances = TestBalances::get_asset(asset, num_users, &mut wallet);
+        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
 
         let current_height = wallet.last_block_height();
@@ -66,65 +71,57 @@ impl Runnable for TestOrchardZSACmd {
             current_height.is_none(),
         );
 
-        let balances = TestBalances::get_asset(asset, num_users, &mut wallet);
+        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Balances after issue ===", asset, &balances);
 
         // --------------------- ZSA transfer ---------------------
 
         let amount_to_transfer_1 = 3;
-        let transfer_info_vec = vec![TransferInfo::new(
-            issuer_index,
-            alice_index,
+        let transfers = vec![TransferInfo::new(
+            issuer_idx,
+            alice_idx,
             amount_to_transfer_1,
         )];
         // Generate expected balances after transfer
-        let expected_balances = update_balances_after_transfer(&balances, &transfer_info_vec);
+        let expected_balances = expected_balances_after_transfer(&balances, &transfers);
 
-        let transfer_tx_vec = transfer_info_vec
+        let transfer_txns = transfers
             .iter()
             .map(|info| info.create_transfer_txn(asset, &mut wallet))
             .collect();
 
-        mine(&mut wallet, &mut rpc_client, transfer_tx_vec, false);
+        mine(&mut wallet, &mut rpc_client, transfer_txns, false);
 
-        check_balances(
-            "=== Balances after transfer ===",
-            asset,
-            expected_balances,
-            &mut wallet,
-            num_users,
-        );
+        check_balances(asset, &expected_balances, &mut wallet, num_users);
+
+        print_balances("=== Balances after transfer ===", asset, &expected_balances);
 
         // --------------------- Burn asset ---------------------
 
-        let balances = TestBalances::get_asset(asset, num_users, &mut wallet);
+        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
 
         let amount_to_burn_issuer = 7;
         let amount_to_burn_alice = amount_to_transfer_1 - 1;
 
-        let burn_vec = vec![
-            BurnInfo::new(issuer_index, amount_to_burn_issuer),
-            BurnInfo::new(alice_index, amount_to_burn_alice),
+        let burns = vec![
+            BurnInfo::new(issuer_idx, asset, amount_to_burn_issuer),
+            BurnInfo::new(alice_idx, asset, amount_to_burn_alice),
         ];
 
         // Generate expected balances after burn
-        let expected_balances = update_balances_after_burn(&balances, &burn_vec);
+        let expected_balances = expected_balances_after_burn(&balances, &burns);
 
-        let burn_tx_vec = burn_vec
+        let burn_txns = burns
             .iter()
-            .map(|info| info.create_burn_txn(asset, &mut wallet))
+            .map(|info| info.create_burn_txn(&mut wallet))
             .collect();
 
-        mine(&mut wallet, &mut rpc_client, burn_tx_vec, false);
+        mine(&mut wallet, &mut rpc_client, burn_txns, false);
 
         // burn from issuer(account0) and alice(account1)
-        check_balances(
-            "=== Balances after burning ===",
-            asset,
-            expected_balances,
-            &mut wallet,
-            num_users,
-        );
+        check_balances(asset, &expected_balances, &mut wallet, num_users);
+
+        print_balances("=== Balances after burning ===", asset, &expected_balances);
 
         // --------------------- Finalization ---------------------
         // TODO - uncomment when finalization is implemented

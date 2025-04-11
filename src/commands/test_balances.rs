@@ -9,19 +9,23 @@ use zcash_primitives::transaction::Transaction;
 pub(crate) struct TestBalances(Vec<i64>);
 
 impl TestBalances {
-    pub(crate) fn get_zec(num_users: u32, user: &mut User) -> TestBalances {
-        Self::get_asset(AssetBase::native(), num_users, user)
+    pub(crate) fn get_native_balances(num_users: u32, user: &mut User) -> TestBalances {
+        Self::get_asset_balances(AssetBase::native(), num_users, user)
     }
 
-    pub(crate) fn get_asset(asset: AssetBase, num_users: u32, wallet: &mut User) -> TestBalances {
-        let balance_vec = (0..num_users)
+    pub(crate) fn get_asset_balances(
+        asset: AssetBase,
+        num_users: u32,
+        wallet: &mut User,
+    ) -> TestBalances {
+        let balances = (0..num_users)
             .map(|i| {
                 let address = wallet.address_for_account(i, External);
                 wallet.balance(address, asset) as i64
             })
             .collect();
 
-        TestBalances(balance_vec)
+        TestBalances(balances)
     }
 }
 
@@ -40,41 +44,46 @@ impl TransferInfo {
         }
     }
     pub(crate) fn create_transfer_txn(&self, asset: AssetBase, wallet: &mut User) -> Transaction {
-        let from_addr = wallet.address_for_account(self.index_from, External);
-        let to_addr = wallet.address_for_account(self.index_to, External);
-        create_transfer_transaction(from_addr, to_addr, self.amount, asset, wallet)
+        let from_ad = wallet.address_for_account(self.index_from, External);
+        let to_ad = wallet.address_for_account(self.index_to, External);
+        create_transfer_transaction(from_ad, to_ad, self.amount, asset, wallet)
     }
 }
 
 pub(crate) struct BurnInfo {
     index: u32,
+    asset: AssetBase,
     amount: u64,
 }
 
 impl BurnInfo {
-    pub(crate) fn new(index: u32, amount: u64) -> Self {
-        BurnInfo { index, amount }
+    pub(crate) fn new(index: u32, asset: AssetBase, amount: u64) -> Self {
+        BurnInfo {
+            index,
+            asset,
+            amount,
+        }
     }
 
-    pub(crate) fn create_burn_txn(&self, asset: AssetBase, wallet: &mut User) -> Transaction {
-        let addr = wallet.address_for_account(self.index, External);
-        create_burn_transaction(addr, self.amount, asset, wallet)
+    pub(crate) fn create_burn_txn(&self, wallet: &mut User) -> Transaction {
+        let address = wallet.address_for_account(self.index, External);
+        create_burn_transaction(address, self.amount, self.asset, wallet)
     }
 }
 
-pub(crate) fn update_balances_after_mine(
+pub(crate) fn expected_balances_after_mine(
     balances: &TestBalances,
-    miner_index: u32,
+    miner_idx: u32,
 ) -> TestBalances {
     let mut new_balances = balances.clone();
-    new_balances.0[miner_index as usize] += 625_000_000;
+    new_balances.0[miner_idx as usize] += 625_000_000;
     new_balances
 }
-pub(crate) fn update_balances_after_transfer(
+pub(crate) fn expected_balances_after_transfer(
     balances: &TestBalances,
-    transfer_info_vec: &[TransferInfo],
+    transfers: &[TransferInfo],
 ) -> TestBalances {
-    let new_balances = transfer_info_vec
+    let new_balances = transfers
         .iter()
         .fold(balances.clone(), |mut acc, transfer_info| {
             acc.0[transfer_info.index_from as usize] -= transfer_info.amount as i64;
@@ -84,29 +93,25 @@ pub(crate) fn update_balances_after_transfer(
     new_balances
 }
 
-pub(crate) fn update_balances_after_burn(
+pub(crate) fn expected_balances_after_burn(
     balances: &TestBalances,
-    burn_vec: &[BurnInfo],
+    burns: &[BurnInfo],
 ) -> TestBalances {
-    let new_balances = burn_vec
-        .iter()
-        .fold(balances.clone(), |mut acc, burn_info| {
-            acc.0[burn_info.index as usize] -= burn_info.amount as i64;
-            acc
-        });
+    let new_balances = burns.iter().fold(balances.clone(), |mut acc, burn_info| {
+        acc.0[burn_info.index as usize] -= burn_info.amount as i64;
+        acc
+    });
     new_balances
 }
 
 pub(crate) fn check_balances(
-    header: &str,
     asset: AssetBase,
-    expected_balances: TestBalances,
+    expected_balances: &TestBalances,
     user: &mut User,
     num_users: u32,
 ) {
-    let actual_balances = TestBalances::get_asset(asset, num_users, user);
-    print_balances(header, asset, &actual_balances);
-    assert_eq!(actual_balances, expected_balances);
+    let actual_balances = TestBalances::get_asset_balances(asset, num_users, user);
+    assert_eq!(&actual_balances, expected_balances);
 }
 
 pub(crate) fn print_balances(header: &str, asset: AssetBase, balances: &TestBalances) {
