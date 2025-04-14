@@ -2,7 +2,6 @@
 
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
-use orchard::note::AssetBase;
 use crate::commands::test_balances::{
     check_balances, print_balances, expected_balances_after_burn, expected_balances_after_transfer,
     BurnInfo, TestBalances, TransferInfo,
