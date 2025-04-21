@@ -2,3 +2,10 @@
 /target
 **/*.rs.bk
 /*.sqlite
+
+# Terraform git
+# Local .terraform directories
+**/.terraform/*
+**/.terragrunt/*
+**/.terragrunt-cache/*
+
