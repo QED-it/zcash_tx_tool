@@ -1,49 +1,20 @@
-# Use a more recent Rust version
-FROM rust:1.74.0
+FROM rust:1.81.0
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    sqlite3 \
-    libsqlite3-dev \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
+# Set up Rust and cargo
+RUN apt-get update && apt-get install git build-essential clang -y
 
-# Set the working directory
-WORKDIR /app
+# Checkout and build custom branch of the zebra repository
+ARG branch=zsa-integration-demo-ag
+ADD https://api.github.com/repos/QED-it/zebra/git/refs/heads/$branch version.json
+RUN git clone -b $branch --single-branch https://github.com/QED-it/zebra.git
 
-# Copy the entire repository
-COPY . .
+WORKDIR zebra
 
-# Install diesel_cli with specific version
-RUN cargo install diesel_cli@2.1.1 --no-default-features --features sqlite --locked
+RUN cargo build --release --package zebrad --bin zebrad --features="getblocktemplate-rpcs"
 
-# Run migrations
-RUN diesel migration run
+EXPOSE 18232
 
-# Build the application in release mode
-RUN cargo build --release
+COPY regtest-config.toml regtest-config.toml
 
-# Install ipfs (for fetch-params.sh)
-RUN wget https://dist.ipfs.io/go-ipfs/v0.9.1/go-ipfs_v0.9.1_linux-amd64.tar.gz && \
-    tar -xvzf go-ipfs_v0.9.1_linux-amd64.tar.gz && \
-    cd go-ipfs && \
-    bash install.sh && \
-    cd .. && \
-    rm -rf go-ipfs go-ipfs_v0.9.1_linux-amd64.tar.gz
-
-# Make fetch-params.sh executable
-RUN chmod +x ./zcutil/fetch-params.sh
-
-# Run fetch-params.sh
-RUN ./zcutil/fetch-params.sh
-
-# Create necessary directories
-RUN mkdir -p /root/.local/share/ZcashParams
-
-# Set default environment variables
-ENV ZCASH_NODE_ADDRESS=127.0.0.1
-ENV ZCASH_NODE_PORT=18232
-ENV ZCASH_NODE_PROTOCOL=http
-
-# Set the entrypoint
-ENTRYPOINT ["cargo", "run", "--release", "--package", "zcash_tx_tool", "--bin", "zcash_tx_tool", "test-orchard-zsa"]
+# Run the zebra node
+ENTRYPOINT ["target/release/zebrad", "-c", "regtest-config.toml"]
