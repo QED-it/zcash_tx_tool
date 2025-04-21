@@ -1,75 +1,53 @@
-# Background
-This repo, along with the 'terraform-aws-modules', creates a solana-node in AWS ECS
+# Infrastructure Deployment Makefile
 
-## How do you deploy the infrastructure in this repo?
+This repository includes a `Makefile` to streamline the deployment, management, and teardown of AWS infrastructure using Terragrunt. The script ensures all prerequisites are met and simplifies executing commands for planning, applying, and destroying infrastructure across all modules in a specific environment.
+After creating the infrastructure, which includes the ECR repository, you can use the push-deploy Github workflow to deploy the Zebra Server to ECR and the ECS cluster.
+You can see the workflow in this repository's `.github/workflows/push-deploy.yaml` file.
 
-### Pre-requisites
+## Prerequisites
 
-1. Install [Terraform](https://www.terraform.io/) version `0.13.0` or newer and
-   [Terragrunt](https://github.com/gruntwork-io/terragrunt) version `v0.25.1` or newer.
-1. Fill in your AWS account variables in `dev/account.hcl`. (named 'qed-it')
-1. Fill in your AWS region in `dev/<region>/region.hcl`. ('eu-central-1')
+Before using this script, ensure the following:
 
-### Running first time in a region
-On each region when running terragrunt for the first export your aws profile (this profile must exist in ~/.aws/credentials) so that the backend S3 bucket for the terraform state will be created, afterwards unset the aws profile, for example:
-1. `cd dev/eu-central-1/rnd-1/vpc`
-1. `export AWS_PROFILE=NAME`
-1. `terragrunt init`
-1. `unset AWS_PROFILE`
+1. **AWS CLI**:
+   - Install the AWS CLI.
+   - Configure it with your credentials.
+   - Ensure the `qed-it` AWS profile exists in `~/.aws/credentials`.
 
-Afterwards terragrunt will use the profile that is in `dev/account.hcl`.
+2. **Terragrunt**:
+   - Install Terragrunt: [Install Instructions](https://terragrunt.gruntwork.io/docs/getting-started/install/).
 
-### Deploying a single module
+3. **Make**:
+   - Ensure `make` is installed on your system.
 
-1. `cd` into the module's folder (e.g. `cd dev/us-east-1/rnd-1/vpc`).
-1. Run `terragrunt plan` to see the changes you're about to apply.
-1. If the plan looks good, run `terragrunt apply`.
+4. **Repository Structure**:
+   - The script expects the `infra/terragrunt-aws-environments` directory to exist at the following location:
+     ```
+     ./zebra/demo-deploy/infra/terragrunt-aws-environments
+     ```
+   - Update the `Makefile` if the directory structure changes.
 
-Deploy/destroy one resource of environment:
+## Makefile Targets
 
-`cd <aws_account>/<region>/<env>/<resource>`
+### 1. `check-prerequisites`
+- Verifies that the required tools and configurations are available:
+  - AWS CLI is installed.
+  - Terragrunt is installed.
+  - The `qed-it` AWS profile exists.
 
-`terragrunt plan`
+### 2. `plan-all`
+- **Command**: `make plan-all`
+- Plans changes for all modules in the environment specified in the `Makefile`.
 
-`terragrunt apply`
+### 3. `apply-all`
+- **Command**: `make apply-all`
+- Applies the planned changes for all modules in the environment.
 
-`terragrunt plan -destroy`
+### 4. `destroy-all`
+- **Command**: `make destroy-all`
+- Destroys all resources in the specified environment.
 
-`terragrunt destroy`
+## Usage
 
-### Deploying all modules in an environment
-
-1. `cd` into the environment folder (e.g. `cd dev/us-east-1/rnd-1`).
-1. Run `terragrunt plan-all` to see all the changes you're about to apply.
-1. If the plan looks good, run `terragrunt apply-all`.
-
-Deploy/destroy all resources of environment:
-
-`cd <aws_account>/<region>/<env>`
-
-`terragrunt plan-all`
-
-`terragrunt apply-all`
-
-`terragrunt plan-all -destroy`
-
-`terragrunt destroy-all`
-
-## How is the code in this repo organized?
-
-The code in this repo uses the following folder hierarchy:
-
-```
-account
- └ _global
- └ region
-    └ _global
-    └ environment
-       └ resource
-```
-
-## Creating and using root (project) level variables
-
-In the situation where you have multiple AWS accounts or regions, you often have to pass common variables down to each
-of your modules. Rather than copy/pasting the same variables into each `terragrunt.hcl` file, in every region, and in
-every environment, you can inherit them from the `inputs` defined in the root `terragrunt.hcl` file.
+1. Navigate to the directory containing the `Makefile`:
+   ```bash
+   ./zebra/demo-deploy

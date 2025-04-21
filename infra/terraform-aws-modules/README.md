@@ -1,6 +1,6 @@
 # Terraform-AWS-Modules repo
 
-This repo, along with the 'terragrunt-aws-projects', creates a solana-node in AWS ECS, which
+This repo, along with the 'terragrunt-aws-projects', creates a the infrastructure needed to deploy our zcash-tx-tool in AWS
 you can use with [Terragrunt](https://github.com/gruntwork-io/terragrunt) to keep your
 [Terraform](https://www.terraform.io) code DRY. For background information, check out the [Keep your Terraform code
 DRY](https://github.com/gruntwork-io/terragrunt#keep-your-terraform-code-dry) section of the Terragrunt documentation.
