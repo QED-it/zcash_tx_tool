@@ -5,8 +5,8 @@ use orchard::note::AssetBase;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct TestBalances {
-    account0: i64,
-    account1: i64,
+    pub(crate) account0: i64,
+    pub(crate) account1: i64,
 }
 
 impl TestBalances {

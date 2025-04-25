@@ -12,11 +12,9 @@
 
 mod clean;
 mod test_balances;
-mod test_orchard;
 mod test_orchard_zsa;
 
 use crate::commands::clean::CleanCmd;
-use crate::commands::test_orchard::TestOrchardCmd;
 use crate::commands::test_orchard_zsa::TestOrchardZSACmd;
 use crate::config::AppConfig;
 use abscissa_core::{Command, Configurable, FrameworkError, Runnable};
@@ -28,7 +26,6 @@ pub const CONFIG_FILE: &str = "config.toml";
 /// Application subcommands need to be listed in an enum.
 #[derive(clap::Parser, Command, Debug, Runnable)]
 pub enum AppCmd {
-    TestOrchard(TestOrchardCmd),
     TestOrchardZSA(TestOrchardZSACmd),
     Clean(CleanCmd),
 }

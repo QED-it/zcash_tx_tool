@@ -7,14 +7,16 @@ use crate::prelude::{debug, info};
 use orchard::issuance::IssueInfo;
 use orchard::note::AssetBase;
 use orchard::value::NoteValue;
-use orchard::{Address, ReferenceKeys};
+use orchard::{Address, Bundle, ReferenceKeys};
 use rand::rngs::OsRng;
 use std::convert::TryFrom;
 use std::ops::Add;
 use orchard::builder::BundleType;
-use orchard::keys::{FullViewingKey, SpendAuthorizingKey};
+use orchard::keys::{FullViewingKey, IssuanceValidatingKey, SpendAuthorizingKey};
+use orchard::keys::Scope::External;
 use orchard::orchard_flavor::OrchardZSA;
-use orchard::swap_bundle::{ActionGroup, ActionGroupAuthorized};
+use orchard::primitives::redpallas::{Binding, SigningKey};
+use orchard::swap_bundle::ActionGroupAuthorized;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
 use zcash_primitives::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
 use zcash_primitives::memo::MemoBytes;
@@ -275,28 +277,55 @@ pub fn create_issue_transaction(
     wallet: &mut User,
 ) -> Transaction {
     info!("Issue {} asset", amount);
+
+    let issuer = wallet.address_for_account(0, External);
+    let input = wallet.find_non_spent_note(AssetBase::native(), issuer).unwrap();
+
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(
         wallet.issuance_key(),
-        asset_desc,
+        asset_desc.clone(),
         Some(IssueInfo {
             recipient,
             value: NoteValue::from_raw(amount),
         }),
         first_issuance,
-    )
-    .unwrap();
+    ).unwrap();
+
+    // We need to add any Orchard transfer to be able to get a nullifier,
+    // normally this will be a fee input, but while fees are disabled we use a dummy transfer
+    tx.add_orchard_spend::<FeeError>(&input.sk, input.note, input.merkle_path).unwrap();
+    tx.add_orchard_output::<FeeError>(
+        Some(wallet.orchard_ovk()),
+        issuer,
+        input.note.value().inner(),
+        input.note.asset(),
+        MemoBytes::empty(),
+    ).unwrap();
     build_tx(tx)
 }
 
 /// Create a transaction that issues a new asset
 pub fn create_finalization_transaction(asset_desc: Vec<u8>, wallet: &mut User) -> Transaction {
     info!("Finalize asset");
+
+    let asset = AssetBase::derive(&IssuanceValidatingKey::from(&wallet.issuance_key()), &asset_desc);
+    let issuer = wallet.address_for_account(0, External);
+    let input = wallet.find_non_spent_note(asset, issuer).unwrap();
+
     let mut tx = create_tx(wallet);
-    tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc.clone(), None, false)
-        .unwrap();
-    tx.finalize_asset::<FeeError>(asset_desc.as_slice())
-        .unwrap();
+    tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc.clone(), None, false).unwrap();
+    tx.finalize_asset::<FeeError>(asset_desc.as_slice()).unwrap();
+    // We need to add any Orchard transfer to be able to get a nullifier,
+    // normally this will be a fee input, but while fees are disabled we use a dummy transfer
+    tx.add_orchard_spend::<FeeError>(&input.sk, input.note, input.merkle_path).unwrap();
+    tx.add_orchard_output::<FeeError>(
+        Some(wallet.orchard_ovk()),
+        issuer,
+        input.note.value().inner(),
+        asset,
+        MemoBytes::empty(),
+    ).unwrap();
     build_tx(tx)
 }
 
@@ -312,7 +341,7 @@ pub fn create_swap_transaction(
 ) -> Transaction {
     info!("Swap {} to {}", amount_asset_a, amount_asset_b);
 
-    let swap_order_1 = create_swap_order(
+    let (swap_order_1, bsk_1) = create_swap_order(
         party_a,
         amount_asset_a,
         asset_a,
@@ -320,7 +349,7 @@ pub fn create_swap_transaction(
         asset_b,
         wallet,
     );
-    let swap_order_2 = create_swap_order(
+    let (swap_order_2, bsk_2) = create_swap_order(
         party_b,
         amount_asset_b,
         asset_b,
@@ -330,8 +359,8 @@ pub fn create_swap_transaction(
     );
 
     let mut tx = create_tx(wallet);
-    tx.add_action_group::<FeeError>(swap_order_1).unwrap();
-    tx.add_action_group::<FeeError>(swap_order_2).unwrap();
+    tx.add_action_group::<FeeError>(swap_order_1, bsk_1).unwrap();
+    tx.add_action_group::<FeeError>(swap_order_2, bsk_2).unwrap();
     build_tx(tx)
 }
 
@@ -342,7 +371,7 @@ fn create_swap_order(
     amount_to_receive: u64,
     asset_to_receive: AssetBase,
     wallet: &mut User,
-) -> ActionGroup<ActionGroupAuthorized, Amount> {
+) -> (Bundle<ActionGroupAuthorized, Amount, OrchardZSA>, SigningKey<Binding>) {
     let ovk = wallet.orchard_ovk();
 
     // Find input notes for asset A
@@ -403,14 +432,14 @@ fn create_swap_order(
 
     // Build Swap Order
     let (action_group, _) = ag_builder.build_action_group(OsRng, 10).unwrap();
-    let commitment = action_group.commitment().into();
+    let commitment = action_group.action_group_commitment().into();
     action_group
         .create_proof(
             &orchard::circuit::ProvingKey::build::<OrchardZSA>(),
             &mut OsRng,
         )
         .unwrap()
-        .apply_signatures(OsRng, commitment, &orchard_saks)
+        .apply_signatures_for_action_group(OsRng, commitment, &orchard_saks)
         .unwrap()
 }
 
@@ -485,7 +514,7 @@ pub fn template_into_proposal(
 }
 
 fn create_tx(wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
-    let build_config = BuildConfig::Zsa {
+    let build_config = BuildConfig::Swap {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),
     };

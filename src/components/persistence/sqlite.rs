@@ -76,7 +76,6 @@ impl SqliteDataStorage {
                 asset
                     .eq(asset_base.to_bytes().to_vec())
                     .and(amount.eq(0))
-                    .and(rho.eq([0u8; 32].to_vec()))
                     .and(
                         recipient_address
                             .eq(ReferenceKeys::recipient().to_raw_address_bytes().to_vec()),
