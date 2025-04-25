@@ -12,12 +12,10 @@
 
 mod clean;
 mod test_balances;
-mod test_orchard;
 mod test_orchard_zsa;
 mod test_three_party;
 
 use crate::commands::clean::CleanCmd;
-use crate::commands::test_orchard::TestOrchardCmd;
 use crate::commands::test_orchard_zsa::TestOrchardZSACmd;
 use crate::commands::test_three_party::TestThreePartyCmd;
 use crate::config::AppConfig;
@@ -30,7 +28,6 @@ pub const CONFIG_FILE: &str = "config.toml";
 /// Application subcommands need to be listed in an enum.
 #[derive(clap::Parser, Command, Debug, Runnable)]
 pub enum AppCmd {
-    TestOrchard(TestOrchardCmd),
     TestOrchardZSA(TestOrchardZSACmd),
     TestThreeParty(TestThreePartyCmd),
     Clean(CleanCmd),
