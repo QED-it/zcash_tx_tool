@@ -1,6 +1,7 @@
 //! `test` - happy e2e flow that issues, transfers and burns an asset
 
 use abscissa_core::{Command, Runnable};
+use orchard::issuance::compute_asset_desc_hash;
 use orchard::keys::Scope::External;
 
 use crate::commands::test_balances::{check_balances, print_balances, TestBalances};
@@ -28,7 +29,7 @@ impl Runnable for TestOrchardZSACmd {
         let issuer = wallet.address_for_account(0, External);
         let alice = wallet.address_for_account(1, External);
 
-        let asset_description = b"WETH".to_vec();
+        let asset_description = compute_asset_desc_hash(b"WETH").unwrap();
         prepare_test(
             config.chain.v6_activation_height,
             &mut wallet,
@@ -38,7 +39,7 @@ impl Runnable for TestOrchardZSACmd {
         // --------------------- Issue asset ---------------------
 
         let issue_tx =
-            create_issue_transaction(issuer, 1000, asset_description.clone(), true, &mut wallet);
+            create_issue_transaction(issuer, 1000, asset_description, true, &mut wallet);
 
         let asset = issue_tx
             .issue_bundle()
