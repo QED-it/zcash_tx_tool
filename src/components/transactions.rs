@@ -289,7 +289,8 @@ pub fn create_issue_transaction(
 pub fn create_finalization_transaction(asset_desc: [u8; 32], wallet: &mut User) -> Transaction {
     info!("Finalize asset");
     let mut tx = create_tx(wallet);
-    tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc, None, false).unwrap();
+    tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc, None, false)
+        .unwrap();
     tx.finalize_asset::<FeeError>(&asset_desc).unwrap();
     build_tx(tx)
 }

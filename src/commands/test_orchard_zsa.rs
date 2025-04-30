@@ -38,8 +38,7 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Issue asset ---------------------
 
-        let issue_tx =
-            create_issue_transaction(issuer, 1000, asset_description, true, &mut wallet);
+        let issue_tx = create_issue_transaction(issuer, 1000, asset_description, true, &mut wallet);
 
         let asset = issue_tx
             .issue_bundle()
