@@ -1,4 +1,4 @@
-//! `test-orchard` - happy e2e flow that issues, transfers and burns an asset
+//! `test-orchard` - happy e2e flow for the native asset
 
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
