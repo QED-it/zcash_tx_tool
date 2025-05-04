@@ -63,7 +63,7 @@ jobs:
         EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
         
         # Check if the tx_tool succeeded
-        if [ $EXIT_CODE -eq 9 ]; then
+        if [ $EXIT_CODE -eq 0 ]; then
           echo "tx-tool completed successfully!"
           exit 0
         else
