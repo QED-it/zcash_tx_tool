@@ -62,13 +62,7 @@ impl Runnable for TestOrchardZSACmd {
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
 
-        let current_height = wallet.last_block_height();
-        mine(
-            &mut wallet,
-            &mut rpc_client,
-            Vec::from([issue_tx]),
-            current_height.is_none(),
-        );
+        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]));
 
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Balances after issue ===", asset, &balances);
@@ -89,7 +83,7 @@ impl Runnable for TestOrchardZSACmd {
             .map(|info| info.create_transfer_txn(asset, &mut wallet))
             .collect();
 
-        mine(&mut wallet, &mut rpc_client, transfer_txns, false);
+        mine(&mut wallet, &mut rpc_client, transfer_txns);
 
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
@@ -115,7 +109,7 @@ impl Runnable for TestOrchardZSACmd {
             .map(|info| info.create_burn_txn(&mut wallet))
             .collect();
 
-        mine(&mut wallet, &mut rpc_client, burn_txns, false);
+        mine(&mut wallet, &mut rpc_client, burn_txns);
 
         // burn from issuer(account0) and alice(account1)
         check_balances(asset, &expected_balances, &mut wallet, num_users);
