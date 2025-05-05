@@ -1,3 +1,8 @@
+# CI Workflow to test tx-tool against a locally built Zebra node (defined in "Dockerfile-demo")
+# This workflow ensures tx-tool works correctly by spinning up a Zebra container
+# and running the tx-tool from the current branch against it in a Docker network.
+# Triggers: push to main, pull requests, and manual runs via workflow_dispatch.
+
 name: Check tx-tool against Zebra
 
 on:
