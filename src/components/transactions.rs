@@ -22,12 +22,8 @@ use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
 
 /// Mine a block with the given transactions and sync the user
-pub fn mine(
-    wallet: &mut User,
-    rpc_client: &mut dyn RpcClient,
-    txs: Vec<Transaction>,
-    activate: bool,
-) {
+pub fn mine(wallet: &mut User, rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) {
+    let activate = wallet.last_block_height().is_none();
     let (_, _) = mine_block(rpc_client, txs, activate);
     sync(wallet, rpc_client);
 }
