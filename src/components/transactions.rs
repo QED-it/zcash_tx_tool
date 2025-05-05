@@ -286,7 +286,10 @@ pub fn create_issue_transaction(
 }
 
 /// Create a transaction that issues a new asset
-pub fn create_finalization_transaction(asset_desc_hash: [u8; 32], wallet: &mut User) -> Transaction {
+pub fn create_finalization_transaction(
+    asset_desc_hash: [u8; 32],
+    wallet: &mut User,
+) -> Transaction {
     info!("Finalize asset");
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc_hash, None, false)

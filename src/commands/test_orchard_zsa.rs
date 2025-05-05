@@ -122,7 +122,7 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Finalization ---------------------
         // TODO - uncomment when finalization is implemented
-        // let finalization_tx = create_finalization_transaction(asset_description.clone(), &mut user);
+        // let finalization_tx = create_finalization_transaction(asset_desc_hash.clone(), &mut user);
         // mine(
         //     &mut user,
         //     &mut rpc_client,
@@ -130,7 +130,7 @@ impl Runnable for TestOrchardZSACmd {
         //     false,
         // );
         //
-        // let invalid_issue_tx = create_issue_transaction(issuer, 2000, asset_description, &mut user);
+        // let invalid_issue_tx = create_issue_transaction(issuer, 2000, asset_desc_hash, &mut user);
         // mine(
         //     &mut user,
         //     &mut rpc_client,
