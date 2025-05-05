@@ -1,21 +1,23 @@
-//! `test-orchard-zsa` - happy e2e flow that issues, transfers and burns an asset
+//! `test-orchard-zsa-final` - happy e2e flow that issues, transfers and finalizes an
+//! asset, then attempts to issue the same asset again (unsuccessfully).
 
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
 use crate::commands::test_balances::{
-    check_balances, print_balances, expected_balances_after_burn, expected_balances_after_transfer,
-    BurnInfo, TestBalances, TransferInfo,
+    check_balances, print_balances, expected_balances_after_transfer, TestBalances, TransferInfo,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
+use crate::components::transactions::{
+    create_issue_transaction, mine, create_finalization_transaction, sync_from_height,
+};
 use crate::components::user::User;
 use crate::prelude::*;
 
 /// Run the E2E test
 #[derive(clap::Parser, Command, Debug)]
-pub struct TestOrchardZSACmd {}
+pub struct TestOrchardZSAFinalCmd {}
 
-impl Runnable for TestOrchardZSACmd {
+impl Runnable for TestOrchardZSAFinalCmd {
     /// Run the `test` subcommand.
     fn run(&self) {
         let config = APP.config();
@@ -88,32 +90,24 @@ impl Runnable for TestOrchardZSACmd {
 
         print_balances("=== Balances after transfer ===", asset, &expected_balances);
 
-        // --------------------- Burn asset ---------------------
+        // --------------------- Finalization ---------------------
 
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
+        let finalization_tx =
+            create_finalization_transaction(asset_description.clone(), &mut wallet);
+        mine(&mut wallet, &mut rpc_client, Vec::from([finalization_tx]));
 
-        let amount_to_burn_issuer = 7;
-        let amount_to_burn_alice = amount_to_transfer_1 - 1;
+        let invalid_issue_tx =
+            create_issue_transaction(issuer_ad, 2000, asset_description, false, &mut wallet);
+        mine(&mut wallet, &mut rpc_client, Vec::from([invalid_issue_tx])); // TODO expect failure
 
-        let burns = vec![
-            BurnInfo::new(issuer_idx, asset, amount_to_burn_issuer),
-            BurnInfo::new(alice_idx, asset, amount_to_burn_alice),
-        ];
-
-        // Generate expected balances after burn
-        let expected_balances = expected_balances_after_burn(&balances, &burns);
-
-        let burn_txns = burns
-            .iter()
-            .map(|info| info.create_burn_txn(&mut wallet))
-            .collect();
-
-        mine(&mut wallet, &mut rpc_client, burn_txns);
-
-        // burn from issuer(account0) and alice(account1)
+        // The balances should not change since the transaction should have been rejected.
+        let actual_balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
+        print_balances(
+            "=== Balances after attempt to issue after finalization ===",
+            asset,
+            &actual_balances,
+        );
         check_balances(asset, &expected_balances, &mut wallet, num_users);
-
-        print_balances("=== Balances after burning ===", asset, &expected_balances);
     }
 }
 
