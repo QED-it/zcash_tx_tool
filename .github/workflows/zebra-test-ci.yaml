@@ -22,13 +22,13 @@ jobs:
       with:
         context: .
         file: ./Dockerfile-demo
-        tags: zebra-node:latest
+        tags: zebra-node:custom
         push: false
         load: true
         
     - name: Run Zebra Node container
       run: |
-        docker run -d --name zebra-node -p 18232:18232 zebra-node:latest
+        docker run -d --name zebra-node -p 18232:18232 zebra-node:custom
         # Wait for the node to start up
         echo "Waiting for Zebra node to initialize..."
         sleep 30
@@ -39,7 +39,7 @@ jobs:
       with:
         context: .
         file: ./Dockerfile
-        tags: zcash-tx-tool:latest
+        tags: zcash-tx-tool:custom
         push: false
         load: true
         
