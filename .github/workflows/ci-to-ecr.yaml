@@ -1,0 +1,49 @@
+name: CI Workflow to ECR and Zebra
+
+on:
+  workflow_run:
+    workflows: ["Check tx-tool against Zebra"]
+    types:
+      - completed
+    branches:
+      - main
+      - arseni-update-CICD
+
+jobs:
+  trigger-ecr-push:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Trigger push to ECR workflow
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'push-to-ecr.yaml',
+              ref: '${{ github.event.workflow_run.head_branch }}'
+            })
+      
+      - name: Trigger Zebra push-deploy workflow
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              // This will only work if the Actions token has workflow permissions to the Zebra repo
+              // which requires organization settings to be properly configured or a PAT
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: 'zebra',
+                workflow_id: 'push-deploy.yaml',
+                ref: 'zsa-integration-demo-ag'
+              });
+              console.log('Successfully triggered Zebra workflow');
+            } catch (error) {
+              console.error('Failed to trigger Zebra workflow:', error);
+              // We don't want to fail the whole workflow if this step fails
+              console.log('This failure likely indicates you need proper permissions.');
+              console.log('Check organization settings or add GITHUB_PAT secret with correct permissions');
+            }
