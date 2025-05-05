@@ -29,7 +29,7 @@ impl Runnable for TestOrchardZSACmd {
         let issuer = wallet.address_for_account(0, External);
         let alice = wallet.address_for_account(1, External);
 
-        let asset_description = compute_asset_desc_hash(b"WETH").unwrap();
+        let asset_desc_hash = compute_asset_desc_hash(b"WETH").unwrap();
         prepare_test(
             config.chain.v6_activation_height,
             &mut wallet,
@@ -38,7 +38,7 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Issue asset ---------------------
 
-        let issue_tx = create_issue_transaction(issuer, 1000, asset_description, true, &mut wallet);
+        let issue_tx = create_issue_transaction(issuer, 1000, asset_desc_hash, true, &mut wallet);
 
         let asset = issue_tx
             .issue_bundle()
