@@ -296,7 +296,9 @@ pub fn create_issue_transaction(
     info!("Issue {} asset", amount);
 
     let issuer = wallet.address_for_account(0, External);
-    let input = wallet.find_non_spent_note(AssetBase::native(), issuer).unwrap();
+    let input = wallet
+        .find_non_spent_note(AssetBase::native(), issuer)
+        .unwrap();
 
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(
@@ -323,7 +325,10 @@ pub fn create_finalization_transaction(
 ) -> Transaction {
     info!("Finalize asset");
 
-    let asset = AssetBase::derive(&IssuanceValidatingKey::from(&wallet.issuance_key()), &asset_desc);
+    let asset = AssetBase::derive(
+        &IssuanceValidatingKey::from(&wallet.issuance_key()),
+        &asset_desc,
+    );
     let issuer = wallet.address_for_account(0, External);
     let input = wallet.find_non_spent_note(asset, issuer).unwrap();
 
@@ -364,8 +369,10 @@ pub fn create_swap_transaction(
     );
 
     let mut tx = create_tx(wallet);
-    tx.add_action_group::<FeeError>(swap_order_1, bsk_1).unwrap();
-    tx.add_action_group::<FeeError>(swap_order_2, bsk_2).unwrap();
+    tx.add_action_group::<FeeError>(swap_order_1, bsk_1)
+        .unwrap();
+    tx.add_action_group::<FeeError>(swap_order_2, bsk_2)
+        .unwrap();
     build_tx(tx)
 }
 
@@ -376,7 +383,10 @@ fn create_swap_order(
     amount_to_receive: u64,
     asset_to_receive: AssetBase,
     wallet: &mut User,
-) -> (Bundle<ActionGroupAuthorized, Amount, OrchardZSA>, SigningKey<Binding>) {
+) -> (
+    Bundle<ActionGroupAuthorized, Amount, OrchardZSA>,
+    SigningKey<Binding>,
+) {
     let ovk = wallet.orchard_ovk();
 
     // Find input notes for asset A

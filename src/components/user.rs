@@ -266,7 +266,11 @@ impl User {
         })
     }
 
-    pub(crate) fn find_non_spent_note(&mut self, asset: AssetBase, owner: Address) -> Option<NoteSpendMetadata> {
+    pub(crate) fn find_non_spent_note(
+        &mut self,
+        asset: AssetBase,
+        owner: Address,
+    ) -> Option<NoteSpendMetadata> {
         let sk = self
             .key_store
             .spending_key_for_ivk(
@@ -277,7 +281,10 @@ impl User {
             .expect("SpendingKey not found for IVK");
 
         let mut notes = self.db.find_non_spent_notes(owner, asset);
-        assert!(!notes.is_empty(), "No notes found for given asset and owner");
+        assert!(
+            !notes.is_empty(),
+            "No notes found for given asset and owner"
+        );
         let note_data = notes.remove(0);
         let merkle_path = MerklePath::from_parts(
             note_data.position as u32,
@@ -466,8 +473,15 @@ impl User {
 
         for (action_idx, ivk, note, recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
             info!("Store note");
-            self.store_note(txid, action_idx + offset, ivk.clone(), note, recipient, memo)
-                .unwrap();
+            self.store_note(
+                txid,
+                action_idx + offset,
+                ivk.clone(),
+                note,
+                recipient,
+                memo,
+            )
+            .unwrap();
         }
     }
 
