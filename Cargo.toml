@@ -45,7 +45,7 @@ abscissa_core = { version = "0.7.0", features = ["testing"] }
 once_cell = "1.2"
 
 [patch.crates-io]
-orchard = { git = "https://github.com/QED-it/orchard", branch = "zsa_swap_spendauth_clone" }
+orchard = { git = "https://github.com/QED-it/orchard", branch = "zsa_swap" }
 sapling-crypto = { git = "https://github.com/QED-it/sapling-crypto", branch = "zsa1" }
 zcash_note_encryption = { git = "https://github.com/QED-it/zcash_note_encryption", branch = "zsa1" }
 zcash_primitives = { git = "https://github.com/QED-it/librustzcash", branch = "zsa-swap"}
