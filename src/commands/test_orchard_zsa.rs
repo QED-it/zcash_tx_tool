@@ -6,7 +6,10 @@ use orchard::note::AssetBase;
 use zcash_primitives::transaction::TxId;
 use crate::commands::test_balances::{check_balances, print_balances, TestBalances};
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{create_shield_coinbase_transaction, create_swap_transaction, mine_empty_blocks, sync_from_height};
+use crate::components::transactions::{
+    create_shield_coinbase_transaction, create_swap_transaction, mine_empty_blocks,
+    sync_from_height,
+};
 use crate::components::transactions::{
     create_burn_transaction, create_issue_transaction, create_transfer_transaction, mine,
 };
@@ -241,20 +244,22 @@ impl Runnable for TestOrchardZSACmd {
         );
 
         // --------------------- Use swapped notes ---------------------
-        
+
         let balances_2 = TestBalances::get_asset(asset_2, &mut wallet);
         let amount_to_transfer_2 = 1;
         print_balances("=== Balances before transfer ===", asset_2, balances_2);
 
-        let transfer_tx_2 = create_transfer_transaction(issuer, alice, amount_to_transfer_2, asset_2, &mut wallet);
+        let transfer_tx_2 =
+            create_transfer_transaction(issuer, alice, amount_to_transfer_2, asset_2, &mut wallet);
         mine(
             &mut wallet,
             &mut rpc_client,
             Vec::from([transfer_tx_2]),
             false,
         );
-        
-        let expected_delta = TestBalances::new(-(amount_to_transfer_2 as i64), amount_to_transfer_2 as i64);
+
+        let expected_delta =
+            TestBalances::new(-(amount_to_transfer_2 as i64), amount_to_transfer_2 as i64);
         check_balances(
             "=== Balances after transfer ===",
             asset_2,
@@ -266,8 +271,9 @@ impl Runnable for TestOrchardZSACmd {
         let balances_3 = TestBalances::get_asset(asset, &mut wallet);
         let amount_to_transfer_3 = balances_3.account1 as u64;
         print_balances("=== Balances before transfer ===", asset, balances_3);
-        
-        let transfer_tx_3 = create_transfer_transaction(alice, issuer, amount_to_transfer_3, asset, &mut wallet);
+
+        let transfer_tx_3 =
+            create_transfer_transaction(alice, issuer, amount_to_transfer_3, asset, &mut wallet);
         mine(
             &mut wallet,
             &mut rpc_client,
@@ -275,7 +281,8 @@ impl Runnable for TestOrchardZSACmd {
             false,
         );
 
-        let expected_delta = TestBalances::new(amount_to_transfer_3 as i64, -(amount_to_transfer_3 as i64));
+        let expected_delta =
+            TestBalances::new(amount_to_transfer_3 as i64, -(amount_to_transfer_3 as i64));
         check_balances(
             "=== Balances after transfer ===",
             asset,
@@ -286,7 +293,11 @@ impl Runnable for TestOrchardZSACmd {
     }
 }
 
-pub fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) -> TxId {
+pub fn prepare_test(
+    target_height: u32,
+    wallet: &mut User,
+    rpc_client: &mut ReqwestRpcClient,
+) -> TxId {
     sync_from_height(target_height, wallet, rpc_client);
     let activate = wallet.last_block_height().is_none();
     let (_, coinbase_txid) = mine_empty_blocks(100, rpc_client, activate); // coinbase maturity = 100

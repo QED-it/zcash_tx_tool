@@ -257,7 +257,11 @@ impl User {
         })
     }
 
-    pub(crate) fn find_non_spent_note(&mut self, asset: AssetBase, owner: Address) -> Option<NoteSpendMetadata> {
+    pub(crate) fn find_non_spent_note(
+        &mut self,
+        asset: AssetBase,
+        owner: Address,
+    ) -> Option<NoteSpendMetadata> {
         let sk = self
             .key_store
             .spending_key_for_ivk(
@@ -268,7 +272,10 @@ impl User {
             .expect("SpendingKey not found for IVK");
 
         let mut notes = self.db.find_non_spent_notes(owner, asset);
-        assert!(!notes.is_empty(), "No notes found for given asset and owner");
+        assert!(
+            !notes.is_empty(),
+            "No notes found for given asset and owner"
+        );
         let note_data = notes.remove(0);
         let merkle_path = MerklePath::from_parts(
             note_data.position as u32,
@@ -445,8 +452,15 @@ impl User {
 
         for (action_idx, ivk, note, recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
             info!("Store note");
-            self.store_note(txid, action_idx + offset, ivk.clone(), note, recipient, memo)
-                .unwrap();
+            self.store_note(
+                txid,
+                action_idx + offset,
+                ivk.clone(),
+                note,
+                recipient,
+                memo,
+            )
+            .unwrap();
         }
     }
 
@@ -588,15 +602,15 @@ impl User {
                 Vec::new()
             };
 
-            if let Some(issue_bundle) = issue_bundle_opt {
-                let mut issued_note_commitments: Vec<ExtractedNoteCommitment> = issue_bundle
-                    .actions()
-                    .iter()
-                    .flat_map(|a| a.notes())
-                    .map(|note| note.commitment().into())
-                    .collect();
-                note_commitments.append(&mut issued_note_commitments);
-            }        
+        if let Some(issue_bundle) = issue_bundle_opt {
+            let mut issued_note_commitments: Vec<ExtractedNoteCommitment> = issue_bundle
+                .actions()
+                .iter()
+                .flat_map(|a| a.notes())
+                .map(|note| note.commitment().into())
+                .collect();
+            note_commitments.append(&mut issued_note_commitments);
+        }
 
         for (note_index, commitment) in note_commitments.iter().enumerate() {
             info!("Adding note commitment ({}, {})", txid, note_index);
