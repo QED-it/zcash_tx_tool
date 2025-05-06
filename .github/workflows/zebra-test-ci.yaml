@@ -1,4 +1,4 @@
-# CI Workflow to test tx-tool against a locally built Zebra node (defined in "Dockerfile-demo")
+# CI Workflow to test tx-tool against a locally built Zebra node (defined in "Dockerfile-zebra")
 # This workflow ensures tx-tool works correctly by spinning up a Zebra container
 # and running the tx-tool from the current branch against it in a Docker network.
 # Triggers: push to main, pull requests, and manual runs via workflow_dispatch.
@@ -22,18 +22,18 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
       
-    - name: Build Zebra Node (Dockerfile-demo)
+    - name: Build Zebra Node (Dockerfile-zebra)
       uses: docker/build-push-action@v4
       with:
         context: .
-        file: ./Dockerfile-demo
-        tags: zebra-node:custom
+        file: ./Dockerfile-zebra
+        tags: zebra-node:local
         push: false
         load: true
         
     - name: Run Zebra Node container
       run: |
-        docker run -d --name zebra-node -p 18232:18232 zebra-node:custom
+        docker run -d --name zebra-node -p 18232:18232 zebra-node:local
         # Wait for the node to start up
         echo "Waiting for Zebra node to initialize..."
         sleep 30
@@ -44,7 +44,7 @@ jobs:
       with:
         context: .
         file: ./Dockerfile
-        tags: zcash-tx-tool:custom
+        tags: zcash-tx-tool:local
         push: false
         load: true
         
@@ -62,7 +62,7 @@ jobs:
           -e ZCASH_NODE_PORT=18232 \
           -e ZCASH_NODE_PROTOCOL=http \
           --name zcash-tx-tool \
-          zcash-tx-tool:latest
+          zcash-tx-tool:local
           
         # Get the exit code from the container
         EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
@@ -73,7 +73,7 @@ jobs:
           exit 0
         else
           echo "tx-tool failed with exit code $EXIT_CODE"
-          echo "Printing container logs for debugging:"
+          echo "Printing container logs:"
           docker logs zcash-tx-tool
           exit 1
         fi

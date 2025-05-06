@@ -67,7 +67,7 @@ docker build -t qedit/zebra-regtest-txv6 .
 docker run -p 18232:18232 qedit/zebra-regtest-txv6
 ```
 
-For more details on how the Docker image is created and synchronized, refer to the [Dockerfile-demo](./Dockerfile-demo).
+For more details on how the Docker image is created and synchronized, refer to the [Dockerfile-zebra](./Dockerfile-zebra).
 
 ### 2. Set Up and Run the Zcash tx-tool
 
