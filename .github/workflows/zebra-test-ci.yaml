@@ -21,6 +21,15 @@ jobs:
       
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
+
+    - name: Set up Docker cache
+      uses: actions/cache@v3
+      with:
+        path: /tmp/.buildx-cache
+        key: zebra-cache-${{ github.ref }}-${{ github.sha }}
+        restore-keys: |
+          zebra-cache-${{ github.ref }}
+          zebra-cache-
       
     - name: Build Zebra Node (Dockerfile-zebra)
       uses: docker/build-push-action@v4
@@ -30,6 +39,8 @@ jobs:
         tags: zebra-node:local
         push: false
         load: true
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
         
     - name: Run Zebra Node container
       run: |
