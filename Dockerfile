@@ -1,5 +1,5 @@
 # Use a more recent Rust version
-FROM rust:1.74.0
+FROM rust:1.74.0 as builder
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -42,10 +42,21 @@ RUN ./zcutil/fetch-params.sh
 # Create necessary directories
 RUN mkdir -p /root/.local/share/ZcashParams
 
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    sqlite3 \
+    libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /root/.zcash-params /root/.zcash-params
+COPY --from=builder /root/.local/share/ZcashParams /root/.local/share/ZcashParams
+COPY --from=builder /app/target/release/zcash_tx_tool /usr/local/bin/zcash_tx_tool
+
 # Set default environment variables
 ENV ZCASH_NODE_ADDRESS=127.0.0.1
 ENV ZCASH_NODE_PORT=18232
 ENV ZCASH_NODE_PROTOCOL=http
 
 # Set the entrypoint
-ENTRYPOINT ["cargo", "run", "--release", "--package", "zcash_tx_tool", "--bin", "zcash_tx_tool", "test-orchard-zsa"]
+ENTRYPOINT ["zcash_tx_tool", "test-orchard-zsa"]
