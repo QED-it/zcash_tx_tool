@@ -16,6 +16,6 @@ Initial release.
 - first_issuance flag
 - action-group-based serialization
 
-## [0.3.0] - 2025-05-05
+## [Unreleased] - 2025-05-05
 ### Added
-- Support for multiple party scenarios
+- Support for scenarios with arbitrary number of accounts
