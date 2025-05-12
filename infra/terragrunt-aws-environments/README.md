@@ -56,7 +56,7 @@ Before using this script, ensure the following:
 
 To view the public ECR image metadata and download options, visit the repository's gallery page:
 
-👉 [Zcash Transaction Tool on ECR Gallery](https://gallery.ecr.aws/j7v0v6n9/tx-tool)
+[Zcash Transaction Tool on ECR Gallery](https://gallery.ecr.aws/j7v0v6n9/tx-tool)
 
 > This page includes the description, usage instructions, supported architectures, and OS information.
 
