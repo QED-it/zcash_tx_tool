@@ -28,7 +28,7 @@ impl Runnable for TestOrchardZSACmd {
         let num_users = 2;
 
         let issuer_idx = 0;
-        let alice_idx: u32 = 1;
+        let alice_idx = 1;
 
         let issuer_ad = wallet.address_for_account(issuer_idx, External);
 

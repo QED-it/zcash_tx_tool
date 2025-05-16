@@ -33,8 +33,8 @@ impl Runnable for TestOrchardCmd {
 
         let num_users = 2;
 
-        let miner_idx: u32 = 0;
-        let alice_idx: u32 = 1;
+        let miner_idx = 0;
+        let alice_idx = 1;
 
         let miner_ad = wallet.address_for_account(miner_idx, External);
         let alice_ad = wallet.address_for_account(alice_idx, External);
