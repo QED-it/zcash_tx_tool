@@ -250,8 +250,9 @@ impl User {
         selected_notes
     }
 
-    pub fn address_for_account(&mut self, account: u32, scope: Scope) -> Address {
-        match self.key_store.accounts.get(&account) {
+    pub fn address_for_account(&mut self, account: usize, scope: Scope) -> Address {
+        let account = account as u32;
+        match self.key_store.accounts.get(&(account)) {
             Some(addr) => *addr,
             None => {
                 let sk = SpendingKey::from_zip32_seed(
