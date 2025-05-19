@@ -51,3 +51,27 @@ Before using this script, ensure the following:
 1. Navigate to the directory containing the `Makefile`:
    ```bash
    ./zebra/demo-deploy
+
+## Public ECR Repository Info
+
+To view the public ECR image metadata and download options, visit the repository's gallery page:
+
+[Zcash Transaction Tool on ECR Gallery](https://gallery.ecr.aws/j7v0v6n9/tx-tool)
+
+> This page includes the description, usage instructions, supported architectures, and OS information.
+
+### Updating ECR Public Metadata
+
+Terraform currently **does not support** updating the catalog metadata for public ECR repositories. To modify the metadata (e.g., description, usage text, etc.), use the AWS CLI:
+
+```bash
+aws ecr-public put-repository-catalog-data \
+  --region us-east-1 \
+  --repository-name tx-tool \
+  --catalog-data '{
+    "description": "Zcash transaction tool",
+    "aboutText": "CLI docker tool for interacting with the Zebra node. Made by qedit.",
+    "usageText": "Run as a docker container, with the regular parameters of the tx-tool to choose which node to connect to (ZCASH_NODE_ADDRESS, ZCASH_NODE_PORT, ZCASH_NODE_PROTOCOL)",
+    "architectures": ["x86_64"],
+    "operatingSystems": ["Linux"]
+  }'
