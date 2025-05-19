@@ -36,8 +36,8 @@ impl Runnable for TestOrchardCmd {
         let miner_idx = 0;
         let alice_idx = 1;
 
-        let miner_ad = wallet.address_for_account(miner_idx, External);
-        let alice_ad = wallet.address_for_account(alice_idx, External);
+        let miner_addr = wallet.address_for_account(miner_idx, External);
+        let alice_addr = wallet.address_for_account(alice_idx, External);
 
         let coinbase_txid = prepare_test(
             config.chain.nu5_activation_height,
@@ -50,7 +50,8 @@ impl Runnable for TestOrchardCmd {
 
         // --------------------- Shield miner's reward ---------------------
 
-        let shielding_tx = create_shield_coinbase_transaction(miner_ad, coinbase_txid, &mut wallet);
+        let shielding_tx =
+            create_shield_coinbase_transaction(miner_addr, coinbase_txid, &mut wallet);
         mine(&mut wallet, &mut rpc_client, Vec::from([shielding_tx]));
 
         let expected_balances = expected_balances_after_mine(&balances, 0);
@@ -80,8 +81,8 @@ impl Runnable for TestOrchardCmd {
         let expected_balances = expected_balances_after_transfer(&balances, &transfers);
 
         let transfer_tx_1 = create_transfer_transaction(
-            miner_ad,
-            alice_ad,
+            miner_addr,
+            alice_addr,
             amount_to_transfer_1,
             AssetBase::native(),
             &mut wallet,

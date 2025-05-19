@@ -42,29 +42,19 @@ impl Runnable for TestThreePartyCmd {
         let purchaser_idx = 1;
         let supplier_idx = 2;
 
-        let manufacturer_ad = wallet.address_for_account(manufacturer_idx, External);
+        let manufacturer_addr = wallet.address_for_account(manufacturer_idx, External);
 
         // --------------------- Issue asset ---------------------
 
         let asset_description = b"MED".to_vec();
 
-        let issue_tx = create_issue_transaction(
-            manufacturer_ad,
+        let (issue_tx, asset) = create_issue_transaction(
+            manufacturer_addr,
             1000,
-            asset_description.clone(),
+            &asset_description,
             true,
             &mut wallet,
         );
-
-        let asset = issue_tx
-            .issue_bundle()
-            .unwrap()
-            .actions()
-            .head
-            .notes()
-            .first()
-            .unwrap()
-            .asset();
 
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
@@ -81,7 +71,7 @@ impl Runnable for TestThreePartyCmd {
             purchaser_idx,
             amount_to_transfer_1,
         )];
-        // Generate expected balances after transfer
+
         let expected_balances = expected_balances_after_transfer(&balances, &transfers);
 
         let transfer_txns = transfers

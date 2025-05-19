@@ -44,9 +44,9 @@ impl TransferInfo {
         }
     }
     pub(crate) fn create_transfer_txn(&self, asset: AssetBase, wallet: &mut User) -> Transaction {
-        let from_ad = wallet.address_for_account(self.acc_idx_from, External);
-        let to_ad = wallet.address_for_account(self.acc_idx_to, External);
-        create_transfer_transaction(from_ad, to_ad, self.amount, asset, wallet)
+        let from_addr = wallet.address_for_account(self.acc_idx_from, External);
+        let to_addr = wallet.address_for_account(self.acc_idx_to, External);
+        create_transfer_transaction(from_addr, to_addr, self.amount, asset, wallet)
     }
 }
 

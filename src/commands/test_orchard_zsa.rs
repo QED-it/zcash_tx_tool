@@ -30,7 +30,7 @@ impl Runnable for TestOrchardZSACmd {
         let issuer_idx = 0;
         let alice_idx = 1;
 
-        let issuer_ad = wallet.address_for_account(issuer_idx, External);
+        let issuer_addr = wallet.address_for_account(issuer_idx, External);
 
         let asset_description = b"WETH".to_vec();
         prepare_test(
@@ -41,23 +41,8 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Issue asset ---------------------
 
-        let issue_tx = create_issue_transaction(
-            issuer_ad,
-            1000,
-            asset_description.clone(),
-            true,
-            &mut wallet,
-        );
-
-        let asset = issue_tx
-            .issue_bundle()
-            .unwrap()
-            .actions()
-            .head
-            .notes()
-            .first()
-            .unwrap()
-            .asset();
+        let (issue_tx, asset) =
+            create_issue_transaction(issuer_addr, 1000, &asset_description, true, &mut wallet);
 
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);

@@ -11,6 +11,7 @@ use orchard::Address;
 use rand::rngs::OsRng;
 use std::convert::TryFrom;
 use std::ops::Add;
+use orchard::keys::IssuanceValidatingKey;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
 use zcash_primitives::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
 use zcash_primitives::memo::MemoBytes;
@@ -262,15 +263,15 @@ pub fn create_burn_transaction(
 pub fn create_issue_transaction(
     recipient: Address,
     amount: u64,
-    asset_desc: Vec<u8>,
+    asset_desc: &[u8],
     first_issuance: bool,
     wallet: &mut User,
-) -> Transaction {
+) -> (Transaction, AssetBase) {
     info!("Issue {} asset", amount);
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(
         wallet.issuance_key(),
-        asset_desc,
+        asset_desc.to_vec(),
         Some(IssueInfo {
             recipient,
             value: NoteValue::from_raw(amount),
@@ -278,7 +279,11 @@ pub fn create_issue_transaction(
         first_issuance,
     )
     .unwrap();
-    build_tx(tx)
+    let asset = AssetBase::derive(
+        &IssuanceValidatingKey::from(&wallet.issuance_key()),
+        asset_desc,
+    );
+    (build_tx(tx), asset)
 }
 
 /// Create a transaction that issues a new asset
