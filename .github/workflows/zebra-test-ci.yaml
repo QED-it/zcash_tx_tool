@@ -50,15 +50,6 @@ jobs:
         sleep 30
         echo "Finished waiting for Zebra node..."
 
-    - name: Set up Docker cache for tx-tool
-      uses: actions/cache@v3
-      with:
-        path: /tmp/.buildx-cache-tx-tool
-        key: tx-tool-cache-${{ github.ref }}-${{ github.sha }}
-        restore-keys: |
-          tx-tool-cache-${{ github.ref }}
-          tx-tool-cache-
-
     - name: Build tx-tool
       uses: docker/build-push-action@v4
       with:
@@ -67,8 +58,6 @@ jobs:
         tags: zcash-tx-tool:local
         push: false
         load: true
-        cache-from: type=local,src=/tmp/.buildx-cache-tx-tool
-        cache-to: type=local,dest=/tmp/.buildx-cache-tx-tool,mode=max
         
     - name: Run tx-tool and verify success
       run: |
