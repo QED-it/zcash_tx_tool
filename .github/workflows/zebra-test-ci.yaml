@@ -1,0 +1,90 @@
+# CI Workflow to test tx-tool against a locally built Zebra node (defined in "Dockerfile-zebra")
+# This workflow ensures tx-tool works correctly by spinning up a Zebra container
+# and running the tx-tool from the current branch against it in a Docker network.
+# Triggers: push to main, pull requests, and manual runs via workflow_dispatch. 
+
+name: Check tx-tool against Zebra
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Set up Docker cache
+      uses: actions/cache@v3
+      with:
+        path: /tmp/.buildx-cache
+        key: zebra-cache-${{ github.ref }}-${{ github.sha }}
+        restore-keys: |
+          zebra-cache-${{ github.ref }}
+          zebra-cache-
+      
+    - name: Build Zebra Node (Dockerfile-zebra)
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dockerfile-zebra
+        tags: zebra-node:local
+        push: false
+        load: true
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+        
+    - name: Run Zebra Node container
+      run: |
+        docker run -d --name zebra-node -p 18232:18232 zebra-node:local
+        # Wait for the node to start up
+        echo "Waiting for Zebra node to initialize..."
+        sleep 30
+        echo "Finished waiting for Zebra node..."
+
+    - name: Build tx-tool
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dockerfile
+        tags: zcash-tx-tool:local
+        push: false
+        load: true
+        
+    - name: Run tx-tool and verify success
+      run: |
+        # Create a network to connect the containers
+        docker network create zcash-net
+        
+        # Connect zebra-node to the network
+        docker network connect zcash-net zebra-node
+        
+        # Run the tx tool and capture exit code
+        docker run --network zcash-net \
+          -e ZCASH_NODE_ADDRESS=zebra-node \
+          -e ZCASH_NODE_PORT=18232 \
+          -e ZCASH_NODE_PROTOCOL=http \
+          --name zcash-tx-tool \
+          zcash-tx-tool:local
+          
+        # Get the exit code from the container
+        EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
+        
+        # Check if the tx_tool succeeded
+        if [ $EXIT_CODE -eq 0 ]; then
+          echo "tx-tool completed successfully!"
+          exit 0
+        else
+          echo "tx-tool failed with exit code $EXIT_CODE"
+          echo "Printing container logs:"
+          docker logs zcash-tx-tool
+          exit 1
+        fi

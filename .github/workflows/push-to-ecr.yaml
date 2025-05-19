@@ -2,7 +2,7 @@ name: Push to Amazon Public ECR
 on:
   workflow_dispatch:
 env:
-  AWS_REGION: us-east-1  # Must be us-east-1 for ECR Public
+  AWS_REGION: us-east-1  # Must be us-east-1 for a Public ECR
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
   ECR_REGISTRY_ALIAS: ${{ vars.ECR_REGISTRY_ALIAS }}
 
@@ -46,7 +46,7 @@ jobs:
           # Build a docker container with public ECR URI format
           docker build -t $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_LATEST \
                       -t $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_TAG \
-                      -f Dockerfile-demo .
+                      -f Dockerfile .
           
           # Push both tags to ECR Public
           docker push $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_LATEST

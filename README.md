@@ -1,8 +1,8 @@
-# Zcash Transaction Tool
+# Zcash tx-tool
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The **Zcash Transaction Tool** is designed to create and send Zcash transactions to a node (e.g., Zebra). It currently supports transaction versions V5 and V6, including the Orchard ZSA (Zcash Shielded Assets) functionality.
+The **Zcash tx-tool** is designed to create and send Zcash transactions to a node (e.g., Zebra). It currently supports transaction versions V5 and V6, including the Orchard ZSA (Zcash Shielded Assets) functionality.
 
 This repository includes a simple Zebra Docker image that incorporates the OrchardZSA version of Zebra and runs in regtest mode.
 
@@ -15,7 +15,7 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
     - [1. Build and Run the Zebra Docker Image](#1-build-and-run-the-zebra-docker-image)
-    - [2. Set Up and Run the Zcash Transaction Tool](#2-set-up-and-run-the-zcash-transaction-tool)
+    - [2. Set Up and Run the Zcash tx-tool](#2-set-up-and-run-the-zcash-transaction-tool)
 - [Configuration](#configuration)
 - [Build Instructions](#build-instructions)
 - [ZSA Orchard Test Scenario](#zsa-orchard-test-scenario)
@@ -67,9 +67,9 @@ docker build -t qedit/zebra-regtest-txv6 .
 docker run -p 18232:18232 qedit/zebra-regtest-txv6
 ```
 
-For more details on how the Docker image is created and synchronized, refer to the [Dockerfile](./Dockerfile).
+For more details on how the Docker image is created and synchronized, refer to the [Dockerfile-zebra](./Dockerfile-zebra).
 
-### 2. Set Up and Run the Zcash Transaction Tool
+### 2. Set Up and Run the Zcash tx-tool
 
 In a separate terminal window, perform the following steps:
 
@@ -90,7 +90,7 @@ diesel setup
 
 #### Build and Run the Orchard ZSA Test Case
 
-Build and run the test case using the Zcash Transaction Tool:
+Build and run the test case using the Zcash tx-tool:
 
 ```bash
 # Build and run with ZSA feature enabled
@@ -178,7 +178,7 @@ Feel free to contribute to this project by opening issues or submitting pull req
 [//]: # ()
 [//]: # (```bash)
 
-[//]: # (docker build -t zcash_tx_tool -f Dockerfile-demo .)
+[//]: # (docker build -t zcash_tx_tool -f Dockerfile .)
 
 [//]: # (```)
 
