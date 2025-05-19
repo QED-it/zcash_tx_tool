@@ -23,6 +23,30 @@ resource "aws_ecrpublic_repository" "public_repository" {
 }
 
 
+resource "aws_ecrpublic_repository_policy" "public_pull_policy" {
+  provider      = aws.us_east_1
+  repository_name = aws_ecrpublic_repository.public_repository.repository_name
+
+  policy = jsonencode({
+    Version = "2008-10-17",
+    Statement = [
+      {
+        Sid = "AllowPublicPull"
+        Effect = "Allow"
+        Principal = "*"
+        Action = [
+          "ecr-public:GetRepositoryCatalogData",
+          "ecr-public:BatchCheckLayerAvailability",
+          "ecr-public:GetDownloadUrlForLayer",
+          "ecr-public:BatchGetImage"
+        ]
+      }
+    ]
+  })
+}
+
+
+
 # Create IAM policy to allow pushing images
 resource "aws_iam_policy" "ecr_public_push_policy" {
   name        = "ECRPublicPushPolicy"
