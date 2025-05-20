@@ -176,6 +176,13 @@ pub fn create_transfer_transaction(
         .iter()
         .fold(0, |acc, input| acc + input.note.value().inner());
 
+    if total_inputs_amount < amount {
+        panic!(
+            "Not enough funds: requested {} but only {} available",
+            amount, total_inputs_amount
+        );
+    }
+
     info!(
         "Total inputs amount: {}, amount to transfer: {}",
         total_inputs_amount, amount
@@ -229,6 +236,13 @@ pub fn create_burn_transaction(
     let total_inputs_amount = inputs
         .iter()
         .fold(0, |acc, input| acc + input.note.value().inner());
+
+    if total_inputs_amount < amount {
+        panic!(
+            "Not enough funds: requested {} but only {} available",
+            amount, total_inputs_amount
+        );
+    }
 
     info!(
         "Total inputs amount: {}, amount to burn: {}",
