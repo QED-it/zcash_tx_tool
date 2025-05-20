@@ -32,21 +32,28 @@ impl TestBalances {
 pub(crate) struct TransferInfo {
     acc_idx_from: usize,
     acc_idx_to: usize,
+    asset: AssetBase,
     amount: u64,
 }
 
 impl TransferInfo {
-    pub(crate) fn new(acc_idx_from: usize, acc_idx_to: usize, amount: u64) -> Self {
+    pub(crate) fn new(
+        acc_idx_from: usize,
+        acc_idx_to: usize,
+        asset: AssetBase,
+        amount: u64,
+    ) -> Self {
         TransferInfo {
             acc_idx_from,
             acc_idx_to,
+            asset,
             amount,
         }
     }
-    pub(crate) fn create_transfer_txn(&self, asset: AssetBase, wallet: &mut User) -> Transaction {
+    pub(crate) fn create_transfer_txn(&self, wallet: &mut User) -> Transaction {
         let from_addr = wallet.address_for_account(self.acc_idx_from, External);
         let to_addr = wallet.address_for_account(self.acc_idx_to, External);
-        create_transfer_transaction(from_addr, to_addr, self.amount, asset, wallet)
+        create_transfer_transaction(from_addr, to_addr, self.amount, self.asset, wallet)
     }
 }
 

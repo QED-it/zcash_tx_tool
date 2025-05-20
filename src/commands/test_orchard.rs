@@ -75,6 +75,7 @@ impl Runnable for TestOrchardCmd {
         let transfers = vec![TransferInfo::new(
             miner_idx,
             alice_idx,
+            AssetBase::native(),
             amount_to_transfer_1,
         )];
 

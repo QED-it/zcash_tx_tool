@@ -58,6 +58,7 @@ impl Runnable for TestOrchardZSACmd {
         let transfers = vec![TransferInfo::new(
             issuer_idx,
             alice_idx,
+            asset,
             amount_to_transfer_1,
         )];
         // Generate expected balances after transfer
@@ -65,7 +66,7 @@ impl Runnable for TestOrchardZSACmd {
 
         let transfer_txns = transfers
             .iter()
-            .map(|info| info.create_transfer_txn(asset, &mut wallet))
+            .map(|info| info.create_transfer_txn(&mut wallet))
             .collect();
 
         mine(&mut wallet, &mut rpc_client, transfer_txns);
