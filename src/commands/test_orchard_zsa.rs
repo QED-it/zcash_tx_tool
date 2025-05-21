@@ -88,26 +88,6 @@ impl Runnable for TestOrchardZSACmd {
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
         print_balances("=== Balances after burning ===", asset, &expected_balances);
-
-        // --------------------- Finalization ---------------------
-        // TODO - uncomment when finalization is implemented
-        // let finalization_tx = create_finalization_transaction(asset_description.clone(), &mut user);
-        // mine(
-        //     &mut user,
-        //     &mut rpc_client,
-        //     Vec::from([finalization_tx]),
-        //     false,
-        // );
-        //
-        // let invalid_issue_tx = create_issue_transaction(issuer, 2000, asset_description, &mut user);
-        // mine(
-        //     &mut user,
-        //     &mut rpc_client,
-        //     Vec::from([invalid_issue_tx]),
-        //     false,
-        // ); // TODO expect failure
-        //
-        // panic!("Invalid issue transaction was accepted");
     }
 }
 
