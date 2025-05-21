@@ -29,11 +29,23 @@ impl TestBalances {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct TransferInfo {
     acc_idx_from: usize,
     acc_idx_to: usize,
     asset: AssetBase,
     amount: u64,
+}
+
+#[derive(Clone)]
+pub(crate) struct BurnInfo {
+    burner_acc_idx: usize,
+    asset: AssetBase,
+    amount: u64,
+}
+
+pub(crate) trait TransactionFromInfo {
+    fn create_txn(&self, wallet: &mut User) -> Transaction;
 }
 
 impl TransferInfo {
@@ -50,17 +62,6 @@ impl TransferInfo {
             amount,
         }
     }
-    pub(crate) fn create_transfer_txn(&self, wallet: &mut User) -> Transaction {
-        let from_addr = wallet.address_for_account(self.acc_idx_from, External);
-        let to_addr = wallet.address_for_account(self.acc_idx_to, External);
-        create_transfer_transaction(from_addr, to_addr, self.amount, self.asset, wallet)
-    }
-}
-
-pub(crate) struct BurnInfo {
-    burner_acc_idx: usize,
-    asset: AssetBase,
-    amount: u64,
 }
 
 impl BurnInfo {
@@ -71,10 +72,49 @@ impl BurnInfo {
             amount,
         }
     }
+}
 
-    pub(crate) fn create_burn_txn(&self, wallet: &mut User) -> Transaction {
+impl TransactionFromInfo for TransferInfo {
+    fn create_txn(&self, wallet: &mut User) -> Transaction {
+        let from_addr = wallet.address_for_account(self.acc_idx_from, External);
+        let to_addr = wallet.address_for_account(self.acc_idx_to, External);
+        create_transfer_transaction(from_addr, to_addr, self.amount, self.asset, wallet)
+    }
+}
+
+impl TransactionFromInfo for BurnInfo {
+    fn create_txn(&self, wallet: &mut User) -> Transaction {
         let address = wallet.address_for_account(self.burner_acc_idx, External);
         create_burn_transaction(address, self.amount, self.asset, wallet)
+    }
+}
+
+pub(crate) struct InfoBatch<T: TransactionFromInfo>(Vec<T>);
+
+impl<T: TransactionFromInfo> From<Vec<T>> for InfoBatch<T> {
+    fn from(items: Vec<T>) -> Self {
+        InfoBatch(items)
+    }
+}
+
+impl<T: Clone + TransactionFromInfo> InfoBatch<T> {
+    pub(crate) fn new_empty() -> Self {
+        InfoBatch(vec![])
+    }
+    pub(crate) fn new_singleton(info_item: T) -> Self {
+        InfoBatch(vec![info_item])
+    }
+
+    pub(crate) fn add_to_batch(&mut self, info_item: T) {
+        self.0.push(info_item);
+    }
+
+    pub(crate) fn to_vec(&self) -> Vec<T> {
+        self.0.clone()
+    }
+
+    pub(crate) fn to_txns(&self, wallet: &mut User) -> Vec<Transaction> {
+        self.0.iter().map(|item| item.create_txn(wallet)).collect()
     }
 }
 
@@ -89,26 +129,31 @@ pub(crate) fn expected_balances_after_mine(
 }
 pub(crate) fn expected_balances_after_transfer(
     balances: &TestBalances,
-    transfers: &[TransferInfo],
+    transfers: &InfoBatch<TransferInfo>,
 ) -> TestBalances {
-    let new_balances = transfers
-        .iter()
-        .fold(balances.clone(), |mut acc, transfer_info| {
-            acc.0[transfer_info.acc_idx_from] -= transfer_info.amount;
-            acc.0[transfer_info.acc_idx_to] += transfer_info.amount;
-            acc
-        });
+    let new_balances =
+        transfers
+            .to_vec()
+            .iter()
+            .fold(balances.clone(), |mut acc, transfer_info| {
+                acc.0[transfer_info.acc_idx_from] -= transfer_info.amount;
+                acc.0[transfer_info.acc_idx_to] += transfer_info.amount;
+                acc
+            });
     new_balances
 }
 
 pub(crate) fn expected_balances_after_burn(
     balances: &TestBalances,
-    burns: &[BurnInfo],
+    burns: &InfoBatch<BurnInfo>,
 ) -> TestBalances {
-    let new_balances = burns.iter().fold(balances.clone(), |mut acc, burn_info| {
-        acc.0[burn_info.burner_acc_idx] -= burn_info.amount;
-        acc
-    });
+    let new_balances = burns
+        .to_vec()
+        .iter()
+        .fold(balances.clone(), |mut acc, burn_info| {
+            acc.0[burn_info.burner_acc_idx] -= burn_info.amount;
+            acc
+        });
     new_balances
 }
 

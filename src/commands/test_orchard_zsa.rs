@@ -4,11 +4,10 @@ use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
 use crate::commands::test_balances::{
     check_balances, print_balances, expected_balances_after_burn, expected_balances_after_transfer,
-    BurnInfo, TestBalances, TransferInfo,
+    BurnInfo, TestBalances, TransferInfo, InfoBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::sync_from_height;
-use crate::components::transactions::{create_issue_transaction, mine};
+use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
 use crate::components::user::User;
 use crate::prelude::*;
 
@@ -55,19 +54,11 @@ impl Runnable for TestOrchardZSACmd {
         // --------------------- ZSA transfer ---------------------
 
         let amount_to_transfer_1 = 3;
-        let transfers = vec![TransferInfo::new(
-            issuer_idx,
-            alice_idx,
-            asset,
-            amount_to_transfer_1,
-        )];
-        // Generate expected balances after transfer
+        let transfer_info = TransferInfo::new(issuer_idx, alice_idx, asset, amount_to_transfer_1);
+        let transfers = InfoBatch::new_singleton(transfer_info);
         let expected_balances = expected_balances_after_transfer(&balances, &transfers);
 
-        let transfer_txns = transfers
-            .iter()
-            .map(|info| info.create_transfer_txn(&mut wallet))
-            .collect();
+        let transfer_txns = transfers.to_txns(&mut wallet);
 
         mine(&mut wallet, &mut rpc_client, transfer_txns);
 
@@ -82,18 +73,14 @@ impl Runnable for TestOrchardZSACmd {
         let amount_to_burn_issuer = 7;
         let amount_to_burn_alice = amount_to_transfer_1 - 1;
 
-        let burns = vec![
-            BurnInfo::new(issuer_idx, asset, amount_to_burn_issuer),
-            BurnInfo::new(alice_idx, asset, amount_to_burn_alice),
-        ];
+        let mut burns = InfoBatch::<BurnInfo>::new_empty();
+        burns.add_to_batch(BurnInfo::new(issuer_idx, asset, amount_to_burn_issuer));
+        burns.add_to_batch(BurnInfo::new(alice_idx, asset, amount_to_burn_alice));
 
         // Generate expected balances after burn
         let expected_balances = expected_balances_after_burn(&balances, &burns);
 
-        let burn_txns = burns
-            .iter()
-            .map(|info| info.create_burn_txn(&mut wallet))
-            .collect();
+        let burn_txns = burns.to_txns(&mut wallet);
 
         mine(&mut wallet, &mut rpc_client, burn_txns);
 

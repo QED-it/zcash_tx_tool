@@ -7,13 +7,11 @@ use zcash_primitives::transaction::TxId;
 
 use crate::commands::test_balances::{
     check_balances, print_balances, expected_balances_after_transfer, TestBalances, TransferInfo,
-    expected_balances_after_mine,
+    expected_balances_after_mine, InfoBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::create_transfer_transaction;
-use crate::components::transactions::mine;
 use crate::components::transactions::{
-    create_shield_coinbase_transaction, mine_empty_blocks, sync_from_height,
+    create_shield_coinbase_transaction, mine, mine_empty_blocks, sync_from_height,
 };
 use crate::components::user::User;
 use crate::prelude::*;
@@ -37,7 +35,6 @@ impl Runnable for TestOrchardCmd {
         let alice_idx = 1;
 
         let miner_addr = wallet.address_for_account(miner_idx, External);
-        let alice_addr = wallet.address_for_account(alice_idx, External);
 
         let coinbase_txid = prepare_test(
             config.chain.nu5_activation_height,
@@ -72,23 +69,19 @@ impl Runnable for TestOrchardCmd {
 
         let amount_to_transfer_1: u64 = 2;
         let balances = TestBalances::get_native_balances(num_users, &mut wallet);
-        let transfers = vec![TransferInfo::new(
+        let transfer_info = TransferInfo::new(
             miner_idx,
             alice_idx,
             AssetBase::native(),
             amount_to_transfer_1,
-        )];
+        );
+        let transfers = InfoBatch::new_singleton(transfer_info);
 
         let expected_balances = expected_balances_after_transfer(&balances, &transfers);
 
-        let transfer_tx_1 = create_transfer_transaction(
-            miner_addr,
-            alice_addr,
-            amount_to_transfer_1,
-            AssetBase::native(),
-            &mut wallet,
-        );
-        mine(&mut wallet, &mut rpc_client, Vec::from([transfer_tx_1]));
+        let transfer_txns = transfers.to_txns(&mut wallet);
+
+        mine(&mut wallet, &mut rpc_client, transfer_txns);
 
         check_balances(
             AssetBase::native(),

@@ -10,11 +10,10 @@ use orchard::keys::Scope::External;
 
 use crate::commands::test_balances::{
     check_balances, print_balances, expected_balances_after_burn, expected_balances_after_transfer,
-    BurnInfo, TestBalances, TransferInfo,
+    BurnInfo, TestBalances, TransferInfo, InfoBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::sync_from_height;
-use crate::components::transactions::{create_issue_transaction, mine};
+use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
 use crate::components::user::User;
 use crate::prelude::*;
 
@@ -66,19 +65,13 @@ impl Runnable for TestThreePartyCmd {
 
         // --------------------- ZSA transfer from manufacturer to purchaser ---------------------
         let amount_to_transfer_1 = 3;
-        let transfers = vec![TransferInfo::new(
-            manufacturer_idx,
-            purchaser_idx,
-            asset,
-            amount_to_transfer_1,
-        )];
+        let transfer_info =
+            TransferInfo::new(manufacturer_idx, purchaser_idx, asset, amount_to_transfer_1);
+        let transfers = InfoBatch::new_singleton(transfer_info);
 
         let expected_balances = expected_balances_after_transfer(&balances, &transfers);
 
-        let transfer_txns = transfers
-            .iter()
-            .map(|info| info.create_transfer_txn(&mut wallet))
-            .collect();
+        let transfer_txns = transfers.to_txns(&mut wallet);
 
         mine(&mut wallet, &mut rpc_client, transfer_txns);
 
@@ -95,20 +88,14 @@ impl Runnable for TestThreePartyCmd {
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         let amount_to_transfer_2 = 1;
 
-        let transfers = vec![TransferInfo::new(
-            purchaser_idx,
-            supplier_idx,
-            asset,
-            amount_to_transfer_2,
-        )];
+        let transfer_info =
+            TransferInfo::new(purchaser_idx, supplier_idx, asset, amount_to_transfer_2);
+        let transfers = InfoBatch::new_singleton(transfer_info);
 
         // Generate expected balances after transfer
         let expected_balances = expected_balances_after_transfer(&balances, &transfers);
 
-        let transfer_txns = transfers
-            .iter()
-            .map(|info| info.create_transfer_txn(&mut wallet))
-            .collect();
+        let transfer_txns = transfers.to_txns(&mut wallet);
 
         mine(&mut wallet, &mut rpc_client, transfer_txns);
 
@@ -125,15 +112,13 @@ impl Runnable for TestThreePartyCmd {
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         let amount_to_burn_supplier = 1;
 
-        let burns = vec![BurnInfo::new(supplier_idx, asset, amount_to_burn_supplier)];
+        let burns =
+            InfoBatch::new_singleton(BurnInfo::new(supplier_idx, asset, amount_to_burn_supplier));
 
         // Generate expected balances after burn
         let expected_balances = expected_balances_after_burn(&balances, &burns);
 
-        let burn_txns = burns
-            .iter()
-            .map(|info| info.create_burn_txn(&mut wallet))
-            .collect();
+        let burn_txns = burns.to_txns(&mut wallet);
 
         mine(&mut wallet, &mut rpc_client, burn_txns);
 
