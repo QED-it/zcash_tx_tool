@@ -85,6 +85,7 @@ jobs:
           # Clean up
           docker stop zebra-node
           docker rm zebra-node
+          docker rm zcash-tx-tool
           docker network rm zcash-net
   
           exit 0
@@ -129,6 +130,7 @@ jobs:
           # Clean up
           docker stop zebra-node
           docker rm zebra-node
+          docker rm zcash-tx-tool
           docker network rm zcash-net
         
           exit 0
