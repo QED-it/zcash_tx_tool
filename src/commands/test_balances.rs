@@ -29,6 +29,7 @@ impl TestBalances {
     }
 }
 
+/// A struct to hold information about a transfer of assets.
 #[derive(Clone)]
 pub(crate) struct TransferInfo {
     acc_idx_from: usize,
@@ -37,6 +38,7 @@ pub(crate) struct TransferInfo {
     amount: u64,
 }
 
+/// A struct to hold information about a burn of assets.
 #[derive(Clone)]
 pub(crate) struct BurnInfo {
     burner_acc_idx: usize,
@@ -44,6 +46,7 @@ pub(crate) struct BurnInfo {
     amount: u64,
 }
 
+/// A trait to create a transaction from the information provided in the struct.
 pub(crate) trait TransactionFromInfo {
     fn create_txn(&self, wallet: &mut User) -> Transaction;
 }
@@ -89,6 +92,7 @@ impl TransactionFromInfo for BurnInfo {
     }
 }
 
+/// A struct to hold a batch of information about transfer or burn of assets.
 pub(crate) struct InfoBatch<T: TransactionFromInfo>(Vec<T>);
 
 impl<T: TransactionFromInfo> From<Vec<T>> for InfoBatch<T> {
@@ -98,21 +102,27 @@ impl<T: TransactionFromInfo> From<Vec<T>> for InfoBatch<T> {
 }
 
 impl<T: Clone + TransactionFromInfo> InfoBatch<T> {
+    /// This function creates a new, empty InfoBatch.
     pub(crate) fn new_empty() -> Self {
         InfoBatch(vec![])
     }
+
+    /// This function creates a new InfoBatch with a single item.
     pub(crate) fn new_singleton(info_item: T) -> Self {
         InfoBatch(vec![info_item])
     }
 
+    /// This function allows the addition of an item to an already existing InfoBatch.
     pub(crate) fn add_to_batch(&mut self, info_item: T) {
         self.0.push(info_item);
     }
 
+    /// This function returns a Vec of the items in the InfoBatch.
     pub(crate) fn to_vec(&self) -> Vec<T> {
         self.0.clone()
     }
 
+    /// This function creates a Vec of transactions for each item in the InfoBatch.
     pub(crate) fn to_txns(&self, wallet: &mut User) -> Vec<Transaction> {
         self.0.iter().map(|item| item.create_txn(wallet)).collect()
     }
