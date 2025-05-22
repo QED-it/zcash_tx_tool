@@ -81,6 +81,12 @@ jobs:
         # Check if the tx_tool succeeded
         if [ $EXIT_CODE -eq 0 ]; then
           echo "tx-tool completed successfully!"
+        
+          # Clean up
+          docker stop zebra-node
+          docker rm zebra-node
+          docker network rm zcash-net
+  
           exit 0
         else
           echo "tx-tool failed with exit code $EXIT_CODE"
@@ -88,11 +94,6 @@ jobs:
           docker logs zcash-tx-tool
           exit 1
         fi
-        
-        # Clean up
-        docker stop zebra-node
-        docker rm zebra-node
-        docker network rm zcash-net
 
     - name: Run Zebra Node container again
       run: |
@@ -124,6 +125,12 @@ jobs:
         # Check if the tx_tool succeeded
         if [ $EXIT_CODE -eq 0 ]; then
           echo "tx-tool completed successfully!"
+        
+          # Clean up
+          docker stop zebra-node
+          docker rm zebra-node
+          docker network rm zcash-net
+        
           exit 0
         else
           echo "tx-tool failed with exit code $EXIT_CODE"
@@ -131,8 +138,3 @@ jobs:
           docker logs zcash-tx-tool
           exit 1
         fi
-        
-        # Clean up
-        docker stop zebra-node
-        docker rm zebra-node
-        docker network rm zcash-net
