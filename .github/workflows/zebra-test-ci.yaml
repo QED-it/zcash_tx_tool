@@ -42,14 +42,6 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-cache
         cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
         
-    - name: Run Zebra Node container
-      run: |
-        docker run -d --name zebra-node -p 18232:18232 zebra-node:local
-        # Wait for the node to start up
-        echo "Waiting for Zebra node to initialize..."
-        sleep 30
-        echo "Finished waiting for Zebra node..."
-
     - name: Build tx-tool
       uses: docker/build-push-action@v4
       with:
@@ -58,8 +50,16 @@ jobs:
         tags: zcash-tx-tool:local
         push: false
         load: true
-        
-    - name: Run tx-tool and verify success
+
+    - name: Run Zebra Node container
+      run: |
+        docker run -d --name zebra-node -p 18232:18232 zebra-node:local
+        # Wait for the node to start up
+        echo "Waiting for Zebra node to initialize..."
+        sleep 30
+        echo "Finished waiting for Zebra node..."
+
+    - name: Run tx-tool for test-orchard-zsa and verify success
       run: |
         # Create a network to connect the containers
         docker network create zcash-net
@@ -73,7 +73,7 @@ jobs:
           -e ZCASH_NODE_PORT=18232 \
           -e ZCASH_NODE_PROTOCOL=http \
           --name zcash-tx-tool \
-          zcash-tx-tool:local
+          zcash-tx-tool:local test-orchard-zsa
           
         # Get the exit code from the container
         EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
@@ -88,3 +88,51 @@ jobs:
           docker logs zcash-tx-tool
           exit 1
         fi
+        
+        # Clean up
+        docker stop zebra-node
+        docker rm zebra-node
+        docker network rm zcash-net
+
+    - name: Run Zebra Node container again
+      run: |
+        docker run -d --name zebra-node -p 18232:18232 zebra-node:local
+        # Wait for the node to start up
+        echo "Waiting for Zebra node to initialize..."
+        sleep 30
+        echo "Finished waiting for Zebra node..."
+
+    - name: Run tx-tool for test-three-party and verify success
+      run: |
+        # Create a network to connect the containers
+        docker network create zcash-net
+        
+        # Connect zebra-node to the network
+        docker network connect zcash-net zebra-node
+        
+        # Run the tx tool and capture exit code
+        docker run --network zcash-net \
+          -e ZCASH_NODE_ADDRESS=zebra-node \
+          -e ZCASH_NODE_PORT=18232 \
+          -e ZCASH_NODE_PROTOCOL=http \
+          --name zcash-tx-tool \
+          zcash-tx-tool:local test-three-party
+        
+        # Get the exit code from the container
+        EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
+        
+        # Check if the tx_tool succeeded
+        if [ $EXIT_CODE -eq 0 ]; then
+          echo "tx-tool completed successfully!"
+          exit 0
+        else
+          echo "tx-tool failed with exit code $EXIT_CODE"
+          echo "Printing container logs:"
+          docker logs zcash-tx-tool
+          exit 1
+        fi
+        
+        # Clean up
+        docker stop zebra-node
+        docker rm zebra-node
+        docker network rm zcash-net
