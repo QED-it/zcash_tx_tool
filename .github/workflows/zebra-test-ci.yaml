@@ -26,9 +26,9 @@ jobs:
       uses: actions/cache@v3
       with:
         path: /tmp/.buildx-cache
-        key: zebra-cache-${{ github.ref }}-${{ github.sha }}
+        key: zebra-cache-${{ runner.os }}-${{ hashFiles('Dockerfile-zebra') }}
         restore-keys: |
-          zebra-cache-${{ github.ref }}
+          zebra-cache-${{ runner.os }}-
           zebra-cache-
       
     - name: Build Zebra Node (Dockerfile-zebra)
