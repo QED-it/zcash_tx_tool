@@ -1,5 +1,5 @@
 # Background
-This repo, along with the 'terraform-aws-modules', creates a the infrastructure needed to deploy our zcash-tx-tool in AWS
+This repo, along with the 'terraform-aws-modules', creates a the public ECR repo needed to deploy our zcash-tx-tool in AWS
 
 ## How do you deploy the infrastructure in this repo?
 
