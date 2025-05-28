@@ -15,3 +15,7 @@ Initial release.
 - OrchardBundle enum
 - first_issuance flag
 - action-group-based serialization
+
+## [Unreleased] - 2025-05-05
+### Added
+- Support for scenarios with arbitrary number of accounts
