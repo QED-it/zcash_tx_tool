@@ -41,6 +41,14 @@ jobs:
         load: true
         cache-from: type=local,src=/tmp/.buildx-cache
         cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+
+    - name: Run Zebra Node container
+      run: |
+        docker run -d --name zebra-node -p 18232:18232 zebra-node:local
+        # Wait for the node to start up
+        echo "Waiting for Zebra node to initialize..."
+        sleep 30
+        echo "Finished waiting for Zebra node..."
         
     - name: Build tx-tool
       uses: docker/build-push-action@v4
@@ -50,14 +58,6 @@ jobs:
         tags: zcash-tx-tool:local
         push: false
         load: true
-
-    - name: Run Zebra Node container
-      run: |
-        docker run -d --name zebra-node -p 18232:18232 zebra-node:local
-        # Wait for the node to start up
-        echo "Waiting for Zebra node to initialize..."
-        sleep 30
-        echo "Finished waiting for Zebra node..."
 
     - name: Run tx-tool for test-orchard-zsa and verify success
       run: |
