@@ -4,10 +4,11 @@
 //! number of ZSAs to the purchaser. The purchaser then transfers the ZSAs to the supplier, in
 //! exchange for the physical doses. The supplier burns the ZSAs after receiving them to signal the
 //! sale of the medicines.
-//! 
+//!
 //! The tests ensure correct balance updates and transaction validity at each step of this scenario.
 
 use abscissa_core::{Command, Runnable};
+use orchard::issuance::compute_asset_desc_hash;
 use orchard::keys::Scope::External;
 
 use crate::commands::test_balances::{
@@ -47,12 +48,12 @@ impl Runnable for TestThreePartyCmd {
 
         // --------------------- Issue asset ---------------------
 
-        let asset_description = b"MED".to_vec();
+        let asset_desc_hash = compute_asset_desc_hash(b"MED").unwrap();
 
         let (issue_tx, asset) = create_issue_transaction(
             manufacturer_addr,
             1000,
-            &asset_description,
+            asset_desc_hash,
             true,
             &mut wallet,
         );

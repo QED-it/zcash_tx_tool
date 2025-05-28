@@ -61,7 +61,7 @@ Open a terminal and execute the following commands:
 
 ```bash
 # Build the Zebra Docker image
-docker build -t qedit/zebra-regtest-txv6 .
+docker build -t qedit/zebra-regtest-txv6 -f Dockerfile-zebra .
 
 # Run the Zebra Docker container
 docker run -p 18232:18232 qedit/zebra-regtest-txv6

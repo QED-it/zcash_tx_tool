@@ -247,6 +247,13 @@ impl User {
                 break;
             }
         }
+        if total_amount_selected < total_amount {
+            panic!(
+                "insufficient inputs: required {} but found {}",
+                total_amount, total_amount_selected
+            );
+        }
+
         selected_notes
     }
 

@@ -10,11 +10,11 @@ on:
       zcash_node_port:
         description: "Zcash node port"
         required: false
-        default: "18232"
+        default: "443"
       zcash_node_protocol:
         description: "Zcash node protocol"
         required: false
-        default: "http"
+        default: "https"
       image_tag:
         description: "Docker image tag"
         required: false
@@ -47,8 +47,8 @@ jobs:
         id: set-defaults
         run: |
           echo "ZCASH_NODE_ADDRESS=${{ github.event.inputs.zcash_node_address || 'dev.zebra.zsa-test.net' }}" >> $GITHUB_ENV
-          echo "ZCASH_NODE_PORT=${{ github.event.inputs.zcash_node_port || '18232' }}" >> $GITHUB_ENV
-          echo "ZCASH_NODE_PROTOCOL=${{ github.event.inputs.zcash_node_protocol || 'http' }}" >> $GITHUB_ENV
+          echo "ZCASH_NODE_PORT=${{ github.event.inputs.zcash_node_port || '443' }}" >> $GITHUB_ENV
+          echo "ZCASH_NODE_PROTOCOL=${{ github.event.inputs.zcash_node_protocol || 'https' }}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${{ github.event.inputs.image_tag || 'latest' }}" >> $GITHUB_ENV
           echo "::set-output name=image_tag::${{ github.event.inputs.image_tag || 'latest' }}"
 

@@ -264,7 +264,7 @@ pub fn create_burn_transaction(
 pub fn create_issue_transaction(
     recipient: Address,
     amount: u64,
-    asset_desc: &[u8],
+    asset_desc_hash: [u8; 32],
     first_issuance: bool,
     wallet: &mut User,
 ) -> (Transaction, AssetBase) {
@@ -272,7 +272,7 @@ pub fn create_issue_transaction(
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(
         wallet.issuance_key(),
-        asset_desc.to_vec(),
+        asset_desc_hash,
         Some(IssueInfo {
             recipient,
             value: NoteValue::from_raw(amount),
@@ -282,19 +282,21 @@ pub fn create_issue_transaction(
     .unwrap();
     let asset = AssetBase::derive(
         &IssuanceValidatingKey::from(&wallet.issuance_key()),
-        asset_desc,
+        &asset_desc_hash,
     );
     (build_tx(tx), asset)
 }
 
 /// Create a transaction that issues a new asset
-pub fn create_finalization_transaction(asset_desc: Vec<u8>, wallet: &mut User) -> Transaction {
+pub fn create_finalization_transaction(
+    asset_desc_hash: [u8; 32],
+    wallet: &mut User,
+) -> Transaction {
     info!("Finalize asset");
     let mut tx = create_tx(wallet);
-    tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc.clone(), None, false)
+    tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc_hash, None, false)
         .unwrap();
-    tx.finalize_asset::<FeeError>(asset_desc.as_slice())
-        .unwrap();
+    tx.finalize_asset::<FeeError>(&asset_desc_hash).unwrap();
     build_tx(tx)
 }
 
