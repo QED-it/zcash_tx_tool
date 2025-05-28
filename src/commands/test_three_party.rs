@@ -4,6 +4,8 @@
 //! number of ZSAs to the purchaser. The purchaser then transfers the ZSAs to the supplier, in
 //! exchange for the physical doses. The supplier burns the ZSAs after receiving them to signal the
 //! sale of the medicines.
+//! 
+//! The tests ensure correct balance updates and transaction validity at each step of this scenario.
 
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;

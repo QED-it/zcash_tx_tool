@@ -102,6 +102,12 @@ Build and run the test case of your choice using the Zcash Transaction Tool, by 
 cargo run --release --package zcash_tx_tool --bin zcash_tx_tool <test-case>
 ```
 
+For example, to run the `test-orchard-zsa` scenario, use:
+
+```bash
+cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
+```
+
 **Note**: To re-run the test scenario (or to run a different scenario), reset the Zebra node by stopping and restarting the Zebra Docker container.
 
 ## Configuration

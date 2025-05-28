@@ -1,4 +1,11 @@
-//! `test-orchard-zsa` - happy e2e flow that issues, transfers and burns an asset
+//! End-to-end tests for main OrchardZSA asset operations: issue, transfer, and burn.
+//!
+//! This module verifies the key asset lifecycle flows for OrchardZSA, including:
+//! - Issuing new assets
+//! - Transferring assets between accounts
+//! - Burning assets
+//!
+//! The tests ensure correct balance updates and transaction validity at each step.
 
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;

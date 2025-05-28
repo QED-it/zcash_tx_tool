@@ -1,4 +1,7 @@
-//! `test-orchard` - happy e2e flow for the native asset
+//! End-to-end tests for operations on the native ZEC asset.
+//!
+//! This module verifies operations on the native asset continue to work as expected.
+//! The tests ensure correct balance updates and transaction validity at each step.
 
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
