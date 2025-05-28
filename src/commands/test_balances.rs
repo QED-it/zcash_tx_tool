@@ -47,8 +47,8 @@ pub(crate) struct BurnInfo {
 }
 
 /// A trait to create a transaction from the information provided in the struct.
-pub(crate) trait TransactionFromInfo {
-    fn create_txn(&self, wallet: &mut User) -> Transaction;
+pub(crate) trait TransactionCreator {
+    fn create_tx(&self, wallet: &mut User) -> Transaction;
 }
 
 impl TransferInfo {
@@ -58,7 +58,7 @@ impl TransferInfo {
         asset: AssetBase,
         amount: u64,
     ) -> Self {
-        TransferInfo {
+        Self {
             acc_idx_from,
             acc_idx_to,
             asset,
@@ -69,7 +69,7 @@ impl TransferInfo {
 
 impl BurnInfo {
     pub(crate) fn new(burner_acc_idx: usize, asset: AssetBase, amount: u64) -> Self {
-        BurnInfo {
+        Self {
             burner_acc_idx,
             asset,
             amount,
@@ -77,39 +77,39 @@ impl BurnInfo {
     }
 }
 
-impl TransactionFromInfo for TransferInfo {
-    fn create_txn(&self, wallet: &mut User) -> Transaction {
+impl TransactionCreator for TransferInfo {
+    fn create_tx(&self, wallet: &mut User) -> Transaction {
         let from_addr = wallet.address_for_account(self.acc_idx_from, External);
         let to_addr = wallet.address_for_account(self.acc_idx_to, External);
         create_transfer_transaction(from_addr, to_addr, self.amount, self.asset, wallet)
     }
 }
 
-impl TransactionFromInfo for BurnInfo {
-    fn create_txn(&self, wallet: &mut User) -> Transaction {
+impl TransactionCreator for BurnInfo {
+    fn create_tx(&self, wallet: &mut User) -> Transaction {
         let address = wallet.address_for_account(self.burner_acc_idx, External);
         create_burn_transaction(address, self.amount, self.asset, wallet)
     }
 }
 
 /// A struct to hold a batch of information about transfer or burn of assets.
-pub(crate) struct InfoBatch<T: TransactionFromInfo>(Vec<T>);
+pub(crate) struct InfoBatch<T: TransactionCreator>(Vec<T>);
 
-impl<T: TransactionFromInfo> From<Vec<T>> for InfoBatch<T> {
+impl<T: TransactionCreator> From<Vec<T>> for InfoBatch<T> {
     fn from(items: Vec<T>) -> Self {
         InfoBatch(items)
     }
 }
 
-impl<T: Clone + TransactionFromInfo> InfoBatch<T> {
+impl<T: Clone + TransactionCreator> InfoBatch<T> {
     /// This function creates a new, empty InfoBatch.
-    pub(crate) fn new_empty() -> Self {
+    pub(crate) fn empty() -> Self {
         InfoBatch(vec![])
     }
 
     /// This function creates a new InfoBatch with a single item.
-    pub(crate) fn new_singleton(info_item: T) -> Self {
-        InfoBatch(vec![info_item])
+    pub(crate) fn from_item(item: T) -> Self {
+        InfoBatch(vec![item])
     }
 
     /// This function allows the addition of an item to an already existing InfoBatch.
@@ -123,8 +123,8 @@ impl<T: Clone + TransactionFromInfo> InfoBatch<T> {
     }
 
     /// This function creates a Vec of transactions for each item in the InfoBatch.
-    pub(crate) fn to_txns(&self, wallet: &mut User) -> Vec<Transaction> {
-        self.0.iter().map(|item| item.create_txn(wallet)).collect()
+    pub(crate) fn to_transactions(&self, wallet: &mut User) -> Vec<Transaction> {
+        self.0.iter().map(|item| item.create_tx(wallet)).collect()
     }
 }
 

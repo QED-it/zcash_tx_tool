@@ -40,7 +40,7 @@ impl Runnable for TestOrchardZSACmd {
 
         let asset_description = b"WETH".to_vec();
         prepare_test(
-            config.chain.v6_activation_height,
+            config.chain.nu7_activation_height,
             &mut wallet,
             &mut rpc_client,
         );
@@ -62,12 +62,12 @@ impl Runnable for TestOrchardZSACmd {
 
         let amount_to_transfer_1 = 3;
         let transfer_info = TransferInfo::new(issuer_idx, alice_idx, asset, amount_to_transfer_1);
-        let transfers = InfoBatch::new_singleton(transfer_info);
+        let transfers = InfoBatch::from_item(transfer_info);
         let expected_balances = expected_balances_after_transfer(&balances, &transfers);
 
-        let transfer_txns = transfers.to_txns(&mut wallet);
+        let transfer_txs = transfers.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, transfer_txns);
+        mine(&mut wallet, &mut rpc_client, transfer_txs);
 
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
@@ -80,16 +80,16 @@ impl Runnable for TestOrchardZSACmd {
         let amount_to_burn_issuer = 7;
         let amount_to_burn_alice = amount_to_transfer_1 - 1;
 
-        let mut burns = InfoBatch::<BurnInfo>::new_empty();
+        let mut burns = InfoBatch::<BurnInfo>::empty();
         burns.add_to_batch(BurnInfo::new(issuer_idx, asset, amount_to_burn_issuer));
         burns.add_to_batch(BurnInfo::new(alice_idx, asset, amount_to_burn_alice));
 
         // Generate expected balances after burn
         let expected_balances = expected_balances_after_burn(&balances, &burns);
 
-        let burn_txns = burns.to_txns(&mut wallet);
+        let burn_txs = burns.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, burn_txns);
+        mine(&mut wallet, &mut rpc_client, burn_txs);
 
         // burn from issuer(account0) and alice(account1)
         check_balances(asset, &expected_balances, &mut wallet, num_users);

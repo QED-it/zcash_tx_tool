@@ -22,6 +22,8 @@ use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
 
+const COINBASE_VALUE: u64 = 625_000_000;
+
 /// Mine a block with the given transactions and sync the user
 pub fn mine(wallet: &mut User, rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) {
     let activate = wallet.last_block_height().is_none();
@@ -75,8 +77,7 @@ pub fn create_shield_coinbase_transaction(
 
     let mut tx = create_tx(wallet);
 
-    let coinbase_value = 625_000_000;
-    let coinbase_amount = NonNegativeAmount::from_u64(coinbase_value).unwrap();
+    let coinbase_amount = NonNegativeAmount::from_u64(COINBASE_VALUE).unwrap();
     let miner_taddr = wallet.miner_address();
 
     let sk = wallet.miner_sk();
@@ -93,7 +94,7 @@ pub fn create_shield_coinbase_transaction(
     tx.add_orchard_output::<FeeError>(
         Some(wallet.orchard_ovk()),
         recipient,
-        coinbase_value,
+        COINBASE_VALUE,
         AssetBase::native(),
         MemoBytes::empty(),
     )

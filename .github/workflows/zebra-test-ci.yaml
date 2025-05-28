@@ -83,10 +83,7 @@ jobs:
           echo "tx-tool completed successfully!"
         
           # Clean up
-          docker stop zebra-node
-          docker rm zebra-node
           docker rm zcash-tx-tool
-          docker network rm zcash-net
   
           exit 0
         else
@@ -96,22 +93,8 @@ jobs:
           exit 1
         fi
 
-    - name: Run Zebra Node container again
-      run: |
-        docker run -d --name zebra-node -p 18232:18232 zebra-node:local
-        # Wait for the node to start up
-        echo "Waiting for Zebra node to initialize..."
-        sleep 30
-        echo "Finished waiting for Zebra node..."
-
-    - name: Run tx-tool for test-three-party and verify success
-      run: |
-        # Create a network to connect the containers
-        docker network create zcash-net
-        
-        # Connect zebra-node to the network
-        docker network connect zcash-net zebra-node
-        
+    - name: Run tx-tool again for test-three-party and verify success
+      run: |                
         # Run the tx tool and capture exit code
         docker run --network zcash-net \
           -e ZCASH_NODE_ADDRESS=zebra-node \
@@ -127,11 +110,8 @@ jobs:
         if [ $EXIT_CODE -eq 0 ]; then
           echo "tx-tool completed successfully!"
         
-          # Clean up
-          docker stop zebra-node
-          docker rm zebra-node
-          docker rm zcash-tx-tool
-          docker network rm zcash-net
+        # Clean up
+        docker rm zcash-tx-tool
         
           exit 0
         else

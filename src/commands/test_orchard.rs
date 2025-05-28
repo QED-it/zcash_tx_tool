@@ -78,13 +78,13 @@ impl Runnable for TestOrchardCmd {
             AssetBase::native(),
             amount_to_transfer_1,
         );
-        let transfers = InfoBatch::new_singleton(transfer_info);
+        let transfers = InfoBatch::from_item(transfer_info);
 
         let expected_balances = expected_balances_after_transfer(&balances, &transfers);
 
-        let transfer_txns = transfers.to_txns(&mut wallet);
+        let transfer_txs = transfers.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, transfer_txns);
+        mine(&mut wallet, &mut rpc_client, transfer_txs);
 
         check_balances(
             AssetBase::native(),

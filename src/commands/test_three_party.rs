@@ -32,7 +32,7 @@ impl Runnable for TestThreePartyCmd {
 
         wallet.reset();
         prepare_test(
-            config.chain.v6_activation_height,
+            config.chain.nu7_activation_height,
             &mut wallet,
             &mut rpc_client,
         );
@@ -69,13 +69,13 @@ impl Runnable for TestThreePartyCmd {
         let amount_to_transfer_1 = 3;
         let transfer_info =
             TransferInfo::new(manufacturer_idx, purchaser_idx, asset, amount_to_transfer_1);
-        let transfers = InfoBatch::new_singleton(transfer_info);
+        let transfers = InfoBatch::from_item(transfer_info);
 
         let expected_balances = expected_balances_after_transfer(&balances, &transfers);
 
-        let transfer_txns = transfers.to_txns(&mut wallet);
+        let transfer_txs = transfers.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, transfer_txns);
+        mine(&mut wallet, &mut rpc_client, transfer_txs);
 
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
@@ -92,14 +92,14 @@ impl Runnable for TestThreePartyCmd {
 
         let transfer_info =
             TransferInfo::new(purchaser_idx, supplier_idx, asset, amount_to_transfer_2);
-        let transfers = InfoBatch::new_singleton(transfer_info);
+        let transfers = InfoBatch::from_item(transfer_info);
 
         // Generate expected balances after transfer
         let expected_balances = expected_balances_after_transfer(&balances, &transfers);
 
-        let transfer_txns = transfers.to_txns(&mut wallet);
+        let transfer_txs = transfers.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, transfer_txns);
+        mine(&mut wallet, &mut rpc_client, transfer_txs);
 
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
@@ -115,14 +115,14 @@ impl Runnable for TestThreePartyCmd {
         let amount_to_burn_supplier = 1;
 
         let burns =
-            InfoBatch::new_singleton(BurnInfo::new(supplier_idx, asset, amount_to_burn_supplier));
+            InfoBatch::from_item(BurnInfo::new(supplier_idx, asset, amount_to_burn_supplier));
 
         // Generate expected balances after burn
         let expected_balances = expected_balances_after_burn(&balances, &burns);
 
-        let burn_txns = burns.to_txns(&mut wallet);
+        let burn_txs = burns.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, burn_txns);
+        mine(&mut wallet, &mut rpc_client, burn_txs);
 
         // burn from issuer(account0) and alice(account1)
         check_balances(asset, &expected_balances, &mut wallet, num_users);
