@@ -50,13 +50,8 @@ impl Runnable for TestThreePartyCmd {
 
         let asset_desc_hash = compute_asset_desc_hash(b"MED").unwrap();
 
-        let (issue_tx, asset) = create_issue_transaction(
-            manufacturer_addr,
-            1000,
-            asset_desc_hash,
-            true,
-            &mut wallet,
-        );
+        let (issue_tx, asset) =
+            create_issue_transaction(manufacturer_addr, 1000, asset_desc_hash, true, &mut wallet);
 
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
