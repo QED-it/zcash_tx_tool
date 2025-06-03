@@ -12,7 +12,7 @@ use orchard::issuance::compute_asset_desc_hash;
 use orchard::keys::Scope::External;
 use crate::commands::test_balances::{
     check_balances, print_balances, expected_balances_after_burn, expected_balances_after_transfer,
-    BurnInfo, TestBalances, TransferInfo, InfoBatch,
+    BurnInfo, TestBalances, TransferInfo, TxiBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
@@ -63,12 +63,12 @@ impl Runnable for TestOrchardZSACmd {
 
         let amount_to_transfer_1 = 3;
         let transfer_info = TransferInfo::new(issuer_idx, alice_idx, asset, amount_to_transfer_1);
-        let transfers = InfoBatch::from_item(transfer_info);
-        let expected_balances = expected_balances_after_transfer(&balances, &transfers);
+        let txi = TxiBatch::from_item(transfer_info);
+        let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
-        let transfer_txs = transfers.to_transactions(&mut wallet);
+        let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, transfer_txs);
+        mine(&mut wallet, &mut rpc_client, txs);
 
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
@@ -81,16 +81,16 @@ impl Runnable for TestOrchardZSACmd {
         let amount_to_burn_issuer = 7;
         let amount_to_burn_alice = amount_to_transfer_1 - 1;
 
-        let mut burns = InfoBatch::<BurnInfo>::empty();
-        burns.add_to_batch(BurnInfo::new(issuer_idx, asset, amount_to_burn_issuer));
-        burns.add_to_batch(BurnInfo::new(alice_idx, asset, amount_to_burn_alice));
+        let mut txi = TxiBatch::<BurnInfo>::empty();
+        txi.add_to_batch(BurnInfo::new(issuer_idx, asset, amount_to_burn_issuer));
+        txi.add_to_batch(BurnInfo::new(alice_idx, asset, amount_to_burn_alice));
 
         // Generate expected balances after burn
-        let expected_balances = expected_balances_after_burn(&balances, &burns);
+        let expected_balances = expected_balances_after_burn(&balances, &txi);
 
-        let burn_txs = burns.to_transactions(&mut wallet);
+        let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, burn_txs);
+        mine(&mut wallet, &mut rpc_client, txs);
 
         // burn from issuer(account0) and alice(account1)
         check_balances(asset, &expected_balances, &mut wallet, num_users);

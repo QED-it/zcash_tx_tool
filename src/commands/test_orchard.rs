@@ -10,7 +10,7 @@ use zcash_primitives::transaction::TxId;
 
 use crate::commands::test_balances::{
     check_balances, print_balances, expected_balances_after_transfer, TestBalances, TransferInfo,
-    expected_balances_after_mine, InfoBatch,
+    expected_balances_after_mine, TxiBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{
@@ -78,13 +78,13 @@ impl Runnable for TestOrchardCmd {
             AssetBase::native(),
             amount_to_transfer_1,
         );
-        let transfers = InfoBatch::from_item(transfer_info);
+        let txi = TxiBatch::from_item(transfer_info);
 
-        let expected_balances = expected_balances_after_transfer(&balances, &transfers);
+        let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
-        let transfer_txs = transfers.to_transactions(&mut wallet);
+        let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, transfer_txs);
+        mine(&mut wallet, &mut rpc_client, txs);
 
         check_balances(
             AssetBase::native(),

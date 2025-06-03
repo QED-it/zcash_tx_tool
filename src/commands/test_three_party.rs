@@ -13,7 +13,7 @@ use orchard::keys::Scope::External;
 
 use crate::commands::test_balances::{
     check_balances, print_balances, expected_balances_after_burn, expected_balances_after_transfer,
-    BurnInfo, TestBalances, TransferInfo, InfoBatch,
+    BurnInfo, TestBalances, TransferInfo, TxiBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
@@ -65,13 +65,13 @@ impl Runnable for TestThreePartyCmd {
         let amount_to_transfer_1 = 3;
         let transfer_info =
             TransferInfo::new(manufacturer_idx, purchaser_idx, asset, amount_to_transfer_1);
-        let transfers = InfoBatch::from_item(transfer_info);
+        let txi = TxiBatch::from_item(transfer_info);
 
-        let expected_balances = expected_balances_after_transfer(&balances, &transfers);
+        let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
-        let transfer_txs = transfers.to_transactions(&mut wallet);
+        let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, transfer_txs);
+        mine(&mut wallet, &mut rpc_client, txs);
 
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
@@ -88,14 +88,14 @@ impl Runnable for TestThreePartyCmd {
 
         let transfer_info =
             TransferInfo::new(purchaser_idx, supplier_idx, asset, amount_to_transfer_2);
-        let transfers = InfoBatch::from_item(transfer_info);
+        let txi = TxiBatch::from_item(transfer_info);
 
         // Generate expected balances after transfer
-        let expected_balances = expected_balances_after_transfer(&balances, &transfers);
+        let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
-        let transfer_txs = transfers.to_transactions(&mut wallet);
+        let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, transfer_txs);
+        mine(&mut wallet, &mut rpc_client, txs);
 
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
@@ -110,17 +110,16 @@ impl Runnable for TestThreePartyCmd {
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         let amount_to_burn_supplier = 1;
 
-        let burns =
-            InfoBatch::from_item(BurnInfo::new(supplier_idx, asset, amount_to_burn_supplier));
+        let txi =
+            TxiBatch::from_item(BurnInfo::new(supplier_idx, asset, amount_to_burn_supplier));
 
         // Generate expected balances after burn
-        let expected_balances = expected_balances_after_burn(&balances, &burns);
+        let expected_balances = expected_balances_after_burn(&balances, &txi);
 
-        let burn_txs = burns.to_transactions(&mut wallet);
+        let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, burn_txs);
+        mine(&mut wallet, &mut rpc_client, txs);
 
-        // burn from issuer(account0) and alice(account1)
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
         print_balances(

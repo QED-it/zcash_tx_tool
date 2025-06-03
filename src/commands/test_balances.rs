@@ -93,23 +93,23 @@ impl TransactionCreator for BurnInfo {
 }
 
 /// A struct to hold a batch of information about transfer or burn of assets.
-pub(crate) struct InfoBatch<T: TransactionCreator>(Vec<T>);
+pub(crate) struct TxiBatch<T: TransactionCreator>(Vec<T>);
 
-impl<T: TransactionCreator> From<Vec<T>> for InfoBatch<T> {
+impl<T: TransactionCreator> From<Vec<T>> for TxiBatch<T> {
     fn from(items: Vec<T>) -> Self {
-        InfoBatch(items)
+        TxiBatch(items)
     }
 }
 
-impl<T: Clone + TransactionCreator> InfoBatch<T> {
+impl<T: Clone + TransactionCreator> TxiBatch<T> {
     /// This function creates a new, empty InfoBatch.
     pub(crate) fn empty() -> Self {
-        InfoBatch(vec![])
+        TxiBatch(vec![])
     }
 
     /// This function creates a new InfoBatch with a single item.
     pub(crate) fn from_item(item: T) -> Self {
-        InfoBatch(vec![item])
+        TxiBatch(vec![item])
     }
 
     /// This function allows the addition of an item to an already existing InfoBatch.
@@ -139,10 +139,10 @@ pub(crate) fn expected_balances_after_mine(
 }
 pub(crate) fn expected_balances_after_transfer(
     balances: &TestBalances,
-    transfers: &InfoBatch<TransferInfo>,
+    txi: &TxiBatch<TransferInfo>,
 ) -> TestBalances {
     let new_balances =
-        transfers
+        txi
             .to_vec()
             .iter()
             .fold(balances.clone(), |mut acc, transfer_info| {
@@ -155,9 +155,9 @@ pub(crate) fn expected_balances_after_transfer(
 
 pub(crate) fn expected_balances_after_burn(
     balances: &TestBalances,
-    burns: &InfoBatch<BurnInfo>,
+    txi: &TxiBatch<BurnInfo>,
 ) -> TestBalances {
-    let new_balances = burns
+    let new_balances = txi
         .to_vec()
         .iter()
         .fold(balances.clone(), |mut acc, burn_info| {
