@@ -22,6 +22,7 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
     - [Orchard-ZSA Two Party Scenario](#orchard-zsa-two-party-scenario)
     - [Orchard-ZSA Three Party Scenario](#orchard-zsa-three-party-scenario)
     - [Creating your own scenario](#creating-your-own-scenario)
+- [Connecting to the Public ZSA Testnet](#connecting-to-the-public-ZSA-testnet)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
 
@@ -196,6 +197,38 @@ You should then be able to run your scenario via (assuming `test-scenario` is th
 cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-scenario
 ```
 
+## Connecting to the Public ZSA Testnet
+
+We’ve made it easy to test Zcash Shielded Assets (ZSA) functionality by connecting directly to our public Zebra node, hosted by QEDIT on AWS.
+
+### Public Testnet Details
+
+- **TLS-enabled URL**: [https://dev.zebra.zsa-test.net](https://dev.zebra.zsa-test.net)
+
+You can run the `zcash_tx_tool` in a Docker container and connect to our testnet by supplying the appropriate environment variables.
+
+### Usage with Docker (HTTPS)
+
+```bash
+docker run --pull=always \
+  -e ZCASH_NODE_ADDRESS=dev.zebra.zsa-test.net \
+  -e ZCASH_NODE_PORT=443 \
+  -e ZCASH_NODE_PROTOCOL=https \
+  public.ecr.aws/j7v0v6n9/tx-tool:latest
+```
+
+Example logs:
+
+```
+Using NetworkConfig: node_address = dev.zebra.zsa-test.net ; node_port = 443 ; protocol = https
+2025-05-08T08:07:23.864492Z  INFO zcash_tx_tool::components::transactions: Starting sync from height 1
+...
+2025-05-08T08:08:58.961625Z  INFO zcash_tx_tool::commands::test_balances: === Balances after burning ===
+2025-05-08T08:08:58.961634Z  INFO zcash_tx_tool::commands::test_balances: Account 0 balance: 990
+2025-05-08T08:08:58.961638Z  INFO zcash_tx_tool::commands::test_balances: Account 1 balance: 1
+```
+
+This demonstrates the full ZSA lifecycle and verifies testnet functionality.
 
 ## License
 
