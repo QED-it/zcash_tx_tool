@@ -3,6 +3,7 @@ name = "zcash_tx_tool"
 authors = []
 version = "0.2.0"
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 clap = "4"

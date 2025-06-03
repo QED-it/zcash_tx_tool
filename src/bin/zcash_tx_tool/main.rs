@@ -7,5 +7,7 @@ use zcash_tx_tool::application::APP;
 
 /// Boot the application
 fn main() {
+    println!("Git tag: {}", env!("GIT_TAG"));
+    println!("Git commit: {}", env!("GIT_COMMIT"));
     abscissa_core::boot(&APP);
 }
