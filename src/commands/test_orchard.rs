@@ -1,16 +1,20 @@
-//! `test` - happy e2e flow that issues, transfers and burns an asset
+//! End-to-end tests for operations on the native ZEC asset.
+//!
+//! This module verifies operations on the native asset continue to work as expected.
+//! The tests ensure correct balance updates and transaction validity at each step.
 
 use abscissa_core::{Command, Runnable};
 use orchard::keys::Scope::External;
 use orchard::note::AssetBase;
 use zcash_primitives::transaction::TxId;
 
-use crate::commands::test_balances::{check_balances, print_balances, TestBalances};
+use crate::commands::test_balances::{
+    check_balances, print_balances, expected_balances_after_transfer, TestBalances, TransferInfo,
+    expected_balances_after_mine, TxiBatch,
+};
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::create_transfer_transaction;
-use crate::components::transactions::mine;
 use crate::components::transactions::{
-    create_shield_coinbase_transaction, mine_empty_blocks, sync_from_height,
+    create_shield_coinbase_transaction, mine, mine_empty_blocks, sync_from_height,
 };
 use crate::components::user::User;
 use crate::prelude::*;
@@ -28,8 +32,12 @@ impl Runnable for TestOrchardCmd {
 
         wallet.reset();
 
-        let miner = wallet.address_for_account(0, External);
-        let alice = wallet.address_for_account(1, External);
+        let num_users = 2;
+
+        let miner_idx = 0;
+        let alice_idx = 1;
+
+        let miner_addr = wallet.address_for_account(miner_idx, External);
 
         let coinbase_txid = prepare_test(
             config.chain.nu5_activation_height,
@@ -37,53 +45,58 @@ impl Runnable for TestOrchardCmd {
             &mut rpc_client,
         );
 
-        let mut balances = TestBalances::get_zec(&mut wallet);
-        print_balances("=== Initial balances ===", AssetBase::native(), balances);
+        let balances = TestBalances::get_native_balances(num_users, &mut wallet);
+        print_balances("=== Initial balances ===", AssetBase::native(), &balances);
 
         // --------------------- Shield miner's reward ---------------------
 
-        let shielding_tx = create_shield_coinbase_transaction(miner, coinbase_txid, &mut wallet);
-        mine(
+        let shielding_tx =
+            create_shield_coinbase_transaction(miner_addr, coinbase_txid, &mut wallet);
+        mine(&mut wallet, &mut rpc_client, Vec::from([shielding_tx]));
+
+        let expected_balances = expected_balances_after_mine(&balances, 0);
+        check_balances(
+            AssetBase::native(),
+            &expected_balances,
             &mut wallet,
-            &mut rpc_client,
-            Vec::from([shielding_tx]),
-            false,
+            num_users,
         );
 
-        let expected_delta = TestBalances::new(625_000_000 /*coinbase_reward*/, 0);
-        balances = check_balances(
+        print_balances(
             "=== Balances after shielding ===",
             AssetBase::native(),
-            balances,
-            expected_delta,
-            &mut wallet,
+            &expected_balances,
         );
 
         // --------------------- Create transfer ---------------------
 
-        let amount_to_transfer_1: i64 = 2;
-
-        let transfer_tx_1 = create_transfer_transaction(
-            miner,
-            alice,
-            amount_to_transfer_1 as u64,
+        let amount_to_transfer_1: u64 = 2;
+        let balances = TestBalances::get_native_balances(num_users, &mut wallet);
+        let transfer_info = TransferInfo::new(
+            miner_idx,
+            alice_idx,
             AssetBase::native(),
-            &mut wallet,
+            amount_to_transfer_1,
         );
-        mine(
+        let txi = TxiBatch::from_item(transfer_info);
+
+        let expected_balances = expected_balances_after_transfer(&balances, &txi);
+
+        let txs = txi.to_transactions(&mut wallet);
+
+        mine(&mut wallet, &mut rpc_client, txs);
+
+        check_balances(
+            AssetBase::native(),
+            &expected_balances,
             &mut wallet,
-            &mut rpc_client,
-            Vec::from([transfer_tx_1]),
-            false,
+            num_users,
         );
 
-        let expected_delta = TestBalances::new(-amount_to_transfer_1, amount_to_transfer_1);
-        check_balances(
+        print_balances(
             "=== Balances after transfer ===",
             AssetBase::native(),
-            balances,
-            expected_delta,
-            &mut wallet,
+            &expected_balances,
         );
     }
 }

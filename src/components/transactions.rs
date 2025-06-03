@@ -11,6 +11,7 @@ use orchard::Address;
 use rand::rngs::OsRng;
 use std::convert::TryFrom;
 use std::ops::Add;
+use orchard::keys::IssuanceValidatingKey;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
 use zcash_primitives::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
 use zcash_primitives::memo::MemoBytes;
@@ -21,13 +22,11 @@ use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
 
+const COINBASE_VALUE: u64 = 625_000_000;
+
 /// Mine a block with the given transactions and sync the user
-pub fn mine(
-    wallet: &mut User,
-    rpc_client: &mut dyn RpcClient,
-    txs: Vec<Transaction>,
-    activate: bool,
-) {
+pub fn mine(wallet: &mut User, rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) {
+    let activate = wallet.last_block_height().is_none();
     let (_, _) = mine_block(rpc_client, txs, activate);
     sync(wallet, rpc_client);
 }
@@ -78,8 +77,7 @@ pub fn create_shield_coinbase_transaction(
 
     let mut tx = create_tx(wallet);
 
-    let coinbase_value = 625_000_000;
-    let coinbase_amount = NonNegativeAmount::from_u64(coinbase_value).unwrap();
+    let coinbase_amount = NonNegativeAmount::from_u64(COINBASE_VALUE).unwrap();
     let miner_taddr = wallet.miner_address();
 
     let sk = wallet.miner_sk();
@@ -96,7 +94,7 @@ pub fn create_shield_coinbase_transaction(
     tx.add_orchard_output::<FeeError>(
         Some(wallet.orchard_ovk()),
         recipient,
-        coinbase_value,
+        COINBASE_VALUE,
         AssetBase::native(),
         MemoBytes::empty(),
     )
@@ -269,7 +267,7 @@ pub fn create_issue_transaction(
     asset_desc_hash: [u8; 32],
     first_issuance: bool,
     wallet: &mut User,
-) -> Transaction {
+) -> (Transaction, AssetBase) {
     info!("Issue {} asset", amount);
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(
@@ -282,7 +280,11 @@ pub fn create_issue_transaction(
         first_issuance,
     )
     .unwrap();
-    build_tx(tx)
+    let asset = AssetBase::derive(
+        &IssuanceValidatingKey::from(&wallet.issuance_key()),
+        &asset_desc_hash,
+    );
+    (build_tx(tx), asset)
 }
 
 /// Create a transaction that issues a new asset

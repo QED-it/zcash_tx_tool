@@ -18,7 +18,10 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
     - [2. Set Up and Run the Zcash tx-tool](#2-set-up-and-run-the-zcash-transaction-tool)
 - [Configuration](#configuration)
 - [Build Instructions](#build-instructions)
-- [ZSA Orchard Test Scenario](#zsa-orchard-test-scenario)
+- [Test Scenarios](#test-scenarios)
+    - [Orchard-ZSA Two Party Scenario](#orchard-zsa-two-party-scenario)
+    - [Orchard-ZSA Three Party Scenario](#orchard-zsa-three-party-scenario)
+    - [Creating your own scenario](#creating-your-own-scenario)
 - [Connecting to the Public ZSA Testnet](#connecting-to-the-public-ZSA-testnet)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
@@ -89,18 +92,27 @@ diesel setup
 ./zcutil/fetch-params.sh
 ```
 
-#### Build and Run the Orchard ZSA Test Case
+#### Build and Run a Test Scenario
 
-Build and run the test case using the Zcash tx-tool:
+There are multiple test scenarios provided in the repository, viz.
+* `test-orchard-zsa` (The detailed script for the flow is at [test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs).)
+* `test-three-party` (The detailed script for the flow is at [test_three_party.rs](src/commands/test_three_party.rs).)
+* `test-orchard` (The detailed script for the flow is at [test_orchard.rs](src/commands/test_orchard.rs).)
+
+Build and run the test case of your choice using the Zcash Transaction Tool, by replacing `<test-case>` in the command below with either of the test scenarios listed above:
 
 ```bash
 # Build and run with ZSA feature enabled
+cargo run --release --package zcash_tx_tool --bin zcash_tx_tool <test-case>
+```
+
+For example, to run the `test-orchard-zsa` scenario, use:
+
+```bash
 cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
 ```
 
-**Note**: To re-run the test scenario, reset the Zebra node by stopping and restarting the Zebra Docker container.
-
-The detailed script for the ZSA flow can be found in [test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs).
+**Note**: To re-run the test scenario (or to run a different scenario), reset the Zebra node by stopping and restarting the Zebra Docker container.
 
 ## Configuration
 
@@ -140,9 +152,13 @@ To test ZSA functionality with the tool, enable the corresponding feature flag:
 cargo build --release
 ```
 
-## ZSA Orchard Test Scenario
+## Test Scenarios
 
-The main test scenario ([src/commands/test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs)) consists of the following steps:
+We describe here 
+
+### Orchard-ZSA Two Party Scenario
+
+This test scenario ([src/commands/test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs)) is a two-party setting which performs the following steps:
 
 1. **Issue an Asset**: Create and issue a new ZSA.
 2. **Transfer the Asset**: Send the issued asset to another account.
@@ -154,6 +170,32 @@ To run the test scenario:
 cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
 ```
 
+### Orchard-ZSA Three Party Scenario
+
+This test scenario ([src/commands/test_three_party.rs](src/commands/test_three_party.rs)) is a three-party setting which performs the following steps:
+
+1. **Issue an Asset**: Create and issue a new ZSA.
+2. **Transfer the Asset (Twice)**: Send the issued ZSA to another account, and then from that account to a third account.
+3. **Burn the Asset**: The third account burns the ZSA.
+
+To run the test scenario:
+
+```bash
+cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-three-party
+```
+
+### Creating your own scenario
+It is also possible to construct your own scenario in a manner similar to these. 
+To do so, copy one of the test scenario files to a new file in the same location and make the changes to fit your setting.
+
+To allow this new file to be run, make the following changes to [commands.rs](src/commands.rs):
+* Add the module corresponding to your new file to the start of [commands.rs](src/commands.rs).
+* Add an analogous new variant to the `AppCmd` enum.
+
+You should then be able to run your scenario via (assuming `test-scenario` is the name of your scenario):
+```bash
+cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-scenario
+```
 
 ## Connecting to the Public ZSA Testnet
 
@@ -187,7 +229,6 @@ Using NetworkConfig: node_address = dev.zebra.zsa-test.net ; node_port = 443 ; p
 ```
 
 This demonstrates the full ZSA lifecycle and verifies testnet functionality.
-
 
 ## License
 
