@@ -18,7 +18,10 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
     - [2. Set Up and Run the Zcash tx-tool](#2-set-up-and-run-the-zcash-transaction-tool)
 - [Configuration](#configuration)
 - [Build Instructions](#build-instructions)
-- [ZSA Orchard Test Scenario](#zsa-orchard-test-scenario)
+- [Test Scenarios](#test-scenarios)
+    - [Orchard-ZSA Two Party Scenario](#orchard-zsa-two-party-scenario)
+    - [Orchard-ZSA Three Party Scenario](#orchard-zsa-three-party-scenario)
+    - [Creating your own scenario](#creating-your-own-scenario)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
 
