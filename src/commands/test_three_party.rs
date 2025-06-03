@@ -110,8 +110,7 @@ impl Runnable for TestThreePartyCmd {
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         let amount_to_burn_supplier = 1;
 
-        let txi =
-            TxiBatch::from_item(BurnInfo::new(supplier_idx, asset, amount_to_burn_supplier));
+        let txi = TxiBatch::from_item(BurnInfo::new(supplier_idx, asset, amount_to_burn_supplier));
 
         // Generate expected balances after burn
         let expected_balances = expected_balances_after_burn(&balances, &txi);
