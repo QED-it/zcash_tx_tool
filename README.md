@@ -19,7 +19,7 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
 - [Configuration](#configuration)
 - [Build Instructions](#build-instructions)
 - [ZSA Orchard Test Scenario](#zsa-orchard-test-scenario)
-- [Connecting to the Public ZSA Testnet](#Connecting to the Public ZSA Testnet)
+- [Connecting to the Public ZSA Testnet](#connecting-to-the-public-ZSA-testnet)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
 
