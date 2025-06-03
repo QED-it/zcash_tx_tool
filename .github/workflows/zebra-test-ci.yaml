@@ -74,22 +74,22 @@ jobs:
           -e ZCASH_NODE_PROTOCOL=http \
           --name zcash-tx-tool \
           zcash-tx-tool:local test-orchard-zsa
-          
+        
+        echo "Printing container logs:"
+        docker logs zcash-tx-tool        
+        
         # Get the exit code from the container
         EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
+        
+        # Clean up
+        docker rm zcash-tx-tool
         
         # Check if the tx_tool succeeded
         if [ $EXIT_CODE -eq 0 ]; then
           echo "tx-tool completed successfully!"
-        
-          # Clean up
-          docker rm zcash-tx-tool
-  
           exit 0
         else
           echo "tx-tool failed with exit code $EXIT_CODE"
-          echo "Printing container logs:"
-          docker logs zcash-tx-tool
           exit 1
         fi
 
@@ -103,20 +103,20 @@ jobs:
           --name zcash-tx-tool \
           zcash-tx-tool:local test-three-party
         
+        echo "Printing container logs:"
+        docker logs zcash-tx-tool
+        
         # Get the exit code from the container
         EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
-        
-        # Check if the tx_tool succeeded
-        if [ $EXIT_CODE -eq 0 ]; then
-          echo "tx-tool completed successfully!"
         
         # Clean up
         docker rm zcash-tx-tool
         
+        # Check if the tx_tool succeeded
+        if [ $EXIT_CODE -eq 0 ]; then
+          echo "tx-tool completed successfully!"        
           exit 0
         else
           echo "tx-tool failed with exit code $EXIT_CODE"
-          echo "Printing container logs:"
-          docker logs zcash-tx-tool
           exit 1
         fi
