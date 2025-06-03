@@ -16,6 +16,9 @@ Initial release.
 - first_issuance flag
 - action-group-based serialization
 
-## [Unreleased] - 2025-05-05
+## [0.3.0] - 2025-06-03
 ### Added
+- Support for the asset description hash in the issuance bundle
+- Structures for describing transfer and burn information, ability to convert them into transactions
 - Support for scenarios with arbitrary number of accounts
+- Additional scenario for a three party test case
