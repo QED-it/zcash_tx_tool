@@ -14,6 +14,12 @@ WORKDIR /app
 # Copy the entire repository
 COPY . .
 
+# Capture version information during build
+RUN echo "GIT_COMMIT=$(git rev-parse HEAD)" > /app/version_info.env && \
+    echo "GIT_TAG=$(git describe --tags --exact-match 2>/dev/null || echo 'none')" >> /app/version_info.env && \
+    echo "DOCKERFILE_HASH=$(sha256sum Dockerfile | cut -d' ' -f1)" >> /app/version_info.env && \
+    echo "Version info captured:" && cat /app/version_info.env
+
 # Install diesel_cli with specific version
 RUN cargo install diesel_cli@2.1.1 --no-default-features --features sqlite --locked
 
