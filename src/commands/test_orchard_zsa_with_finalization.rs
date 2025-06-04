@@ -86,7 +86,7 @@ impl Runnable for TestOrchardZSAFinalCmd {
             asset,
             &actual_balances,
         );
-        check_balances(asset, &expected_balances, &mut wallet, num_users); 
+        check_balances(asset, &expected_balances, &mut wallet, num_users);
     }
 }
 
