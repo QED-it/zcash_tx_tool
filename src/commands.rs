@@ -14,12 +14,14 @@ mod clean;
 mod test_balances;
 mod test_orchard;
 mod test_orchard_zsa;
+mod test_orchard_zsa_with_finalization;
 mod test_three_party;
 
 use crate::commands::clean::CleanCmd;
 use crate::commands::test_orchard::TestOrchardCmd;
 use crate::commands::test_orchard_zsa::TestOrchardZSACmd;
 use crate::commands::test_three_party::TestThreePartyCmd;
+use crate::commands::test_orchard_zsa_with_finalization::TestOrchardZSAFinalCmd;
 use crate::config::AppConfig;
 use abscissa_core::{Command, Configurable, FrameworkError, Runnable};
 use std::path::PathBuf;
@@ -33,6 +35,7 @@ pub enum AppCmd {
     TestOrchard(TestOrchardCmd),
     TestOrchardZSA(TestOrchardZSACmd),
     TestThreeParty(TestThreePartyCmd),
+    TestOrchardZSAFinal(TestOrchardZSAFinalCmd),
     Clean(CleanCmd),
 }
 
