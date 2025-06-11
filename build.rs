@@ -12,22 +12,14 @@ fn run_command_with_fallback(cmd: &str, args: &[&str], fallback: &str) -> String
 }
 
 fn main() {
-    let git_tag = run_command_with_fallback(
-        "git", 
-        &["describe", "--tags", "--abbrev=0"], 
-        "none"
-    );
-    
-    let git_commit = run_command_with_fallback(
-        "git", 
-        &["rev-parse", "HEAD"], 
-        "none"
-    );
-    
+    let git_tag = run_command_with_fallback("git", &["describe", "--tags", "--abbrev=0"], "none");
+
+    let git_commit = run_command_with_fallback("git", &["rev-parse", "HEAD"], "none");
+
     let dockerfile_hash = run_command_with_fallback(
-        "sh", 
-        &["-c", "sha256sum Dockerfile | cut -d' ' -f1"], 
-        "none"
+        "sh",
+        &["-c", "sha256sum Dockerfile | cut -d' ' -f1"],
+        "none",
     );
 
     println!("cargo:rustc-env=GIT_TAG={}", git_tag);
