@@ -34,7 +34,8 @@ pub static RUNNER: Lazy<CmdRunner> = Lazy::new(CmdRunner::default);
 fn version_no_args() {
     let mut runner = RUNNER.clone();
     let mut cmd = runner.arg("--version").capture_stdout().run();
-    cmd.stdout().expect_regex(r"^Git tag:");
+    cmd.stdout().expect_regex(r"^Git tag: (none|[\w\.\-]+)");
     cmd.stdout().expect_regex(r"^Git commit:");
+    cmd.stdout().expect_regex(r"^Dockerfile hash:");
     cmd.stdout().expect_regex(r"\A\w+ [\d\.\-]+\z");
 }
