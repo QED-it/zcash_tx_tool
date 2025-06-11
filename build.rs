@@ -6,7 +6,7 @@ fn main() {
         .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "unknown".to_owned());
 
     let git_commit = Command::new("git")
