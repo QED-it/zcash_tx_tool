@@ -12,7 +12,8 @@ fn run_command_with_fallback(cmd: &str, args: &[&str], fallback: &str) -> String
 }
 
 fn main() {
-    let git_tag = run_command_with_fallback("git", &["describe", "--tags", "--abbrev=0"], "none");
+    let git_tag =
+        run_command_with_fallback("git", &["describe", "--exact-match", "--tags"], "none");
 
     let git_commit = run_command_with_fallback("git", &["rev-parse", "HEAD"], "none");
 
