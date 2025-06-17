@@ -1,7 +1,5 @@
 name: CI Workflow to ECR and Zebra (merged-PR gate)
 
-# 1️⃣  Fire only when a PR targeting `main` is closed.
-#     We’ll bail out immediately unless that PR was merged.
 on:
   pull_request:
     branches: [main]
@@ -9,13 +7,10 @@ on:
 
 jobs:
   trigger-on-merge:
-    # 2️⃣  Continue only if the PR was merged
     if: ${{ github.event.pull_request.merged == true }}
     runs-on: ubuntu-latest
 
     steps:
-      # 3️⃣  Make sure *this* commit’s run of
-      #     “Check tx-tool against Zebra” concluded **success**.
       - name: Verify Zebra check workflow succeeded
         id: zebra
         uses: actions/github-script@v6
@@ -41,7 +36,6 @@ jobs:
               core.setFailed('Zebra check did not succeed on the merge commit');
             }
 
-      # 4️⃣  Dispatch the downstream workflows only if step #3 passed
       - name: Trigger push-to-ECR workflow
         if: steps.zebra.outputs.passed == 'true'
         uses: actions/github-script@v6
