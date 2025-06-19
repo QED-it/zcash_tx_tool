@@ -6,6 +6,10 @@ and this library adheres to Rust's notion of
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Show git metadata when running `zcash_tx_tool`
+- Embed `GIT_TAG` and `GIT_COMMIT` via build script
+- Adjust acceptance tests for the new output
 
 ## [0.3.0] - 2025-06-03
 ### Added

@@ -205,16 +205,22 @@ We’ve made it easy to test Zcash Shielded Assets (ZSA) functionality by connec
 
 - **TLS-enabled URL**: [https://dev.zebra.zsa-test.net](https://dev.zebra.zsa-test.net)
 
-You can run the `zcash_tx_tool` in a Docker container and connect to our testnet by supplying the appropriate environment variables.
+You can run the `zcash_tx_tool` against our testnet by setting the appropriate environment variables before running your test scenarios.
 
-### Usage with Docker (HTTPS)
+### Usage with Native Rust Commands
+
+Set the following environment variables before running your test scenarios:
 
 ```bash
-docker run --pull=always \
-  -e ZCASH_NODE_ADDRESS=dev.zebra.zsa-test.net \
-  -e ZCASH_NODE_PORT=443 \
-  -e ZCASH_NODE_PROTOCOL=https \
-  public.ecr.aws/j7v0v6n9/tx-tool:latest
+export ZCASH_NODE_ADDRESS=dev.zebra.zsa-test.net
+export ZCASH_NODE_PORT=443
+export ZCASH_NODE_PROTOCOL=https
+```
+
+Then run your test scenario as usual:
+
+```bash
+cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
 ```
 
 Example logs:
