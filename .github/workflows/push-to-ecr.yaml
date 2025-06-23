@@ -4,7 +4,7 @@ on:
     inputs:
       version:
         description: 'Version to tag the Docker image'
-        required: true
+        required: false
         type: string
 env:
   AWS_REGION: us-east-1  # Must be us-east-1 for a Public ECR
