@@ -36,16 +36,18 @@ jobs:
           git fetch --tags
           
           # Get exact match tag if it exists (will fail if current commit doesn't have a tag, and will put an empty string)
-          EXACT_TAG=$(git describe --exact-match --tags 2>/dev/null || echo "")
-          echo "EXACT_TAG=$EXACT_TAG" >> $GITHUB_ENV
+          GIT_TAG=$(git describe --exact-match --tags 2>/dev/null || echo "")
+          if [ -n "$GIT_TAG" ]; then
+            echo "GIT_TAG=$GIT_TAG" >> $GITHUB_ENV
+          fi
           
           # Set the input version
           echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
           
           # Echo what we found
           echo "Git Tag Discovery:"
-          if [ -n "$EXACT_TAG" ]; then
-            echo "  Found exact match Git tag: $EXACT_TAG"
+          if [ -n "$GIT_TAG" ]; then
+            echo "  Found exact match Git tag: $GIT_TAG"
           else
             echo "  No exact match Git tag found for current commit"
           fi
@@ -56,7 +58,7 @@ jobs:
           ECR_PUBLIC_REGISTRY: public.ecr.aws
           IMAGE_TAG_LATEST: latest
           IMAGE_TAG_VERSION: ${{ env.VERSION }}
-          IMAGE_TAG_EXACT: ${{ env.EXACT_TAG }}
+          IMAGE_TAG_EXACT: ${{ env.GIT_TAG }}
         run: |
           # Build docker container with multiple tags
           DOCKER_TAGS=(
