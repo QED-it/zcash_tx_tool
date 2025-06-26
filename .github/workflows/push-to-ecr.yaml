@@ -35,7 +35,7 @@ jobs:
         run: |
           git fetch --tags
           
-          # Get exact match tag if it exists (will fail if current commit doesn't have a tag, and will put an empty string)
+          # Get exact match tag if it exists (will be empty if the current commit doesn't have a tag)
           GIT_TAG=$(git describe --exact-match --tags 2>/dev/null || echo "")
           if [ -n "$GIT_TAG" ]; then
             echo "GIT_TAG=$GIT_TAG" >> $GITHUB_ENV
