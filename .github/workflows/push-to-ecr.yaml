@@ -63,14 +63,13 @@ jobs:
           IMAGE_TAG_LATEST: latest
         run: |
           # Build docker container with multiple tags
-          DOCKER_TAGS=(
-            "-t $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_LATEST"
-            "-t $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_VERSION"
-          )
+          DOCKER_BUILD_ARGS=()
+          DOCKER_BUILD_ARGS+=("-t" "$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_LATEST")
+          DOCKER_BUILD_ARGS+=("-t" "$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_VERSION")
           
           # Add exact tag if it exists
           if [ -n "$GIT_TAG" ]; then
-            DOCKER_TAGS+=("-t $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$GIT_TAG")
+            DOCKER_BUILD_ARGS+=("-t" "$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$GIT_TAG")
           fi
           
           # Echo final tags that will be pushed
@@ -84,7 +83,7 @@ jobs:
           
           # Build with all tags
           echo "Building Docker image..."
-          docker build "${DOCKER_TAGS[@]}" -f Dockerfile .
+          docker build "${DOCKER_BUILD_ARGS[@]}" -f Dockerfile .
           
           # Push all tags
           echo "Pushing images to ECR Public..."
