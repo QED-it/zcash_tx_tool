@@ -1,7 +1,10 @@
-# CI Workflow to test tx-tool against a locally built Zebra node (defined in "Dockerfile-zebra")
-# This workflow ensures tx-tool works correctly by spinning up a Zebra container
+# CI Workflow to test tx-tool against a locally built Zebra node
+# This workflow clones the zebra repo at a specific branch, builds the Zebra Docker image, and tests tx-tool against it.
+# The workflow ensures tx-tool works correctly by spinning up a Zebra container
 # and running the tx-tool from the current branch against it in a Docker network.
 # Triggers: push to main, pull requests, and manual runs via workflow_dispatch. 
+
+# Please note that the selected Zebra branch should be a branch containing the testnet-single-node-deploy directory with a "dockerfile" and "regtest-config.toml" file in it.
 
 name: Check tx-tool against Zebra
 
@@ -16,8 +19,17 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
+    - name: Checkout tx-tool code
       uses: actions/checkout@v3
+      with:
+        path: tx-tool
+      
+    - name: Checkout Zebra code
+      uses: actions/checkout@v3
+      with:
+        repository: QED-it/zebra
+        ref: ${{ vars.ZEBRA_BRANCH_TO_TEST || 'zsa-integration-demo' }} # The branch in Zebra we want to test against
+        path: zebra
       
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
@@ -26,16 +38,16 @@ jobs:
       uses: actions/cache@v3
       with:
         path: /tmp/.buildx-cache
-        key: zebra-cache-${{ runner.os }}-${{ hashFiles('Dockerfile-zebra') }}
+        key: zebra-cache-${{ runner.os }}-${{ hashFiles('zebra/testnet-single-node-deploy/Dockerfile') }}
         restore-keys: |
           zebra-cache-${{ runner.os }}-
           zebra-cache-
       
-    - name: Build Zebra Node (Dockerfile-zebra)
+    - name: Build Zebra Node
       uses: docker/build-push-action@v4
       with:
-        context: .
-        file: ./Dockerfile-zebra
+        context: zebra
+        file: zebra/testnet-single-node-deploy/Dockerfile
         tags: zebra-node:local
         push: false
         load: true
@@ -53,8 +65,8 @@ jobs:
     - name: Build tx-tool
       uses: docker/build-push-action@v4
       with:
-        context: .
-        file: ./Dockerfile
+        context: tx-tool
+        file: tx-tool/Dockerfile
         tags: zcash-tx-tool:local
         push: false
         load: true
