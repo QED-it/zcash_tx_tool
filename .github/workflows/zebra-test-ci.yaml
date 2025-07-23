@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: QED-it/zebra
-          ref: ${{ vars.ZEBRA_BRANCH_TO_TEST || 'zsa-integration-demo' }} # The branch in Zebra we want to test against
+          ref: arseni-adjust-dockerfiles # ${{ vars.ZEBRA_BRANCH_TO_TEST || 'zsa-integration-demo' }} # The branch in Zebra we want to test against
           path: zebra
 
       - name: Set up Docker Buildx
