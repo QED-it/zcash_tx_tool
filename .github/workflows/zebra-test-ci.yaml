@@ -37,10 +37,6 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
-          key: zebra-cache-${{ runner.os }}-${{ hashFiles('zebra/testnet-single-node-deploy/Dockerfile') }}
-          restore-keys: |
-            zebra-cache-${{ runner.os }}-
-            zebra-cache-
 
       - name: Build Zebra Node
         uses: docker/build-push-action@v4
