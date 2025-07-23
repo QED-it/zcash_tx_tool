@@ -64,14 +64,20 @@ sudo apt install pkg-config libssl-dev libsqlite3-dev
 Open a terminal and execute the following commands:
 
 ```bash
+# Clone the zebra repository with the ZSA integration branch
+git clone -b zsa-integration-demo --single-branch https://github.com/QED-it/zebra.git
+
+# Navigate to the testnet deployment directory
+cd zebra/testnet-single-node-deploy
+
 # Build the Zebra Docker image
-docker build -t qedit/zebra-regtest-txv6 -f Dockerfile-zebra .
+docker build -t qedit/zebra-regtest-txv6 .
 
 # Run the Zebra Docker container
 docker run -p 18232:18232 qedit/zebra-regtest-txv6
 ```
 
-For more details on how the Docker image is created and synchronized, refer to the [Dockerfile-zebra](./Dockerfile-zebra).
+For more details on how the Docker image is created and synchronized, refer to the [Dockerfile](https://github.com/QED-it/zebra/blob/zsa-integration-demo/testnet-single-node-deploy/Dockerfile) in the zebra repository.
 
 ### 2. Set Up and Run the Zcash tx-tool
 
