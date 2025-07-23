@@ -46,7 +46,7 @@ jobs:
     - name: Build Zebra Node
       uses: docker/build-push-action@v4
       with:
-        context: zebra/testnet-single-node-deploy
+        context: zebra
         file: zebra/testnet-single-node-deploy/Dockerfile
         tags: zebra-node:local
         push: false
