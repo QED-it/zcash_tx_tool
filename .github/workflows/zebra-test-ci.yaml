@@ -48,8 +48,6 @@ jobs:
           tags: zebra-node:local
           push: false
           load: true
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
 
       - name: Create Docker network and run Zebra Node container
         run: |
