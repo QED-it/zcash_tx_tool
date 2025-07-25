@@ -39,12 +39,15 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
 
       - name: Build Zebra Node
         uses: docker/build-push-action@v4
         with:
           context: zebra
-          file: zebra/testnet-single-node-deploy/Dockerfile
+          file: zebra/testnet-single-node-deploy/dockerfile
           tags: zebra-node:local
           push: false
           load: true
