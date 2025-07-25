@@ -5,8 +5,6 @@
 # Triggers: push to main, pull requests, and manual runs via workflow_dispatch.
 # Please note that the selected Zebra branch should be a branch containing the testnet-single-node-deploy directory with a "dockerfile" and "regtest-config.toml" file in it.
 
-# Please note that the selected Zebra branch should be a branch containing the testnet-single-node-deploy directory with a "dockerfile" and "regtest-config.toml" file in it.
-
 name: Check tx-tool against Zebra
 
 on:
@@ -29,7 +27,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: QED-it/zebra
-          ref: arseni-adjust-dockerfiles # ${{ vars.ZEBRA_BRANCH_TO_TEST || 'zsa-integration-demo' }} # The branch in Zebra we want to test against
+          ref: ${{ vars.ZEBRA_BRANCH_TO_TEST || 'zsa-integration-demo' }} # The branch in Zebra we want to test against
           path: zebra
 
       - name: Set up Docker Buildx
@@ -39,18 +37,21 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          key: zebra-cache-${{ runner.os }}-${{ hashFiles('zebra/testnet-single-node-deploy/Dockerfile') }}
           restore-keys: |
-            ${{ runner.os }}-buildx-
+            zebra-cache-${{ runner.os }}-
+            zebra-cache-
 
       - name: Build Zebra Node
         uses: docker/build-push-action@v4
         with:
-          context: zebra/testnet-single-node-deploy
-          file: zebra/testnet-single-node-deploy/dockerfile
+          context: zebra
+          file: zebra/testnet-single-node-deploy/Dockerfile
           tags: zebra-node:local
           push: false
           load: true
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
 
       - name: Create Docker network and run Zebra Node container
         run: |
@@ -60,35 +61,10 @@ jobs:
           # Run Zebra node connected to the network
           docker run -d --name zebra-node --network zcash-net -p 18232:18232 zebra-node:local
           
-          # Wait for the node to start up and be ready
+          # Wait for the node to start up
           echo "Waiting for Zebra node to initialize..."
           sleep 30
-          
-          # Wait for the RPC endpoint to be available
-          echo "Waiting for Zebra RPC endpoint to be ready..."
-          for i in {1..60}; do
-            if docker run --rm --network zcash-net alpine nc -z zebra-node 18232; then
-              echo "Zebra RPC endpoint is ready!"
-              break
-            fi
-            echo "Attempt $i: Zebra RPC endpoint not ready yet, waiting..."
-            sleep 5
-          done
-          
           echo "Finished waiting for Zebra node..."
-          
-          # Debug: Check if containers are running and network connectivity
-          echo "=== Debug Information ==="
-          echo "Docker containers:"
-          docker ps -a
-          echo "Docker networks:"
-          docker network ls
-          echo "Zebra node logs:"
-          docker logs zebra-node
-          echo "Testing network connectivity from host:"
-          docker run --rm --network zcash-net alpine nslookup zebra-node
-          echo "Testing port connectivity:"
-          docker run --rm --network zcash-net alpine nc -zv zebra-node 18232
 
       - name: Build tx-tool
         uses: docker/build-push-action@v4
@@ -101,11 +77,6 @@ jobs:
 
       - name: Run tx-tool for test-orchard-zsa and verify success
         run: |
-          # Debug: Test connectivity before running tx-tool
-          echo "=== Pre-run connectivity test ==="
-          docker run --rm --network zcash-net alpine nslookup zebra-node
-          docker run --rm --network zcash-net alpine nc -zv zebra-node 18232
-          
           # Run the tx tool and capture exit code
           docker run --network zcash-net \
             -e ZCASH_NODE_ADDRESS=zebra-node \
@@ -134,11 +105,6 @@ jobs:
 
       - name: Run tx-tool again for test-three-party and verify success
         run: |
-          # Debug: Test connectivity before running tx-tool
-          echo "=== Pre-run connectivity test ==="
-          docker run --rm --network zcash-net alpine nslookup zebra-node
-          docker run --rm --network zcash-net alpine nc -zv zebra-node 18232
-          
           # Run the tx tool and capture exit code
           docker run --network zcash-net \
             -e ZCASH_NODE_ADDRESS=zebra-node \
