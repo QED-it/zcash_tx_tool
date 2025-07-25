@@ -5,6 +5,8 @@
 # Triggers: push to main, pull requests, and manual runs via workflow_dispatch.
 # Please note that the selected Zebra branch should be a branch containing the testnet-single-node-deploy directory with a "dockerfile" and "regtest-config.toml" file in it.
 
+# Please note that the selected Zebra branch should be a branch containing the testnet-single-node-deploy directory with a "dockerfile" and "regtest-config.toml" file in it.
+
 name: Check tx-tool against Zebra
 
 on:
@@ -161,4 +163,3 @@ jobs:
             echo "tx-tool failed with exit code $EXIT_CODE"
             exit 1
           fi
-
