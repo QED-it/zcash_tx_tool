@@ -193,6 +193,24 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
 
+      - name: Verify file structure in built container
+        run: |
+          echo "=== Checking file structure inside the built container ==="
+          echo "Working directory contents:"
+          docker run --rm zebra-node:local ls -la /app/
+          echo ""
+          echo "=== Checking if testnet-single-node-deploy directory exists ==="
+          docker run --rm zebra-node:local ls -la /app/testnet-single-node-deploy/
+          echo ""
+          echo "=== Verifying the exact config file path that ENTRYPOINT will use ==="
+          docker run --rm zebra-node:local ls -la /app/testnet-single-node-deploy/regtest-config.toml
+          echo ""
+          echo "=== Testing if zebrd binary exists ==="
+          docker run --rm zebra-node:local ls -la /app/target/release/zebrd
+          echo ""
+          echo "=== Testing the exact ENTRYPOINT command manually ==="
+          docker run --rm zebra-node:local /bin/bash -c "cd /app && ls -la testnet-single-node-deploy/regtest-config.toml"
+
       - name: Debug built Docker image
         run: |
           echo "=== Inspecting built Docker image ==="
