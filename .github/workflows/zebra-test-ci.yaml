@@ -241,6 +241,7 @@ jobs:
           docker run --rm --entrypoint="" zebra-node:local pwd
           docker run --rm --entrypoint="" zebra-node:local ls -la testnet-single-node-deploy/regtest-config.toml || echo "Relative path failed"
 
+          
       - name: Create Docker network and start Zebra Node
         run: |
           set +e  # Don't exit on errors during setup
