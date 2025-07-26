@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: QED-it/zebra
-          ref: ${{ vars.ZEBRA_BRANCH_TO_TEST || 'zsa-integration-demo' }} # The branch in Zebra we want to test against
+          ref: arseni-adjust-dockerfiles # ${{ vars.ZEBRA_BRANCH_TO_TEST || 'zsa-integration-demo' }} # The branch in Zebra we want to test against
           path: zebra
 
       - name: Set up Docker Buildx
@@ -163,6 +163,24 @@ jobs:
             echo "✅ regtest-config.toml already exists"
           fi
 
+      - name: Debug build context before Docker build
+        run: |
+          echo "=== Build context structure (zebra directory) ==="
+          ls -la zebra/
+          echo ""
+          echo "=== Contents of testnet-single-node-deploy ==="
+          ls -la zebra/testnet-single-node-deploy/
+          echo ""
+          echo "=== Verifying dockerfile can find all COPY sources ==="
+          echo "Checking for '../' parent directory access from testnet-single-node-deploy:"
+          ls -la zebra/testnet-single-node-deploy/../ | head -10
+          echo ""
+          echo "=== Dockerfile COPY command analysis ==="
+          echo "Current working directory for build context will be: zebra/"
+          echo "Dockerfile says 'COPY .. .' which would try to copy from parent of zebra"
+          echo "Dockerfile says 'COPY regtest-config.toml regtest-config.toml' which looks for:"
+          echo "  zebra/regtest-config.toml (WRONG - should be zebra/testnet-single-node-deploy/regtest-config.toml)"
+
       - name: Build Zebra Node
         uses: docker/build-push-action@v4
         with:
@@ -174,6 +192,24 @@ jobs:
           load: true
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+
+      - name: Debug built Docker image
+        run: |
+          echo "=== Inspecting built Docker image ==="
+          docker images zebra-node:local
+          echo ""
+          echo "=== Testing image can run basic commands ==="
+          docker run --rm zebra-node:local --version || echo "Version command failed"
+          echo ""
+          echo "=== Checking what files made it into the container ==="
+          docker run --rm zebra-node:local ls -la /app/ | head -20
+          echo ""
+          echo "=== Looking for config file in container ==="
+          docker run --rm zebra-node:local ls -la /app/regtest-config.toml || echo "Config file not found in /app/"
+          docker run --rm zebra-node:local find /app -name "*regtest*" -type f || echo "No regtest files found"
+          echo ""
+          echo "=== Checking if zebrd binary exists ==="
+          docker run --rm zebra-node:local ls -la /app/target/release/ | grep zebrd || echo "zebrd binary not found"
 
       - name: Create Docker network and start Zebra Node
         run: |
