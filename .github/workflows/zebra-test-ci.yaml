@@ -104,10 +104,63 @@ jobs:
           if [ -f "zebra/testnet-single-node-deploy/dockerfile" ]; then
             echo "✅ Found lowercase 'dockerfile'"
             echo "Contents of testnet-single-node-deploy/dockerfile:"
+            echo "---START DOCKERFILE---"
             cat zebra/testnet-single-node-deploy/dockerfile
+            echo "---END DOCKERFILE---"
           else
             echo "❌ dockerfile not found!"
             exit 1
+          fi
+          
+          echo ""
+          echo "=== Current testnet-single-node-deploy directory contents ==="
+          ls -la zebra/testnet-single-node-deploy/
+          
+          echo ""
+          echo "=== Config file info ==="
+          if [ -f "zebra/testnet-single-node-deploy/regtest-config.toml" ]; then
+            echo "Config file size: $(wc -c < zebra/testnet-single-node-deploy/regtest-config.toml) bytes"
+            echo "First few lines of config:"
+            head -5 zebra/testnet-single-node-deploy/regtest-config.toml
+          fi
+
+      - name: Generate regtest config if missing
+        run: |
+          if [ ! -f "zebra/testnet-single-node-deploy/regtest-config.toml" ]; then
+            echo "Generating regtest config..."
+            
+            # Create the directory if it doesn't exist
+            mkdir -p zebra/testnet-single-node-deploy/
+            
+            cd zebra
+            
+            # Try to generate a valid config using the zebrad binary
+            if command -v cargo >/dev/null 2>&1; then
+              echo "Using cargo to generate config..."
+              
+              # Generate config to the correct location
+              cargo run --bin zebrad -- generate -o testnet-single-node-deploy/regtest-config.toml || {
+                echo "Cargo generate failed, trying alternative approach..."
+                
+                # Generate to current directory then move
+                cargo run --bin zebrad -- generate -o zebrad.toml
+                if [ -f "zebrad.toml" ]; then
+                  mv zebrad.toml testnet-single-node-deploy/regtest-config.toml
+                  echo "Generated and moved config file"
+                else
+                  echo "❌ Could not generate config file"
+                  exit 1
+                fi
+              }
+            else
+              echo "❌ Cannot generate config - cargo not available"
+              exit 1
+            fi
+            
+            echo "Config file created successfully"
+            echo "File size: $(wc -c < testnet-single-node-deploy/regtest-config.toml) bytes"
+          else
+            echo "✅ regtest-config.toml already exists"
           fi
 
       - name: Build Zebra Node
