@@ -98,29 +98,24 @@ jobs:
             done
           fi
 
-      - name: Generate regtest config if missing
+      - name: Check and fix Dockerfile path
         run: |
-          if [ ! -f "zebra/testnet-single-node-deploy/regtest-config.toml" ]; then
-            echo "Generating regtest config..."
-            cd zebra
-            
-            # Try to generate a valid config
-            if command -v cargo >/dev/null 2>&1; then
-              echo "Using cargo to generate config..."
-              cargo run --bin zebrad -- generate -o testnet-single-node-deploy/regtest-config.toml
-            else
-              echo "❌ Cannot generate config - cargo not available and no existing config found"
-              exit 1
-            fi
-            
-            echo "Config file created successfully"
+          echo "=== Checking dockerfile vs Dockerfile ==="
+          if [ -f "zebra/testnet-single-node-deploy/dockerfile" ]; then
+            echo "✅ Found lowercase 'dockerfile'"
+            echo "Contents of testnet-single-node-deploy/dockerfile:"
+            cat zebra/testnet-single-node-deploy/dockerfile
+          else
+            echo "❌ dockerfile not found!"
+            exit 1
           fi
 
       - name: Build Zebra Node
         uses: docker/build-push-action@v4
         with:
           context: zebra
-          file: zebra/testnet-single-node-deploy/Dockerfile
+          # Use the testnet-specific dockerfile (lowercase)
+          file: zebra/testnet-single-node-deploy/dockerfile
           tags: zebra-node:local
           push: false
           load: true
@@ -131,13 +126,43 @@ jobs:
         run: |
           set +e  # Don't exit on errors during setup
           
+          # First, let's check what files are actually in the build context
+          echo "=== Final check before starting container ==="
+          ls -la zebra/testnet-single-node-deploy/ || echo "Directory missing!"
+          
           # Create a network to connect the containers
           echo "Creating Docker network..."
           docker network create zcash-net
           
+          # Before starting container, let's test the image
+          echo "=== Testing Zebra image directly ==="
+          docker run --rm zebra-node:local --version || echo "Version command failed"
+          docker run --rm zebra-node:local generate --help || echo "Generate command failed"
+          
+          # Try to generate config in the image if we still don't have one
+          if [ ! -f "zebra/testnet-single-node-deploy/regtest-config.toml" ]; then
+            echo "=== Attempting to generate config inside container ==="
+            docker run --rm -v "$(pwd)/zebra:/workspace" -w /workspace zebra-node:local generate -o testnet-single-node-deploy/regtest-config.toml || echo "Container config generation failed"
+          fi
+          
+          # Check if config was created
+          if [ -f "zebra/testnet-single-node-deploy/regtest-config.toml" ]; then
+            echo "✅ Config file exists, size: $(wc -c < zebra/testnet-single-node-deploy/regtest-config.toml) bytes"
+          else
+            echo "❌ Still no config file - trying to generate in current directory"
+            docker run --rm -v "$(pwd):/workspace" -w /workspace zebra-node:local generate -o regtest-config.toml
+            if [ -f "regtest-config.toml" ]; then
+              mv regtest-config.toml zebra/testnet-single-node-deploy/
+              echo "✅ Generated and moved config"
+            fi
+          fi
+          
           # Run Zebra node connected to the network
           echo "Starting Zebra node container..."
-          docker run -d --name zebra-node --network zcash-net -p 18232:18232 zebra-node:local
+          # Try with specific config path and regtest network
+          docker run -d --name zebra-node --network zcash-net -p 18232:18232 \
+            -v "$(pwd)/zebra/testnet-single-node-deploy:/config" \
+            zebra-node:local start -c /config/regtest-config.toml
           
           # Immediately check if container started successfully
           sleep 5
@@ -152,11 +177,10 @@ jobs:
             # Remove failed container
             docker rm zebra-node
             
-            # Try to run with interactive mode for debugging
-            echo "Trying to run container with different parameters..."
+            # Try without volume mount, just with generated config
+            echo "Trying to run container without volume mount..."
             docker run -d --name zebra-node --network zcash-net -p 18232:18232 \
-              -e RUST_LOG=debug \
-              zebra-node:local || echo "Failed to start container"
+              zebra-node:local || echo "Failed to start container at all"
           fi
           
           # Wait for the node to start up
