@@ -216,6 +216,7 @@ jobs:
           docker run --rm zebra-node:local --help
 
       - name: Debug built Docker image
+        continue-on-error: true
         run: |
           echo "=== Inspecting built Docker image ==="
           docker images zebra-node:local
@@ -224,14 +225,21 @@ jobs:
           docker run --rm zebra-node:local --version || echo "Version command failed"
           echo ""
           echo "=== Checking what files made it into the container ==="
-          docker run --rm zebra-node:local ls -la /app/ | head -20
+          docker run --rm --entrypoint="" zebra-node:local ls -la /app/ | head -20
           echo ""
           echo "=== Looking for config file in container ==="
-          docker run --rm zebra-node:local ls -la /app/regtest-config.toml || echo "Config file not found in /app/"
-          docker run --rm zebra-node:local find /app -name "*regtest*" -type f || echo "No regtest files found"
+          docker run --rm --entrypoint="" zebra-node:local ls -la /app/testnet-single-node-deploy/regtest-config.toml || echo "Config file not found"
+          docker run --rm --entrypoint="" zebra-node:local find /app -name "*regtest*" -type f || echo "No regtest files found"
+          echo ""
+          echo "=== Contents of regtest-config.toml ==="
+          docker run --rm --entrypoint="" zebra-node:local cat /app/testnet-single-node-deploy/regtest-config.toml || echo "Could not read config file"
           echo ""
           echo "=== Checking if zebrd binary exists ==="
-          docker run --rm zebra-node:local ls -la /app/target/release/ | grep zebrd || echo "zebrd binary not found"
+          docker run --rm --entrypoint="" zebra-node:local ls -la /app/target/release/ | grep zebrd || echo "zebrd binary not found"
+          echo ""
+          echo "=== Test config file path resolution ==="
+          docker run --rm --entrypoint="" zebra-node:local pwd
+          docker run --rm --entrypoint="" zebra-node:local ls -la testnet-single-node-deploy/regtest-config.toml || echo "Relative path failed"
 
       - name: Create Docker network and start Zebra Node
         run: |
