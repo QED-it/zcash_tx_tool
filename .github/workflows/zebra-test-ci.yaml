@@ -86,9 +86,6 @@ jobs:
             --name zcash-tx-tool \
             zcash-tx-tool:local test-orchard-zsa
           
-          echo "Printing container logs:"
-          docker logs zcash-tx-tool        
-          
           # Get the exit code from the container
           EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
           
@@ -114,9 +111,6 @@ jobs:
             --name zcash-tx-tool \
             zcash-tx-tool:local test-three-party
           
-          echo "Printing container logs:"
-          docker logs zcash-tx-tool
-          
           # Get the exit code from the container
           EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
           
@@ -131,6 +125,12 @@ jobs:
             echo "tx-tool failed with exit code $EXIT_CODE"
             exit 1
           fi
+
+      - name: Print Zebra logs
+        if: always()
+        run: |
+          echo "Printing Zebra node logs:"
+          docker logs zebra-node || echo "Could not retrieve Zebra logs"
 
       - name: Cleanup
         if: always()
