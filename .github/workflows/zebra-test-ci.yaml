@@ -42,6 +42,80 @@ jobs:
             zebra-cache-${{ runner.os }}-
             zebra-cache-
 
+      - name: Check Zebra configuration files
+        run: |
+          echo "=== Root zebra directory structure ==="
+          ls -la zebra/ | head -20
+          echo ""
+          echo "=== Looking for testnet-single-node-deploy directory ==="
+          find zebra -name "*testnet*" -type d 2>/dev/null || echo "No testnet directories found"
+          find zebra -name "*deploy*" -type d 2>/dev/null || echo "No deploy directories found"
+          find zebra -name "*single*" -type d 2>/dev/null || echo "No single directories found"
+          echo ""
+          echo "=== All .toml files in zebra repository ==="
+          find zebra -name "*.toml" -type f | head -20
+          echo ""
+          echo "=== All Dockerfile files in zebra repository ==="
+          find zebra -name "Dockerfile" -type f 2>/dev/null || echo "No Dockerfile found"
+          find zebra -name "dockerfile" -type f 2>/dev/null || echo "No dockerfile found"
+          echo ""
+          echo "=== Checking testnet-single-node-deploy directory ==="
+          if [ -d "zebra/testnet-single-node-deploy" ]; then
+            echo "✅ testnet-single-node-deploy directory exists"
+            echo "Contents:"
+            ls -la zebra/testnet-single-node-deploy/
+          else
+            echo "❌ testnet-single-node-deploy directory does NOT exist"
+            echo "Available directories in zebra:"
+            find zebra -maxdepth 2 -type d | grep -v "\.git" | head -20
+          fi
+          echo ""
+          echo "=== Checking for regtest-config.toml ==="
+          if [ -f "zebra/testnet-single-node-deploy/regtest-config.toml" ]; then
+            echo "✅ regtest-config.toml found"
+            echo "File size: $(wc -c < zebra/testnet-single-node-deploy/regtest-config.toml) bytes"
+          else
+            echo "❌ regtest-config.toml NOT found in expected location"
+            echo "Searching for any regtest config files:"
+            find zebra -name "*regtest*" -type f 2>/dev/null || echo "No regtest files found"
+            echo "Searching for any config files:"
+            find zebra -name "*config*.toml" -type f 2>/dev/null | head -10 || echo "No config.toml files found"
+          fi
+          echo ""
+          echo "=== Checking Dockerfile ==="
+          if [ -f "zebra/testnet-single-node-deploy/Dockerfile" ]; then
+            echo "✅ Dockerfile found in testnet-single-node-deploy"
+            echo "Dockerfile contents:"
+            cat zebra/testnet-single-node-deploy/Dockerfile
+          else
+            echo "❌ Dockerfile NOT found in testnet-single-node-deploy"
+            echo "Searching for Dockerfiles in zebra repo:"
+            find zebra -name "Dockerfile" -type f 2>/dev/null | while read dockerfile; do
+              echo "Found Dockerfile at: $dockerfile"
+              echo "Contents:"
+              cat "$dockerfile"
+              echo "---"
+            done
+          fi
+
+      - name: Generate regtest config if missing
+        run: |
+          if [ ! -f "zebra/testnet-single-node-deploy/regtest-config.toml" ]; then
+            echo "Generating regtest config..."
+            cd zebra
+            
+            # Try to generate a valid config
+            if command -v cargo >/dev/null 2>&1; then
+              echo "Using cargo to generate config..."
+              cargo run --bin zebrad -- generate -o testnet-single-node-deploy/regtest-config.toml
+            else
+              echo "❌ Cannot generate config - cargo not available and no existing config found"
+              exit 1
+            fi
+            
+            echo "Config file created successfully"
+          fi
+
       - name: Build Zebra Node
         uses: docker/build-push-action@v4
         with:
@@ -65,9 +139,32 @@ jobs:
           echo "Starting Zebra node container..."
           docker run -d --name zebra-node --network zcash-net -p 18232:18232 zebra-node:local
           
+          # Immediately check if container started successfully
+          sleep 5
+          CONTAINER_STATUS=$(docker inspect zebra-node --format='{{.State.Status}}' 2>/dev/null || echo "not_found")
+          echo "Initial container status: $CONTAINER_STATUS"
+          
+          if [ "$CONTAINER_STATUS" = "exited" ]; then
+            echo "❌ Container exited immediately! Checking logs..."
+            docker logs zebra-node
+            echo "Attempting to restart with alternative approach..."
+            
+            # Remove failed container
+            docker rm zebra-node
+            
+            # Try to run with interactive mode for debugging
+            echo "Trying to run container with different parameters..."
+            docker run -d --name zebra-node --network zcash-net -p 18232:18232 \
+              -e RUST_LOG=debug \
+              zebra-node:local || echo "Failed to start container"
+          fi
+          
           # Wait for the node to start up
           echo "Waiting for Zebra node to initialize (60 seconds)..."
           sleep 60
+          
+          echo "Final container status:"
+          docker inspect zebra-node --format='{{.State.Status}}' 2>/dev/null || echo "Container not found"
           
           echo "Initial setup completed."
 
@@ -81,6 +178,25 @@ jobs:
           
           echo "=== Zebra Node Logs ==="
           docker logs zebra-node || echo "Failed to get zebra-node logs"
+          
+          # Check if container is actually running
+          CONTAINER_STATUS=$(docker inspect zebra-node --format='{{.State.Status}}' 2>/dev/null)
+          echo "Container status: $CONTAINER_STATUS"
+          
+          if [ "$CONTAINER_STATUS" != "running" ]; then
+            echo "❌ Zebra container is not running!"
+            echo "Exit code: $(docker inspect zebra-node --format='{{.State.ExitCode}}' 2>/dev/null)"
+            echo "This explains why DNS resolution fails - the container isn't in the network."
+            
+            # Try to diagnose the issue
+            echo "=== Attempting to diagnose container startup issue ==="
+            echo "Trying to run container manually for diagnosis..."
+            docker run --rm zebra-node:local --help || echo "Container help failed"
+            
+            exit 1  # Fail here since there's no point continuing without Zebra running
+          fi
+          
+          echo "✅ Container is running, proceeding with network tests..."
           
           echo "=== Docker Network Info ==="
           docker network ls
