@@ -182,6 +182,8 @@ jobs:
           # First, let's check what files are actually in the build context
           echo "=== Final check before starting container ==="
           ls -la zebra/testnet-single-node-deploy/ || echo "Directory missing!"
+
+          cat zebra/testnet-single-node-deploy/dockerfile || echo "dockerfile missing!"
           
           # Create a network to connect the containers
           echo "Creating Docker network..."
@@ -212,9 +214,7 @@ jobs:
           
           # FIXED: Use --config flag before the start subcommand
           echo "Starting Zebra node container..."
-          docker run -d --name zebra-node --network zcash-net -p 18232:18232 \
-            -v "$(pwd)/zebra/testnet-single-node-deploy:/config" \
-            zebra-node:local --config /config/regtest-config.toml start
+          docker run -d --name zebra-node --network zcash-net -p 18232:18232 zebra-node:local
           
           # Immediately check if container started successfully
           sleep 5
