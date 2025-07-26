@@ -61,10 +61,35 @@ jobs:
           # Run Zebra node connected to the network
           docker run -d --name zebra-node --network zcash-net -p 18232:18232 zebra-node:local
           
-          # Wait for the node to start up
+          # Wait for the node to start up and verify it's accessible
           echo "Waiting for Zebra node to initialize..."
-          sleep 30
-          echo "Finished waiting for Zebra node..."
+          sleep 60  # Increase wait time
+          
+          # Verify the container is running
+          docker ps | grep zebra-node
+          
+          # Test network connectivity
+          docker run --rm --network zcash-net alpine:latest nslookup zebra-node
+          
+          # Test if the RPC endpoint is responding
+          timeout 30 bash -c 'until docker run --rm --network zcash-net curlimages/curl:latest curl -s http://zebra-node:18232 >/dev/null 2>&1; do echo "Waiting for Zebra RPC..."; sleep 5; done'
+          
+          echo "Zebra node is ready!"
+
+      - name: Debug network connectivity
+        run: |
+          echo "=== Docker network info ==="
+          docker network ls
+          docker network inspect zcash-net
+          
+          echo "=== Container status ==="
+          docker ps -a
+          
+          echo "=== Test DNS resolution ==="
+          docker run --rm --network zcash-net alpine:latest nslookup zebra-node
+          
+          echo "=== Test port connectivity ==="
+          docker run --rm --network zcash-net alpine:latest nc -zv zebra-node 18232
 
       - name: Build tx-tool
         uses: docker/build-push-action@v4
