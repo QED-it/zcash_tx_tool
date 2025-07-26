@@ -37,7 +37,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
-          key: zebra-cache-${{ runner.os }}-${{ hashFiles('zebra/testnet-single-node-deploy/Dockerfile') }}
+          key: zebra-cache-${{ runner.os }}-${{ hashFiles('zebra/testnet-single-node-deploy/dockerfile') }}
           restore-keys: |
             zebra-cache-${{ runner.os }}-
             zebra-cache-
@@ -139,13 +139,13 @@ jobs:
               echo "Using cargo to generate config..."
               
               # Generate config to the correct location
-              cargo run --bin zebrad -- generate -o testnet-single-node-deploy/regtest-config.toml || {
+              cargo run --bin zebrd -- generate -o testnet-single-node-deploy/regtest-config.toml || {
                 echo "Cargo generate failed, trying alternative approach..."
                 
                 # Generate to current directory then move
-                cargo run --bin zebrad -- generate -o zebrad.toml
-                if [ -f "zebrad.toml" ]; then
-                  mv zebrad.toml testnet-single-node-deploy/regtest-config.toml
+                cargo run --bin zebrd -- generate -o zebrd.toml
+                if [ -f "zebrd.toml" ]; then
+                  mv zebrd.toml testnet-single-node-deploy/regtest-config.toml
                   echo "Generated and moved config file"
                 else
                   echo "❌ Could not generate config file"
@@ -210,12 +210,11 @@ jobs:
             fi
           fi
           
-          # Run Zebra node connected to the network
+          # FIXED: Use --config flag before the start subcommand
           echo "Starting Zebra node container..."
-          # Try with specific config path and regtest network
           docker run -d --name zebra-node --network zcash-net -p 18232:18232 \
             -v "$(pwd)/zebra/testnet-single-node-deploy:/config" \
-            zebra-node:local start -c /config/regtest-config.toml
+            zebra-node:local --config /config/regtest-config.toml start
           
           # Immediately check if container started successfully
           sleep 5
@@ -230,10 +229,15 @@ jobs:
             # Remove failed container
             docker rm zebra-node
             
-            # Try without volume mount, just with generated config
-            echo "Trying to run container without volume mount..."
+            # Try with default config (let zebrd generate its own)
+            echo "Trying to run container with default config..."
             docker run -d --name zebra-node --network zcash-net -p 18232:18232 \
-              zebra-node:local || echo "Failed to start container at all"
+              zebra-node:local start || echo "Failed to start container with default config"
+              
+            # Check again
+            sleep 5
+            CONTAINER_STATUS=$(docker inspect zebra-node --format='{{.State.Status}}' 2>/dev/null || echo "not_found")
+            echo "Container status after retry: $CONTAINER_STATUS"
           fi
           
           # Wait for the node to start up
@@ -305,12 +309,19 @@ jobs:
           set +e  # Don't exit on errors
           
           echo "Waiting for Zebra RPC to be ready..."
-          MAX_ATTEMPTS=12
+          MAX_ATTEMPTS=24  # Increased from 12 to 24 (4 minutes total)
           ATTEMPT=0
           
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             ATTEMPT=$((ATTEMPT + 1))
             echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Testing RPC connectivity..."
+            
+            # Check if container is still running first
+            if ! docker inspect zebra-node --format='{{.State.Status}}' 2>/dev/null | grep -q "running"; then
+              echo "❌ Zebra container stopped running! Logs:"
+              docker logs zebra-node
+              exit 1
+            fi
             
             if docker run --rm --network zcash-net curlimages/curl:latest curl -s --connect-timeout 5 http://zebra-node:18232 >/dev/null 2>&1; then
               echo "✅ Zebra RPC is responding!"
