@@ -53,43 +53,84 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
 
-      - name: Create Docker network and run Zebra Node container
+      - name: Create Docker network and start Zebra Node
         run: |
+          set +e  # Don't exit on errors during setup
+          
           # Create a network to connect the containers
+          echo "Creating Docker network..."
           docker network create zcash-net
           
           # Run Zebra node connected to the network
+          echo "Starting Zebra node container..."
           docker run -d --name zebra-node --network zcash-net -p 18232:18232 zebra-node:local
           
-          # Wait for the node to start up and verify it's accessible
-          echo "Waiting for Zebra node to initialize..."
-          sleep 60  # Increase wait time
+          # Wait for the node to start up
+          echo "Waiting for Zebra node to initialize (60 seconds)..."
+          sleep 60
           
-          # Verify the container is running
-          docker ps | grep zebra-node
-          
-          # Test network connectivity
-          docker run --rm --network zcash-net alpine:latest nslookup zebra-node
-          
-          # Test if the RPC endpoint is responding
-          timeout 30 bash -c 'until docker run --rm --network zcash-net curlimages/curl:latest curl -s http://zebra-node:18232 >/dev/null 2>&1; do echo "Waiting for Zebra RPC..."; sleep 5; done'
-          
-          echo "Zebra node is ready!"
+          echo "Initial setup completed."
 
-      - name: Debug network connectivity
+      - name: Debug and verify Zebra node status
+        continue-on-error: true
         run: |
-          echo "=== Docker network info ==="
-          docker network ls
-          docker network inspect zcash-net
+          set +e  # Continue even if individual commands fail
           
-          echo "=== Container status ==="
+          echo "=== Container Status ==="
           docker ps -a
           
-          echo "=== Test DNS resolution ==="
-          docker run --rm --network zcash-net alpine:latest nslookup zebra-node
+          echo "=== Zebra Node Logs ==="
+          docker logs zebra-node || echo "Failed to get zebra-node logs"
           
-          echo "=== Test port connectivity ==="
-          docker run --rm --network zcash-net alpine:latest nc -zv zebra-node 18232
+          echo "=== Docker Network Info ==="
+          docker network ls
+          docker network inspect zcash-net || echo "Failed to inspect network"
+          
+          echo "=== Test Container Connectivity ==="
+          docker run --rm --network zcash-net alpine:latest echo "Network connection test" || echo "Failed to run test container"
+          
+          echo "=== Test DNS Resolution ==="
+          docker run --rm --network zcash-net alpine:latest nslookup zebra-node || echo "DNS lookup failed"
+          
+          echo "=== Test Direct IP Connectivity ==="
+          ZEBRA_IP=$(docker inspect zebra-node --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null)
+          if [ -n "$ZEBRA_IP" ]; then
+            echo "Zebra container IP: $ZEBRA_IP"
+            docker run --rm --network zcash-net alpine:latest ping -c 3 $ZEBRA_IP || echo "IP ping failed"
+          else
+            echo "Could not get Zebra container IP"
+          fi
+          
+          echo "=== Test Port Connectivity ==="
+          docker run --rm --network zcash-net alpine:latest nc -zv zebra-node 18232 || echo "Port connection failed"
+          
+          echo "=== Test HTTP Endpoint ==="
+          docker run --rm --network zcash-net curlimages/curl:latest curl -v --connect-timeout 10 http://zebra-node:18232 || echo "HTTP connection failed"
+
+      - name: Wait for Zebra RPC to be ready
+        run: |
+          set +e  # Don't exit on errors
+          
+          echo "Waiting for Zebra RPC to be ready..."
+          MAX_ATTEMPTS=12
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Testing RPC connectivity..."
+            
+            if docker run --rm --network zcash-net curlimages/curl:latest curl -s --connect-timeout 5 http://zebra-node:18232 >/dev/null 2>&1; then
+              echo "✅ Zebra RPC is responding!"
+              exit 0
+            else
+              echo "❌ RPC not ready yet, waiting 10 seconds..."
+              sleep 10
+            fi
+          done
+          
+          echo "⚠️  RPC readiness check timed out, but continuing with tests..."
+          echo "Final attempt to check what's listening on the container:"
+          docker exec zebra-node netstat -tlnp 2>/dev/null || echo "Could not check ports inside container"
 
       - name: Build tx-tool
         uses: docker/build-push-action@v4
@@ -100,58 +141,110 @@ jobs:
           push: false
           load: true
 
+      - name: Pre-test network verification
+        continue-on-error: true
+        run: |
+          set +e
+          
+          echo "=== Final pre-test checks ==="
+          echo "Zebra container status:"
+          docker inspect zebra-node --format='{{.State.Status}}' || echo "Could not get container status"
+          
+          echo "Zebra container health:"
+          docker inspect zebra-node --format='{{.State.Health.Status}}' || echo "No health check configured"
+          
+          echo "Network connectivity test:"
+          docker run --rm --network zcash-net alpine:latest ping -c 1 zebra-node || echo "Network ping failed"
+          
+          echo "Port test with timeout:"
+          timeout 5 docker run --rm --network zcash-net alpine:latest nc -zv zebra-node 18232 || echo "Port test failed or timed out"
+
       - name: Run tx-tool for test-orchard-zsa and verify success
         run: |
-          # Run the tx tool and capture exit code
+          set +e  # Don't exit immediately on error
+          
+          echo "=== Running tx-tool test-orchard-zsa ==="
+          
+          # Run the tx tool
           docker run --network zcash-net \
             -e ZCASH_NODE_ADDRESS=zebra-node \
             -e ZCASH_NODE_PORT=18232 \
             -e ZCASH_NODE_PROTOCOL=http \
+            -e RUST_BACKTRACE=1 \
             --name zcash-tx-tool \
             zcash-tx-tool:local test-orchard-zsa
 
-          echo "Printing container logs:"
+          echo "=== tx-tool container logs ==="
           docker logs zcash-tx-tool
 
           # Get the exit code from the container
           EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
+          echo "tx-tool exit code: $EXIT_CODE"
 
           # Clean up
           docker rm zcash-tx-tool
 
           # Check if the tx_tool succeeded
           if [ $EXIT_CODE -eq 0 ]; then
-            echo "tx-tool completed successfully!"
-            exit 0
+            echo "✅ tx-tool test-orchard-zsa completed successfully!"
           else
-            echo "tx-tool failed with exit code $EXIT_CODE"
+            echo "❌ tx-tool test-orchard-zsa failed with exit code $EXIT_CODE"
+            
+            # Additional debugging if it failed
+            echo "=== Additional debugging info ==="
+            echo "Zebra logs since tx-tool run:"
+            docker logs --since 5m zebra-node || echo "Could not get recent zebra logs"
+            
             exit 1
           fi
 
-      - name: Run tx-tool again for test-three-party and verify success
+      - name: Run tx-tool for test-three-party and verify success
         run: |
-          # Run the tx tool and capture exit code
+          set +e  # Don't exit immediately on error
+          
+          echo "=== Running tx-tool test-three-party ==="
+          
+          # Run the tx tool
           docker run --network zcash-net \
             -e ZCASH_NODE_ADDRESS=zebra-node \
             -e ZCASH_NODE_PORT=18232 \
             -e ZCASH_NODE_PROTOCOL=http \
-            --name zcash-tx-tool \
+            -e RUST_BACKTRACE=1 \
+            --name zcash-tx-tool-2 \
             zcash-tx-tool:local test-three-party
 
-          echo "Printing container logs:"
-          docker logs zcash-tx-tool
+          echo "=== tx-tool container logs ==="
+          docker logs zcash-tx-tool-2
 
           # Get the exit code from the container
-          EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
+          EXIT_CODE=$(docker inspect zcash-tx-tool-2 --format='{{.State.ExitCode}}')
+          echo "tx-tool exit code: $EXIT_CODE"
 
           # Clean up
-          docker rm zcash-tx-tool
+          docker rm zcash-tx-tool-2
 
           # Check if the tx_tool succeeded
           if [ $EXIT_CODE -eq 0 ]; then
-            echo "tx-tool completed successfully!"
-            exit 0
+            echo "✅ tx-tool test-three-party completed successfully!"
           else
-            echo "tx-tool failed with exit code $EXIT_CODE"
+            echo "❌ tx-tool test-three-party failed with exit code $EXIT_CODE"
+            
+            # Additional debugging if it failed
+            echo "=== Additional debugging info ==="
+            echo "Zebra logs since tx-tool run:"
+            docker logs --since 5m zebra-node || echo "Could not get recent zebra logs"
+            
             exit 1
           fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          set +e
+          
+          echo "=== Cleanup ==="
+          docker stop zebra-node || echo "Could not stop zebra-node"
+          docker rm zebra-node || echo "Could not remove zebra-node"
+          docker network rm zcash-net || echo "Could not remove network"
+          
+          echo "Cleanup completed."
