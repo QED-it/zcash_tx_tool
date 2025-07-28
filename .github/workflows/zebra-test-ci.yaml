@@ -1,4 +1,4 @@
-# CI Workflow to test tx-tool against a locally built Zebra node.
+# CI Workflow to test tx-tool against a locally built Zebra node
 # This workflow clones the zebra repo at a specific branch, builds the Zebra Docker image, and tests tx-tool against it.
 # The workflow ensures tx-tool works correctly by spinning up a Zebra container
 # and running the tx-tool from the current branch against it in a Docker network.
