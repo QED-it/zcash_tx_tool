@@ -35,7 +35,7 @@ use zcash_primitives::legacy::TransparentAddress;
 use zcash_primitives::transaction::components::issuance::write_note;
 use zcash_primitives::transaction::{OrchardBundle, Transaction, TxId};
 use zcash_primitives::zip32::AccountId;
-use zcash_primitives::zip339::Mnemonic;
+use bip0039::Mnemonic;
 
 pub const MAX_CHECKPOINTS: usize = 100;
 pub const NOTE_COMMITMENT_TREE_DEPTH: u8 = 32;
@@ -147,8 +147,8 @@ impl User {
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
             last_block_height: None,
             last_block_hash: None,
-            seed: Mnemonic::from_phrase(seed_phrase).unwrap().to_seed(""),
-            miner_seed: Mnemonic::from_phrase(miner_seed_phrase)
+            seed: <Mnemonic>::from_phrase(seed_phrase).unwrap().to_seed(""),
+            miner_seed: <Mnemonic>::from_phrase(miner_seed_phrase)
                 .unwrap()
                 .to_seed(""),
         }
@@ -166,7 +166,7 @@ impl User {
             last_block_height: None,
             last_block_hash: None,
             seed: seed_random_bytes,
-            miner_seed: Mnemonic::from_phrase(miner_seed_phrase)
+            miner_seed: <Mnemonic>::from_phrase(miner_seed_phrase)
                 .unwrap()
                 .to_seed(""),
         }

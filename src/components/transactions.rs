@@ -12,6 +12,7 @@ use rand::rngs::OsRng;
 use std::convert::TryFrom;
 use std::ops::Add;
 use orchard::keys::IssuanceValidatingKey;
+use secp256k1::Secp256k1;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
 use zcash_primitives::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
 use zcash_primitives::memo::MemoBytes;
@@ -80,11 +81,11 @@ pub fn create_shield_coinbase_transaction(
     let coinbase_amount = NonNegativeAmount::from_u64(COINBASE_VALUE).unwrap();
     let miner_taddr = wallet.miner_address();
 
-    let sk = wallet.miner_sk();
+    let sk = wallet.miner_sk().public_key(&Secp256k1::new());
 
     tx.add_transparent_input(
         sk,
-        transparent::OutPoint::new(coinbase_txid.0, 0),
+        transparent::OutPoint::new(coinbase_txid.into(), 0),
         TxOut {
             value: coinbase_amount,
             script_pubkey: miner_taddr.script(),
@@ -182,7 +183,7 @@ pub fn create_transfer_transaction(
     let mut tx = create_tx(wallet);
 
     inputs.into_iter().for_each(|input| {
-        tx.add_orchard_spend::<FeeError>(&input.sk, input.note, input.merkle_path)
+        tx.add_orchard_spend::<FeeError>((&input.sk).into(), input.note, input.merkle_path)
             .unwrap()
     });
 
@@ -236,7 +237,7 @@ pub fn create_burn_transaction(
     let mut tx = create_tx(wallet);
 
     inputs.into_iter().for_each(|input| {
-        tx.add_orchard_spend::<FeeError>(&input.sk, input.note, input.merkle_path)
+        tx.add_orchard_spend::<FeeError>((&input.sk).into(), input.note, input.merkle_path)
             .unwrap()
     });
 
@@ -323,7 +324,7 @@ pub fn template_into_proposal(
     } else {
         txs_with_coinbase
             .iter()
-            .map(|tx| tx.txid().0)
+            .map(|tx| *tx.txid().clone().as_ref())
             .collect::<Root>()
             .0
     };
@@ -371,7 +372,7 @@ pub fn template_into_proposal(
 }
 
 fn create_tx(wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
-    let build_config = BuildConfig::Zsa {
+    let build_config = BuildConfig::TxV6 {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),
     };
