@@ -53,8 +53,17 @@ jobs:
             echo "IMAGE_TAG_VERSION=$RELEASE_TAG" >> $GITHUB_ENV
             echo "Triggered by release: $RELEASE_TAG"
           else
-            # For manual dispatch, use the input
-            echo "IMAGE_TAG_VERSION=${{ github.event.inputs.image_tag_version }}" >> $GITHUB_ENV
+            # For manual dispatch, use the input (handle empty case)
+            IMAGE_TAG_VERSION="${{ github.event.inputs.image_tag_version }}"
+            if [ -z "$IMAGE_TAG_VERSION" ]; then
+              # Use git tag if available, otherwise use commit SHA
+              if [ -n "$GIT_TAG" ]; then
+                IMAGE_TAG_VERSION="$GIT_TAG"
+              else
+                IMAGE_TAG_VERSION="${{ github.sha }}"
+              fi
+            fi
+            echo "IMAGE_TAG_VERSION=$IMAGE_TAG_VERSION" >> $GITHUB_ENV
           fi
           
           # Echo what we found
@@ -64,11 +73,11 @@ jobs:
           else
             echo "  No exact match Git tag found for current commit"
           fi
-          
           if [ "${{ github.event_name }}" = "release" ]; then
             echo "  Release tag: ${{ github.event.release.tag_name }}"
           else
             echo "  User-provided IMAGE_TAG_VERSION: ${{ github.event.inputs.image_tag_version }}"
+            echo "  Final IMAGE_TAG_VERSION: $IMAGE_TAG_VERSION"
           fi
 
       - name: Build, tag, and push image to Amazon ECR Public
@@ -81,19 +90,18 @@ jobs:
           DOCKER_BUILD_ARGS=()
           DOCKER_BUILD_ARGS+=("-t" "$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_LATEST")
           DOCKER_BUILD_ARGS+=("-t" "$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_VERSION")
-          
-          # Add exact tag if it exists
-          if [ -n "$GIT_TAG" ]; then
-            DOCKER_BUILD_ARGS+=("-t" "$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$GIT_TAG")
-          fi
-          
+
           # Echo final tags that will be pushed
           echo "Docker Image Tags to be pushed:"
           echo "  $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_LATEST"
           echo "  $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_VERSION"
-          if [ -n "$GIT_TAG" ]; then
+          
+          # Add exact tag if it exists and is different from IMAGE_TAG_VERSION
+          if [ -n "$GIT_TAG" ] && [ "$GIT_TAG" != "$IMAGE_TAG_VERSION" ]; then
+            DOCKER_BUILD_ARGS+=("-t" "$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$GIT_TAG")
             echo "  $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$GIT_TAG"
           fi
+          
           echo ""
           
           # Build with all tags
@@ -105,7 +113,7 @@ jobs:
           docker push $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_LATEST
           docker push $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_VERSION
           
-          if [ -n "$GIT_TAG" ]; then
+          if [ -n "$GIT_TAG" ] && [ "$GIT_TAG" != "$IMAGE_TAG_VERSION" ]; then
             docker push $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$GIT_TAG
           fi
           
@@ -115,6 +123,6 @@ jobs:
           echo "image_latest=$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_LATEST" >> $GITHUB_OUTPUT
           echo "image_version=$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG_VERSION" >> $GITHUB_OUTPUT
           
-          if [ -n "$GIT_TAG" ]; then
+          if [ -n "$GIT_TAG" ] && [ "$GIT_TAG" != "$IMAGE_TAG_VERSION" ]; then
             echo "image_exact_tag=$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$GIT_TAG" >> $GITHUB_OUTPUT
           fi
