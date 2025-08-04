@@ -6,6 +6,8 @@ on:
         description: 'Version to tag the Docker image'
         required: false
         type: string
+  release:
+    types: [published]
 env:
   AWS_REGION: us-east-1  # Must be us-east-1 for a Public ECR
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
@@ -33,7 +35,7 @@ jobs:
           registry-type: public
           region: us-east-1
 
-      - name: Get Git tags
+      - name: Get Git tags and release info
         id: vars
         run: |
           git fetch --tags
@@ -44,8 +46,16 @@ jobs:
             echo "GIT_TAG=$GIT_TAG" >> $GITHUB_ENV
           fi
           
-          # Set the input IMAGE_TAG_VERSION
-          echo "IMAGE_TAG_VERSION=${{ github.event.inputs.image_tag_version }}" >> $GITHUB_ENV
+          # Handle different trigger types
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # For release events, use the release tag name
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            echo "IMAGE_TAG_VERSION=$RELEASE_TAG" >> $GITHUB_ENV
+            echo "Triggered by release: $RELEASE_TAG"
+          else
+            # For manual dispatch, use the input
+            echo "IMAGE_TAG_VERSION=${{ github.event.inputs.image_tag_version }}" >> $GITHUB_ENV
+          fi
           
           # Echo what we found
           echo "Git Tag Discovery:"
@@ -54,7 +64,12 @@ jobs:
           else
             echo "  No exact match Git tag found for current commit"
           fi
-          echo "  User-provided IMAGE_TAG_VERSION: ${{ github.event.inputs.image_tag_version }}"
+          
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "  Release tag: ${{ github.event.release.tag_name }}"
+          else
+            echo "  User-provided IMAGE_TAG_VERSION: ${{ github.event.inputs.image_tag_version }}"
+          fi
 
       - name: Build, tag, and push image to Amazon ECR Public
         id: build-image
