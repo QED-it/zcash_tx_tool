@@ -11,17 +11,18 @@ use orchard::Address;
 use rand::rngs::OsRng;
 use std::convert::TryFrom;
 use std::ops::Add;
-use orchard::keys::IssuanceValidatingKey;
+use orchard::keys::{IssuanceValidatingKey, SpendAuthorizingKey};
 use secp256k1::Secp256k1;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
-use zcash_primitives::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
-use zcash_primitives::memo::MemoBytes;
+use zcash_protocol::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
+use zcash_protocol::memo::MemoBytes;
 use zcash_primitives::transaction::builder::{BuildConfig, Builder};
-use zcash_primitives::transaction::components::amount::NonNegativeAmount;
-use zcash_primitives::transaction::components::{transparent, TxOut};
 use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
+use zcash_protocol::value::Zatoshis;
+use zcash_transparent::builder::TransparentSigningSet;
+use zcash_transparent::bundle::{OutPoint, TxOut};
 
 const COINBASE_VALUE: u64 = 625_000_000;
 
@@ -78,14 +79,14 @@ pub fn create_shield_coinbase_transaction(
 
     let mut tx = create_tx(wallet);
 
-    let coinbase_amount = NonNegativeAmount::from_u64(COINBASE_VALUE).unwrap();
+    let coinbase_amount = Zatoshis::from_u64(COINBASE_VALUE).unwrap();
     let miner_taddr = wallet.miner_address();
 
     let sk = wallet.miner_sk().public_key(&Secp256k1::new());
 
     tx.add_transparent_input(
         sk,
-        transparent::OutPoint::new(coinbase_txid.into(), 0),
+        OutPoint::new(coinbase_txid.into(), 0),
         TxOut {
             value: coinbase_amount,
             script_pubkey: miner_taddr.script(),
@@ -101,7 +102,7 @@ pub fn create_shield_coinbase_transaction(
     )
     .unwrap();
 
-    build_tx(tx)
+    build_tx(tx, &wallet.transparent_signing_set(), &[])
 }
 
 /// Sync the user with the node
@@ -182,10 +183,14 @@ pub fn create_transfer_transaction(
 
     let mut tx = create_tx(wallet);
 
-    inputs.into_iter().for_each(|input| {
-        tx.add_orchard_spend::<FeeError>((&input.sk).into(), input.note, input.merkle_path)
-            .unwrap()
-    });
+    let orchard_keys: Vec<SpendAuthorizingKey> = inputs
+        .into_iter()
+        .map(|input| {
+            tx.add_orchard_spend::<FeeError>((&input.sk).into(), input.note, input.merkle_path)
+                .unwrap();
+            SpendAuthorizingKey::from(&input.sk)
+        })
+        .collect();
 
     // Add main transfer output
     tx.add_orchard_output::<FeeError>(
@@ -211,7 +216,11 @@ pub fn create_transfer_transaction(
         .unwrap();
     }
 
-    build_tx(tx)
+    build_tx(
+        tx,
+        &wallet.transparent_signing_set(),
+        orchard_keys.as_slice(),
+    )
 }
 
 /// Create a burn transaction
@@ -236,10 +245,14 @@ pub fn create_burn_transaction(
 
     let mut tx = create_tx(wallet);
 
-    inputs.into_iter().for_each(|input| {
-        tx.add_orchard_spend::<FeeError>((&input.sk).into(), input.note, input.merkle_path)
-            .unwrap()
-    });
+    let orchard_keys: Vec<SpendAuthorizingKey> = inputs
+        .into_iter()
+        .map(|input| {
+            tx.add_orchard_spend::<FeeError>((&input.sk).into(), input.note, input.merkle_path)
+                .unwrap();
+            SpendAuthorizingKey::from(&input.sk)
+        })
+        .collect();
 
     // Add main transfer output
     tx.add_burn::<FeeError>(amount, asset).unwrap();
@@ -258,7 +271,11 @@ pub fn create_burn_transaction(
         .unwrap();
     }
 
-    build_tx(tx)
+    build_tx(
+        tx,
+        &wallet.transparent_signing_set(),
+        orchard_keys.as_slice(),
+    )
 }
 
 /// Create a transaction that issues a new asset
@@ -285,7 +302,7 @@ pub fn create_issue_transaction(
         &IssuanceValidatingKey::from(&wallet.issuance_key()),
         &asset_desc_hash,
     );
-    (build_tx(tx), asset)
+    (build_tx(tx, &wallet.transparent_signing_set(), &[]), asset)
 }
 
 /// Create a transaction that issues a new asset
@@ -298,7 +315,7 @@ pub fn create_finalization_transaction(
     tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc_hash, None, false)
         .unwrap();
     tx.finalize_asset::<FeeError>(&asset_desc_hash).unwrap();
-    build_tx(tx)
+    build_tx(tx, &wallet.transparent_signing_set(), &[])
 }
 
 /// Convert a block template and a list of transactions into a block proposal
@@ -384,9 +401,12 @@ fn create_tx(wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
     tx
 }
 
-fn build_tx(builder: Builder<'_, RegtestNetwork, ()>) -> Transaction {
-    let fee_rule =
-        &FeeRule::non_standard(NonNegativeAmount::from_u64(0).unwrap(), 20, 150, 34).unwrap();
+fn build_tx(
+    builder: Builder<'_, RegtestNetwork, ()>,
+    tss: &TransparentSigningSet,
+    orchard_saks: &[SpendAuthorizingKey],
+) -> Transaction {
+    let fee_rule = &FeeRule::non_standard(Zatoshis::from_u64(0).unwrap(), 20, 150, 34).unwrap();
     let prover = LocalTxProver::with_default_location();
     match prover {
         None => {
@@ -394,7 +414,7 @@ fn build_tx(builder: Builder<'_, RegtestNetwork, ()>) -> Transaction {
         }
         Some(prover) => {
             let tx = builder
-                .build(OsRng, &prover, &prover, fee_rule)
+                .build(tss, &[], orchard_saks, OsRng, &prover, &prover, fee_rule)
                 .unwrap()
                 .into_transaction();
             info!("Build tx: {}", tx.txid());

@@ -4,11 +4,9 @@ mod structs;
 use bridgetree::{self, BridgeTree};
 use incrementalmerkletree::Position;
 use std::collections::BTreeMap;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 
 use abscissa_core::prelude::info;
-
-use zcash_primitives::{constants, legacy, transaction::components::Amount};
 
 use orchard::domain::OrchardDomainCommon;
 use orchard::issuance::{IssueBundle, Signed};
@@ -29,13 +27,16 @@ use crate::components::persistence::model::NoteData;
 use crate::components::persistence::sqlite::SqliteDataStorage;
 use crate::components::user::structs::OrderedAddress;
 use zcash_primitives::block::BlockHash;
-use zcash_primitives::consensus::{BlockHeight, REGTEST_NETWORK};
-use zcash_primitives::legacy::keys::NonHardenedChildIndex;
-use zcash_primitives::legacy::TransparentAddress;
+use zcash_protocol::consensus::{BlockHeight, REGTEST_NETWORK};
 use zcash_primitives::transaction::components::issuance::write_note;
 use zcash_primitives::transaction::{OrchardBundle, Transaction, TxId};
-use zcash_primitives::zip32::AccountId;
 use bip0039::Mnemonic;
+use zcash_primitives::zip32::AccountId;
+use zcash_protocol::constants;
+use zcash_protocol::value::ZatBalance;
+use zcash_transparent::address::TransparentAddress;
+use zcash_transparent::builder::TransparentSigningSet;
+use zcash_transparent::keys::NonHardenedChildIndex;
 
 pub const MAX_CHECKPOINTS: usize = 100;
 pub const NOTE_COMMITMENT_TREE_DEPTH: u8 = 32;
@@ -305,13 +306,16 @@ impl User {
     // Hack for claiming coinbase
     pub fn miner_address(&self) -> TransparentAddress {
         let account = AccountId::try_from(0).unwrap();
-        let pubkey =
-            legacy::keys::AccountPrivKey::from_seed(&REGTEST_NETWORK, &self.miner_seed, account)
-                .unwrap()
-                .derive_external_secret_key(NonHardenedChildIndex::ZERO)
-                .unwrap()
-                .public_key(&Secp256k1::new())
-                .serialize();
+        let pubkey = zcash_transparent::keys::AccountPrivKey::from_seed(
+            &REGTEST_NETWORK,
+            &self.miner_seed,
+            account,
+        )
+        .unwrap()
+        .derive_external_secret_key(NonHardenedChildIndex::ZERO)
+        .unwrap()
+        .public_key(&Secp256k1::new())
+        .serialize();
         let hash = &Ripemd160::digest(Sha256::digest(pubkey))[..];
         TransparentAddress::PublicKeyHash(hash.try_into().unwrap())
     }
@@ -319,10 +323,20 @@ impl User {
     // Hack for claiming coinbase
     pub fn miner_sk(&self) -> SecretKey {
         let account = AccountId::try_from(0).unwrap();
-        legacy::keys::AccountPrivKey::from_seed(&REGTEST_NETWORK, &self.miner_seed, account)
-            .unwrap()
-            .derive_external_secret_key(NonHardenedChildIndex::ZERO)
-            .unwrap()
+        zcash_transparent::keys::AccountPrivKey::from_seed(
+            &REGTEST_NETWORK,
+            &self.miner_seed,
+            account,
+        )
+        .unwrap()
+        .derive_external_secret_key(NonHardenedChildIndex::ZERO)
+        .unwrap()
+    }
+
+    pub(crate) fn transparent_signing_set(&self) -> TransparentSigningSet {
+        let mut tss = TransparentSigningSet::new();
+        tss.add_key(self.miner_sk());
+        tss
     }
 
     pub fn balance_zec(&mut self, address: Address) -> u64 {
@@ -398,7 +412,7 @@ impl User {
     fn add_notes_from_orchard_bundle<O: OrchardDomainCommon>(
         &mut self,
         txid: &TxId,
-        bundle: &Bundle<Authorized, Amount, O>,
+        bundle: &Bundle<Authorized, ZatBalance, O>,
     ) {
         let keys = self
             .key_store
@@ -483,7 +497,7 @@ impl User {
     fn mark_potential_spends<O: OrchardDomainCommon>(
         &mut self,
         txid: &TxId,
-        orchard_bundle: &Bundle<Authorized, Amount, O>,
+        orchard_bundle: &Bundle<Authorized, ZatBalance, O>,
     ) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {

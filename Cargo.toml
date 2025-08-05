@@ -37,6 +37,7 @@ bip0039 = "0.12.0"
 nonempty = "0.11.0"
 
 # - Transparent inputs
+zcash_transparent = { version = "0.3.0", features = ["transparent-inputs"] }
 ripemd = { version = "0.1" }
 sha2 = "0.10"
 secp256k1 = { version = "0.29.1" }
@@ -48,6 +49,9 @@ version = "0.7.0"
 abscissa_core = { version = "0.7.0", features = ["testing"] }
 once_cell = "1.2"
 
+[lints.rust]
+non_local_definitions = "allow"
+
 [patch.crates-io]
 orchard = { git = "https://github.com/QED-it/orchard", rev = "806878c75e491ec7815af86ee08d761c7ed527b5" }
 sapling-crypto = { git = "https://github.com/QED-it/sapling-crypto", branch = "zsa1" }
@@ -58,3 +62,4 @@ zcash_address = { git = "https://github.com/QED-it/librustzcash", rev = "a996e53
 zcash_client_backend = { git = "https://github.com/QED-it/librustzcash", rev = "a996e53e7a561a4723be6a712e44c8eb5fad4a6c" }
 zcash_proofs = { git = "https://github.com/QED-it/librustzcash", rev = "a996e53e7a561a4723be6a712e44c8eb5fad4a6c" }
 zcash_encoding = { git = "https://github.com/QED-it/librustzcash", rev = "a996e53e7a561a4723be6a712e44c8eb5fad4a6c" }
+zcash_transparent = { git = "https://github.com/QED-it/librustzcash", rev = "a996e53e7a561a4723be6a712e44c8eb5fad4a6c" }

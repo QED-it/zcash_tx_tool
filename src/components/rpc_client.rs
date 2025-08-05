@@ -289,9 +289,13 @@ pub struct TransactionTemplate {
 impl Default for TransactionTemplate {
     fn default() -> Self {
         TransactionTemplate {
-            data: String::from("0400008085202f89010000000000000000000000000000000000000000000000000000000000000000ffffffff025100ffffffff0140be4025000000001976a91475dd6d7f4bef95aa1ff1a711e5bfd853b4c6aaf888ac00000000010000000000000000000000000000"),
+            data: String::from(
+                "0400008085202f89010000000000000000000000000000000000000000000000000000000000000000ffffffff025100ffffffff0140be4025000000001976a91475dd6d7f4bef95aa1ff1a711e5bfd853b4c6aaf888ac00000000010000000000000000000000000000",
+            ),
             hash: String::from("e775c092962a712a42ee5dd42091dd569e8651c5a2c529a738687ca4495be2ed"),
-            auth_digest: String::from("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+            auth_digest: String::from(
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            ),
             depends: vec![],
             fee: 0,
             sigops: 1,
