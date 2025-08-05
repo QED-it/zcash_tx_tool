@@ -40,11 +40,14 @@ RUN ./zcutil/fetch-params.sh
 # Create necessary directories
 RUN mkdir -p /root/.local/share/ZcashParams
 
+# Validate the presence of the file
+RUN test -f /app/target/release/zcash_tx_tool
+
 # Set default environment variables
 ENV ZCASH_NODE_ADDRESS=127.0.0.1
 ENV ZCASH_NODE_PORT=18232
 ENV ZCASH_NODE_PROTOCOL=http
 
 # Set the entrypoint with default scenario as "test-orchard-zsa"
-ENTRYPOINT ["cargo", "run", "--release", "--package", "zcash_tx_tool", "--bin", "zcash_tx_tool"]
+ENTRYPOINT ["/app/target/release/zcash_tx_tool"]
 CMD ["test-orchard-zsa"]
