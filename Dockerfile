@@ -40,7 +40,7 @@ RUN ./zcutil/fetch-params.sh
 # Create necessary directories
 RUN mkdir -p /root/.local/share/ZcashParams
 
-# Validate the presence of the config file
+# Validate the presence of the file
 RUN test -f /app/target/release/zcash_tx_tool
 
 # Set default environment variables
