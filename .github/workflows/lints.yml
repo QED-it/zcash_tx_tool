@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 30
     runs-on: ubuntu-latest
     env:
-      RUSTFLAGS: '--cfg zcash_unstable="nu6"'
+      RUSTFLAGS: '--cfg zcash_unstable="nu7"'
     steps:
       - uses: actions/checkout@v4
       - name: Run Clippy

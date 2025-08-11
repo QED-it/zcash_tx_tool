@@ -8,6 +8,7 @@
 //! The tests ensure correct balance updates and transaction validity at each step.
 
 use abscissa_core::{Command, Runnable};
+use nonempty::NonEmpty;
 use orchard::issuance::compute_asset_desc_hash;
 use orchard::keys::Scope::External;
 use crate::commands::test_balances::{
@@ -39,7 +40,7 @@ impl Runnable for TestOrchardZSACmd {
 
         let issuer_addr = wallet.address_for_account(issuer_idx, External);
 
-        let asset_desc_hash = compute_asset_desc_hash(b"WETH").unwrap();
+        let asset_desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(b"WETH").unwrap());
         prepare_test(
             config.chain.nu7_activation_height,
             &mut wallet,

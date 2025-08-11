@@ -8,6 +8,7 @@
 //! The tests ensure correct balance updates and transaction validity at each step of this scenario.
 
 use abscissa_core::{Command, Runnable};
+use nonempty::NonEmpty;
 use orchard::issuance::compute_asset_desc_hash;
 use orchard::keys::Scope::External;
 
@@ -48,7 +49,7 @@ impl Runnable for TestThreePartyCmd {
 
         // --------------------- Issue asset ---------------------
 
-        let asset_desc_hash = compute_asset_desc_hash(b"MED").unwrap();
+        let asset_desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(b"MED").unwrap());
 
         let (issue_tx, asset) =
             create_issue_transaction(manufacturer_addr, 1000, asset_desc_hash, true, &mut wallet);

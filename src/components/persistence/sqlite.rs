@@ -54,7 +54,7 @@ impl SqliteDataStorage {
 
     pub fn find_notes_for_tx(&mut self, txid: &TxId) -> Vec<NoteData> {
         notes
-            .filter(tx_id.eq(txid.0.to_vec()))
+            .filter(tx_id.eq(txid.as_ref().to_vec()))
             .select(NoteData::as_select())
             .load(&mut self.connection)
             .expect("Error loading notes")
@@ -79,7 +79,7 @@ impl SqliteDataStorage {
         diesel::update(notes)
             .filter(id.eq(note_id))
             .set((
-                spend_tx_id.eq(spend_tx_id_value.0.to_vec()),
+                spend_tx_id.eq(spend_tx_id_value.as_ref().to_vec()),
                 spend_action_index.eq(spend_action_index_value),
             ))
             .execute(&mut self.connection)
