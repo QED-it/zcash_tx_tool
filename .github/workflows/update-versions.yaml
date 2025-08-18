@@ -1,0 +1,63 @@
+name: CI Workflow to ECR and Zebra (merged-PR gate)
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+jobs:
+  trigger-on-merge:
+    if: ${{ github.event.pull_request.merged == true }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify Zebra check workflow succeeded
+        id: zebra
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const {owner, repo} = context.repo;
+            const mergeSha = context.payload.pull_request.merge_commit_sha;
+
+            // Get the runs of that particular workflow on the merge commit
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: 'check-tx-tool-against-zebra.yaml',   // file name OR numeric ID
+              head_sha: mergeSha
+            });
+
+            const ok = runs.data.workflow_runs
+              .some(run => run.conclusion === 'success');
+
+            core.setOutput('passed', ok);
+            if (!ok) {
+              core.setFailed('Zebra check did not succeed on the merge commit');
+            }
+
+      - name: Trigger push-to-ECR workflow
+        if: steps.zebra.outputs.passed == 'true'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'push-to-ecr.yaml',
+              ref: 'main'
+            });
+
+      - name: Trigger Zebra push-deploy workflow
+        if: steps.zebra.outputs.passed == 'true'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: 'zebra',
+              workflow_id: 'push-deploy.yaml',
+              ref: 'zsa-integration-demo-ag'
+            });
