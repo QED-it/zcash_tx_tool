@@ -8,7 +8,6 @@ use std::convert::TryInto;
 
 use abscissa_core::prelude::info;
 
-use orchard::domain::OrchardDomainCommon;
 use orchard::issuance::{IssueBundle, Signed};
 use orchard::keys::{
     FullViewingKey, IncomingViewingKey, IssuanceAuthorizingKey, OutgoingViewingKey, Scope,
@@ -31,6 +30,7 @@ use zcash_protocol::consensus::{BlockHeight, REGTEST_NETWORK};
 use zcash_primitives::transaction::components::issuance::write_note;
 use zcash_primitives::transaction::{OrchardBundle, Transaction, TxId};
 use bip0039::Mnemonic;
+use orchard::primitives::OrchardPrimitives;
 use zcash_primitives::zip32::AccountId;
 use zcash_protocol::constants;
 use zcash_protocol::value::ZatBalance;
@@ -409,7 +409,7 @@ impl User {
     /// incoming viewing keys, and return a data structure that describes
     /// the actions that are involved with this user, either spending notes belonging
     /// to this user or creating new notes owned by this user.
-    fn add_notes_from_orchard_bundle<O: OrchardDomainCommon>(
+    fn add_notes_from_orchard_bundle<O: OrchardPrimitives>(
         &mut self,
         txid: &TxId,
         bundle: &Bundle<Authorized, ZatBalance, O>,
@@ -494,7 +494,7 @@ impl User {
         }
     }
 
-    fn mark_potential_spends<O: OrchardDomainCommon>(
+    fn mark_potential_spends<O: OrchardPrimitives>(
         &mut self,
         txid: &TxId,
         orchard_bundle: &Bundle<Authorized, ZatBalance, O>,
