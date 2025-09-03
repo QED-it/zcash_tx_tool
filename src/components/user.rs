@@ -27,7 +27,6 @@ use crate::components::persistence::sqlite::SqliteDataStorage;
 use crate::components::user::structs::OrderedAddress;
 use zcash_primitives::block::BlockHash;
 use zcash_protocol::consensus::{BlockHeight, REGTEST_NETWORK};
-use zcash_primitives::transaction::components::issuance::write_note;
 use zcash_primitives::transaction::{OrchardBundle, Transaction, TxId};
 use bip0039::Mnemonic;
 use orchard::primitives::OrchardPrimitives;
@@ -266,43 +265,7 @@ impl User {
         })
     }
 
-    pub(crate) fn find_non_spent_note(
-        &mut self,
-        asset: AssetBase,
-        owner: Address,
-    ) -> Option<NoteSpendMetadata> {
-        let sk = self
-            .key_store
-            .spending_key_for_ivk(
-                self.key_store
-                    .ivk_for_address(&owner)
-                    .expect("IVK not found for address"),
-            )
-            .expect("SpendingKey not found for IVK");
-
-        let mut notes = self.db.find_non_spent_notes(owner, asset);
-        assert!(
-            !notes.is_empty(),
-            "No notes found for given asset and owner"
-        );
-        let note_data = notes.remove(0);
-        let merkle_path = MerklePath::from_parts(
-            note_data.position as u32,
-            self.commitment_tree
-                .witness(Position::from(note_data.position as u64), 0)
-                .unwrap()
-                .try_into()
-                .unwrap(),
-        );
-
-        Some(NoteSpendMetadata {
-            note: note_data.into(),
-            sk: *sk,
-            merkle_path,
-        })
-    }
-
-    pub fn address_for_account(&mut self, account: usize, scope: Scope) -> Address {
+    pub fn address_for_account(&mut self, account: u32, scope: Scope) -> Address {
         match self.key_store.accounts.get(&account) {
             Some(addr) => *addr,
             None => {
@@ -426,17 +389,17 @@ impl User {
             match orchard_bundle {
                 OrchardBundle::OrchardVanilla(b) => {
                     notes_offset = b.actions().len();
-                    self.add_notes_from_orchard_bundle(&tx.txid(), b, 0);
+                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
                     self.mark_potential_spends(&tx.txid(), b);
                 }
                 OrchardBundle::OrchardZSA(b) => {
                     notes_offset = b.actions().len();
-                    self.add_notes_from_orchard_bundle(&tx.txid(), b, 0);
+                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
                     self.mark_potential_spends(&tx.txid(), b);
                 }
                 OrchardBundle::OrchardSwap(b) => {
                     b.action_groups().iter().for_each(|group| {
-                        self.add_notes_from_orchard_bundle(&tx.txid(), group, notes_offset);
+                        self.add_notes_from_orchard_bundle(&tx.txid(), group);
                         self.mark_potential_spends(&tx.txid(), group);
                         notes_offset += group.actions().len();
                     });
@@ -459,10 +422,10 @@ impl User {
     /// incoming viewing keys, and return a data structure that describes
     /// the actions that are involved with this user, either spending notes belonging
     /// to this user or creating new notes owned by this user.
-    fn add_notes_from_orchard_bundle<O: OrchardPrimitives>(
+    fn add_notes_from_orchard_bundle<O: OrchardPrimitives, A: Authorization>(
         &mut self,
         txid: &TxId,
-        bundle: &Bundle<Authorized, ZatBalance, O>,
+        bundle: &Bundle<A, ZatBalance, O>,
     ) {
         let keys = self
             .key_store
@@ -475,7 +438,7 @@ impl User {
             info!("Store note");
             self.store_note(
                 txid,
-                action_idx + offset,
+                action_idx,
                 ivk.clone(),
                 note,
                 recipient,
@@ -580,7 +543,7 @@ impl User {
     fn mark_potential_spends<O: OrchardPrimitives, A: Authorization>(
         &mut self,
         txid: &TxId,
-        orchard_bundle: &Bundle<Authorized, ZatBalance, O>,
+        orchard_bundle: &Bundle<A, ZatBalance, O>,
     ) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {

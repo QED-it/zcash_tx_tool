@@ -6,16 +6,13 @@ use orchard::note::AssetBase;
 use zcash_primitives::transaction::Transaction;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct TestBalances(Vec<u64>);
+pub(crate) struct TestBalances(pub(crate) Vec<u64>);
 
 impl TestBalances {
-    pub(crate) fn get_native_balances(num_accounts: usize, user: &mut User) -> TestBalances {
-        Self::get_asset_balances(AssetBase::native(), num_accounts, user)
-    }
 
     pub(crate) fn get_asset_balances(
         asset: AssetBase,
-        num_accounts: usize,
+        num_accounts: u32,
         wallet: &mut User,
     ) -> TestBalances {
         let balances = (0..num_accounts)
@@ -32,8 +29,8 @@ impl TestBalances {
 /// A struct to hold information about a transfer of assets.
 #[derive(Clone)]
 pub(crate) struct TransferInfo {
-    acc_idx_from: usize,
-    acc_idx_to: usize,
+    acc_idx_from: u32,
+    acc_idx_to: u32,
     asset: AssetBase,
     amount: u64,
 }
@@ -41,7 +38,7 @@ pub(crate) struct TransferInfo {
 /// A struct to hold information about a burn of assets.
 #[derive(Clone)]
 pub(crate) struct BurnInfo {
-    burner_acc_idx: usize,
+    burner_acc_idx: u32,
     asset: AssetBase,
     amount: u64,
 }
@@ -53,8 +50,8 @@ pub(crate) trait TransactionCreator {
 
 impl TransferInfo {
     pub(crate) fn new(
-        acc_idx_from: usize,
-        acc_idx_to: usize,
+        acc_idx_from: u32,
+        acc_idx_to: u32,
         asset: AssetBase,
         amount: u64,
     ) -> Self {
@@ -68,7 +65,7 @@ impl TransferInfo {
 }
 
 impl BurnInfo {
-    pub(crate) fn new(burner_acc_idx: usize, asset: AssetBase, amount: u64) -> Self {
+    pub(crate) fn new(burner_acc_idx: u32, asset: AssetBase, amount: u64) -> Self {
         Self {
             burner_acc_idx,
             asset,
@@ -128,6 +125,7 @@ impl<T: Clone + TransactionCreator> TxiBatch<T> {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn expected_balances_after_mine(
     balances: &TestBalances,
     miner_idx: usize,
@@ -137,6 +135,7 @@ pub(crate) fn expected_balances_after_mine(
     new_balances.0[miner_idx] += coinbase_value;
     new_balances
 }
+
 pub(crate) fn expected_balances_after_transfer(
     balances: &TestBalances,
     txi: &TxiBatch<TransferInfo>,
@@ -145,8 +144,8 @@ pub(crate) fn expected_balances_after_transfer(
         .to_vec()
         .iter()
         .fold(balances.clone(), |mut acc, transfer_info| {
-            acc.0[transfer_info.acc_idx_from] -= transfer_info.amount;
-            acc.0[transfer_info.acc_idx_to] += transfer_info.amount;
+            acc.0[transfer_info.acc_idx_from as usize] -= transfer_info.amount;
+            acc.0[transfer_info.acc_idx_to as usize] += transfer_info.amount;
             acc
         });
     new_balances
@@ -160,7 +159,7 @@ pub(crate) fn expected_balances_after_burn(
         .to_vec()
         .iter()
         .fold(balances.clone(), |mut acc, burn_info| {
-            acc.0[burn_info.burner_acc_idx] -= burn_info.amount;
+            acc.0[burn_info.burner_acc_idx as usize] -= burn_info.amount;
             acc
         });
     new_balances
@@ -170,14 +169,15 @@ pub(crate) fn check_balances(
     asset: AssetBase,
     expected_balances: &TestBalances,
     user: &mut User,
-    num_accounts: usize,
+    num_accounts: u32,
 ) {
     let actual_balances = TestBalances::get_asset_balances(asset, num_accounts, user);
     assert_eq!(&actual_balances, expected_balances);
 }
 
-pub(crate) fn print_balances(header: &str, asset: AssetBase, balances: &TestBalances) {
+pub(crate) fn print_balances(header: &str, asset: AssetBase, num_accounts: u32,  wallet: &mut User) {
     info!("{}", header);
+    let balances = TestBalances::get_asset_balances(asset, num_accounts, wallet);
     if asset.is_native().into() {
         info!("AssetBase: Native ZEC");
     } else {

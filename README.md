@@ -65,7 +65,7 @@ Open a terminal and execute the following commands:
 
 ```bash
 # Clone the zebra repository with the ZSA integration branch
-git clone -b zsa-integration-demo --single-branch https://github.com/QED-it/zebra.git
+git clone -b zsa-integration-state-multiple-ag --single-branch https://github.com/QED-it/zebra.git
 
 # Navigate to the testnet deployment directory
 cd zebra/testnet-single-node-deploy

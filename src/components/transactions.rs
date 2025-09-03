@@ -13,21 +13,18 @@ use std::convert::TryFrom;
 use std::ops::Add;
 use orchard::builder::BundleType;
 use orchard::keys::{FullViewingKey, IssuanceValidatingKey, SpendAuthorizingKey};
-use orchard::keys::Scope::External;
 use orchard::orchard_flavor::OrchardZSA;
-use orchard::swap_bundle::{ActionGroup, ActionGroupAuthorized};
-use orchard::keys::{IssuanceValidatingKey, SpendAuthorizingKey};
+use orchard::swap_bundle::ActionGroupAuthorized;
+use orchard::primitives::redpallas::{Binding, SigningKey};
 use secp256k1::Secp256k1;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
 use zcash_protocol::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
 use zcash_protocol::memo::MemoBytes;
 use zcash_primitives::transaction::builder::{BuildConfig, Builder};
-use zcash_primitives::transaction::components::amount::NonNegativeAmount;
-use zcash_primitives::transaction::components::{transparent, Amount, TxOut};
 use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
-use zcash_protocol::value::Zatoshis;
+use zcash_protocol::value::{ZatBalance, Zatoshis};
 use zcash_transparent::builder::TransparentSigningSet;
 use zcash_transparent::bundle::{OutPoint, TxOut};
 
@@ -294,12 +291,6 @@ pub fn create_issue_transaction(
     wallet: &mut User,
 ) -> (Transaction, AssetBase) {
     info!("Issue {} asset", amount);
-
-    let issuer = wallet.address_for_account(0, External);
-    let input = wallet
-        .find_non_spent_note(AssetBase::native(), issuer)
-        .unwrap();
-
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(
         wallet.issuance_key(),
@@ -324,14 +315,6 @@ pub fn create_finalization_transaction(
     wallet: &mut User,
 ) -> Transaction {
     info!("Finalize asset");
-
-    let asset = AssetBase::derive(
-        &IssuanceValidatingKey::from(&wallet.issuance_key()),
-        &asset_desc,
-    );
-    let issuer = wallet.address_for_account(0, External);
-    let input = wallet.find_non_spent_note(asset, issuer).unwrap();
-
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc_hash, None, false)
         .unwrap();
@@ -373,7 +356,7 @@ pub fn create_swap_transaction(
         .unwrap();
     tx.add_action_group::<FeeError>(swap_order_2, bsk_2)
         .unwrap();
-    build_tx(tx)
+    build_tx(tx, &wallet.transparent_signing_set(), &[])
 }
 
 fn create_swap_order(
@@ -384,7 +367,7 @@ fn create_swap_order(
     asset_to_receive: AssetBase,
     wallet: &mut User,
 ) -> (
-    Bundle<ActionGroupAuthorized, Amount, OrchardZSA>,
+    Bundle<ActionGroupAuthorized, ZatBalance, OrchardZSA>,
     SigningKey<Binding>,
 ) {
     let ovk = wallet.orchard_ovk();
@@ -427,7 +410,7 @@ fn create_swap_order(
             address,
             NoteValue::from_raw(amount_to_receive),
             asset_to_receive,
-            None,
+            [0; 512],
         )
         .unwrap();
 
@@ -440,7 +423,7 @@ fn create_swap_order(
                 address,
                 NoteValue::from_raw(change_amount),
                 asset_to_send,
-                None,
+                [0; 512],
             )
             .unwrap();
     }

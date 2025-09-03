@@ -39,7 +39,7 @@ impl Runnable for TestThreePartyCmd {
             &mut rpc_client,
         );
 
-        let num_users = 3;
+        let num_accounts = 3;
 
         let manufacturer_idx = 0;
         let purchaser_idx = 1;
@@ -54,13 +54,12 @@ impl Runnable for TestThreePartyCmd {
         let (issue_tx, asset) =
             create_issue_transaction(manufacturer_addr, 1000, asset_desc_hash, true, &mut wallet);
 
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
-        print_balances("=== Initial balances ===", asset, &balances);
+        print_balances("=== Initial balances ===", asset, num_accounts, &mut wallet);
 
         mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]));
 
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
-        print_balances("=== Balances after issue ===", asset, &balances);
+        let balances = TestBalances::get_asset_balances(asset, num_accounts, &mut wallet);
+        print_balances("=== Balances after issue ===", asset, num_accounts, &mut wallet);
 
         // --------------------- ZSA transfer from manufacturer to purchaser ---------------------
         let amount_to_transfer_1 = 3;
@@ -74,17 +73,18 @@ impl Runnable for TestThreePartyCmd {
 
         mine(&mut wallet, &mut rpc_client, txs);
 
-        check_balances(asset, &expected_balances, &mut wallet, num_users);
+        check_balances(asset, &expected_balances, &mut wallet, num_accounts);
 
         print_balances(
             "=== Balances after transfer to purchaser ===",
             asset,
-            &expected_balances,
+            num_accounts,
+            &mut wallet,
         );
 
         // --------------------- ZSA transfer from purchaser to supplier ---------------------
 
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
+        let balances = TestBalances::get_asset_balances(asset, num_accounts, &mut wallet);
         let amount_to_transfer_2 = 1;
 
         let transfer_info =
@@ -98,17 +98,18 @@ impl Runnable for TestThreePartyCmd {
 
         mine(&mut wallet, &mut rpc_client, txs);
 
-        check_balances(asset, &expected_balances, &mut wallet, num_users);
+        check_balances(asset, &expected_balances, &mut wallet, num_accounts);
 
         print_balances(
             "=== Balances after transfer to supplier ===",
             asset,
-            &expected_balances,
+            num_accounts,
+            &mut wallet,
         );
 
         // --------------------- Supplier burning asset ---------------------
 
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
+        let balances = TestBalances::get_asset_balances(asset, num_accounts, &mut wallet);
         let amount_to_burn_supplier = 1;
 
         let txi = TxiBatch::from_item(BurnInfo::new(supplier_idx, asset, amount_to_burn_supplier));
@@ -120,12 +121,13 @@ impl Runnable for TestThreePartyCmd {
 
         mine(&mut wallet, &mut rpc_client, txs);
 
-        check_balances(asset, &expected_balances, &mut wallet, num_users);
+        check_balances(asset, &expected_balances, &mut wallet, num_accounts);
 
         print_balances(
             "=== Balances after burning by supplier ===",
             asset,
-            &expected_balances,
+            num_accounts,
+            &mut wallet,
         );
     }
 }
