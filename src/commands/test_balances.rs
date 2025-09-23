@@ -24,6 +24,14 @@ impl TestBalances {
 
         TestBalances(balances)
     }
+
+    pub(crate) fn increment(&mut self, account: u32, amount: u64) {
+        self.0[account as usize] = self.0[account as usize] + amount;
+    }
+
+    pub(crate) fn decrement(&mut self, account: u32, amount: u64) {
+        self.0[account as usize] = self.0[account as usize] - amount;
+    }
 }
 
 /// A struct to hold information about a transfer of assets.
@@ -76,16 +84,13 @@ impl BurnInfo {
 
 impl TransactionCreator for TransferInfo {
     fn create_tx(&self, wallet: &mut User) -> Transaction {
-        let from_addr = wallet.address_for_account(self.acc_idx_from, External);
-        let to_addr = wallet.address_for_account(self.acc_idx_to, External);
-        create_transfer_transaction(from_addr, to_addr, self.amount, self.asset, wallet)
+        create_transfer_transaction(self.acc_idx_from, self.acc_idx_to, self.amount, self.asset, wallet)
     }
 }
 
 impl TransactionCreator for BurnInfo {
     fn create_tx(&self, wallet: &mut User) -> Transaction {
-        let address = wallet.address_for_account(self.burner_acc_idx, External);
-        create_burn_transaction(address, self.amount, self.asset, wallet)
+        create_burn_transaction(self.burner_acc_idx, self.amount, self.asset, wallet)
     }
 }
 

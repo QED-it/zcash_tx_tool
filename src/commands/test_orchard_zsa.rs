@@ -85,7 +85,7 @@ impl Runnable for TestOrchardZSACmd {
         txi.add_to_batch(BurnInfo::new(alice_idx, asset, amount_to_burn_alice));
 
         // Generate expected balances after burn
-        let expected_balances = expected_balances_after_burn(&expected_balances, &txi);
+        let mut expected_balances = expected_balances_after_burn(&expected_balances, &txi);
 
         let txs = txi.to_transactions(&mut wallet);
 
@@ -98,11 +98,14 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Swap ---------------------
 
+        let matcher_index = 2;
+        let matcher_addr = wallet.address_for_account(matcher_index, External);
+
         // Issue a new type of asset
         let asset_desc_hash_2 = compute_asset_desc_hash(&NonEmpty::from_slice(b"WBTC").unwrap());
 
         let (issue_tx_2, _) =
-            create_issue_transaction(alice_addr, 5, asset_desc_hash_2, true, &mut wallet);
+            create_issue_transaction(alice_addr, 10, asset_desc_hash_2, true, &mut wallet);
 
         let asset_2 = issue_tx_2
             .issue_bundle()
@@ -120,13 +123,17 @@ impl Runnable for TestOrchardZSACmd {
             Vec::from([issue_tx_2]),
         );
 
+        let mut expected_balances_asset_2 = TestBalances::get_asset_balances(asset_2, num_accounts, &mut wallet);
 
-        let swap_tx = create_swap_transaction(issuer_addr, alice_addr, 10, asset, 5, asset_2, &mut wallet);
-        let swap_info = TransferInfo::new(issuer_idx, alice_idx, asset, 10);
-        let swap_info2 = TransferInfo::new(alice_idx, issuer_idx, asset_2, 5);
-        let mut txi = TxiBatch::from_item(swap_info);
-        txi.add_to_batch(swap_info2);
-        let expected_balances = expected_balances_after_transfer(&expected_balances, &txi);
+        let swap_asset_a_amount = 10;
+        let swap_asset_b_amount = 6;
+        let swap_tx = create_swap_transaction(issuer_idx, alice_idx, swap_asset_a_amount, asset, swap_asset_b_amount, asset_2, &mut wallet);
+
+        expected_balances.decrement(issuer_idx, swap_asset_a_amount);
+        expected_balances.increment(alice_idx, swap_asset_a_amount);
+
+        expected_balances_asset_2.decrement(alice_idx, swap_asset_b_amount);
+        expected_balances_asset_2.increment(issuer_idx, swap_asset_b_amount);
 
         mine(&mut wallet, &mut rpc_client, Vec::from([swap_tx]));
 
@@ -141,19 +148,19 @@ impl Runnable for TestOrchardZSACmd {
 
         check_balances(
             asset_2,
-            &expected_balances,
+            &expected_balances_asset_2,
             &mut wallet,
             num_accounts,
         );
 
-        print_balances("=== Balances after swap for the second asset ===", asset, num_accounts, &mut wallet);
+        print_balances("=== Balances after swap for the second asset ===", asset_2, num_accounts, &mut wallet);
 
         // --------------------- Use swapped notes ---------------------
 
         let amount_to_transfer_2 = 1;
         let transfer_info = TransferInfo::new(issuer_idx, alice_idx, asset_2, amount_to_transfer_2);
         let txi = TxiBatch::from_item(transfer_info);
-        let expected_balances = expected_balances_after_transfer(&expected_balances, &txi);
+        let expected_balances_asset_2 = expected_balances_after_transfer(&expected_balances_asset_2, &txi);
         let txns = txi.to_transactions(&mut wallet);
 
         mine(
@@ -164,7 +171,7 @@ impl Runnable for TestOrchardZSACmd {
 
         check_balances(
             asset_2,
-            &expected_balances,
+            &expected_balances_asset_2,
             &mut wallet,
             num_accounts,
         );

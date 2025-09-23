@@ -13,6 +13,7 @@ use std::convert::TryFrom;
 use std::ops::Add;
 use orchard::builder::BundleType;
 use orchard::keys::{FullViewingKey, IssuanceValidatingKey, SpendAuthorizingKey};
+use orchard::keys::Scope::External;
 use orchard::orchard_flavor::OrchardZSA;
 use orchard::swap_bundle::ActionGroupAuthorized;
 use orchard::primitives::redpallas::{Binding, SigningKey};
@@ -75,12 +76,13 @@ pub fn mine_empty_blocks(
 
 /// Create a shielded coinbase transaction
 pub fn create_shield_coinbase_transaction(
-    recipient: Address,
+    recipient_index: u32,
     coinbase_txid: TxId,
     wallet: &mut User,
 ) -> Transaction {
     info!("Shielding coinbase output from tx {}", coinbase_txid);
 
+    let recipient = wallet.address_for_account(recipient_index, External);
     let mut tx = create_tx(wallet);
 
     let coinbase_amount = Zatoshis::from_u64(COINBASE_VALUE).unwrap();
@@ -98,7 +100,7 @@ pub fn create_shield_coinbase_transaction(
     )
     .unwrap();
     tx.add_orchard_output::<FeeError>(
-        Some(wallet.orchard_ovk()),
+        Some(wallet.orchard_ovk(recipient_index)),
         recipient,
         COINBASE_VALUE,
         AssetBase::native(),
@@ -164,15 +166,17 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
 
 /// Create a transfer transaction
 pub fn create_transfer_transaction(
-    sender: Address,
-    recipient: Address,
+    sender_index: u32,
+    recipient_index: u32,
     amount: u64,
     asset: AssetBase,
     wallet: &mut User,
 ) -> Transaction {
     info!("Transfer {} zatoshi", amount);
 
-    let ovk = wallet.orchard_ovk();
+    let sender = wallet.address_for_account(sender_index, External);
+    let recipient = wallet.address_for_account(recipient_index, External);
+    let ovk = wallet.orchard_ovk(sender_index);
 
     // Add inputs
     let inputs = wallet.select_spendable_notes(sender, amount, asset);
@@ -229,12 +233,14 @@ pub fn create_transfer_transaction(
 
 /// Create a burn transaction
 pub fn create_burn_transaction(
-    arsonist: Address,
+    arsonist_index: u32,
     amount: u64,
     asset: AssetBase,
     wallet: &mut User,
 ) -> Transaction {
     info!("Burn {} zatoshi", amount);
+
+    let arsonist = wallet.address_for_account(arsonist_index, External);
 
     // Add inputs
     let inputs = wallet.select_spendable_notes(arsonist, amount, asset);
@@ -264,7 +270,7 @@ pub fn create_burn_transaction(
     // Add change output if needed
     let change_amount = total_inputs_amount - amount;
     if change_amount != 0 {
-        let ovk = wallet.orchard_ovk();
+        let ovk = wallet.orchard_ovk(arsonist_index);
         tx.add_orchard_output::<FeeError>(
             Some(ovk),
             arsonist,
@@ -324,8 +330,8 @@ pub fn create_finalization_transaction(
 
 /// Create a swap transaction
 pub fn create_swap_transaction(
-    party_a: Address,
-    party_b: Address,
+    party_a: u32,
+    party_b: u32,
     amount_asset_a: u64,
     asset_a: AssetBase,
     amount_asset_b: u64,
@@ -360,7 +366,7 @@ pub fn create_swap_transaction(
 }
 
 fn create_swap_order(
-    address: Address,
+    account_index: u32,
     amount_to_send: u64,
     asset_to_send: AssetBase,
     amount_to_receive: u64,
@@ -370,7 +376,8 @@ fn create_swap_order(
     Bundle<ActionGroupAuthorized, ZatBalance, OrchardZSA>,
     SigningKey<Binding>,
 ) {
-    let ovk = wallet.orchard_ovk();
+    let ovk = wallet.orchard_ovk(account_index);
+    let address = wallet.address_for_account(account_index, External);
 
     // Find input notes for asset A
     let inputs_a = wallet.select_spendable_notes(address, amount_to_send, asset_to_send);

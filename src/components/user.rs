@@ -286,11 +286,11 @@ impl User {
         }
     }
 
-    pub(crate) fn orchard_ovk(&self) -> OutgoingViewingKey {
+    pub(crate) fn orchard_ovk(&self, account_index: u32) -> OutgoingViewingKey {
         let sk = SpendingKey::from_zip32_seed(
             self.seed.as_slice(),
             constants::regtest::COIN_TYPE,
-            AccountId::try_from(0).unwrap(),
+            AccountId::try_from(account_index).unwrap(),
         )
         .unwrap();
         FullViewingKey::from(&sk).to_ovk(Scope::External)
@@ -389,17 +389,17 @@ impl User {
             match orchard_bundle {
                 OrchardBundle::OrchardVanilla(b) => {
                     notes_offset = b.actions().len();
-                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
+                    self.add_notes_from_orchard_bundle(&tx.txid(), b, 0);
                     self.mark_potential_spends(&tx.txid(), b);
                 }
                 OrchardBundle::OrchardZSA(b) => {
                     notes_offset = b.actions().len();
-                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
+                    self.add_notes_from_orchard_bundle(&tx.txid(), b, 0);
                     self.mark_potential_spends(&tx.txid(), b);
                 }
                 OrchardBundle::OrchardSwap(b) => {
                     b.action_groups().iter().for_each(|group| {
-                        self.add_notes_from_orchard_bundle(&tx.txid(), group);
+                        self.add_notes_from_orchard_bundle(&tx.txid(), group, notes_offset);
                         self.mark_potential_spends(&tx.txid(), group);
                         notes_offset += group.actions().len();
                     });
@@ -426,6 +426,7 @@ impl User {
         &mut self,
         txid: &TxId,
         bundle: &Bundle<A, ZatBalance, O>,
+        action_index_offset: usize,
     ) {
         let keys = self
             .key_store
@@ -434,11 +435,13 @@ impl User {
             .cloned()
             .collect::<Vec<_>>();
 
-        for (action_idx, ivk, note, recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
+        let decrypted_notes = bundle.decrypt_outputs_with_keys(&keys);
+
+        for (action_idx, ivk, note, recipient, memo) in decrypted_notes {
             info!("Store note");
             self.store_note(
                 txid,
-                action_idx,
+                action_index_offset + action_idx,
                 ivk.clone(),
                 note,
                 recipient,
