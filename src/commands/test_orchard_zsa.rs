@@ -12,7 +12,7 @@ use crate::commands::test_balances::{
     BurnInfo, TestBalances, TransferInfo, TxiBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{create_issue_transaction, create_swap_transaction, mine, sync_from_height};
+use crate::components::transactions::{create_issue_transaction, create_swap_transaction, create_swap_transaction_with_matcher, mine, sync_from_height};
 use crate::components::user::User;
 use crate::prelude::*;
 use abscissa_core::{Command, Runnable};
@@ -125,15 +125,16 @@ impl Runnable for TestOrchardZSACmd {
 
         let mut expected_balances_asset_2 = TestBalances::get_asset_balances(asset_2, num_accounts, &mut wallet);
 
+        let spread = 1;
         let swap_asset_a_amount = 10;
         let swap_asset_b_amount = 6;
-        let swap_tx = create_swap_transaction(issuer_idx, alice_idx, swap_asset_a_amount, asset, swap_asset_b_amount, asset_2, &mut wallet);
+        let swap_tx = create_swap_transaction_with_matcher(issuer_idx, alice_idx, matcher_index, swap_asset_a_amount, asset, swap_asset_b_amount, asset_2, spread, &mut wallet);
 
         expected_balances.decrement(issuer_idx, swap_asset_a_amount);
-        expected_balances.increment(alice_idx, swap_asset_a_amount);
+        expected_balances.increment(alice_idx, swap_asset_a_amount - spread);
 
-        expected_balances_asset_2.decrement(alice_idx, swap_asset_b_amount);
-        expected_balances_asset_2.increment(issuer_idx, swap_asset_b_amount);
+        expected_balances_asset_2.decrement(alice_idx, swap_asset_b_amount );
+        expected_balances_asset_2.increment(issuer_idx, swap_asset_b_amount - spread);
 
         mine(&mut wallet, &mut rpc_client, Vec::from([swap_tx]));
 

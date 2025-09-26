@@ -365,6 +365,55 @@ pub fn create_swap_transaction(
     build_tx(tx, &wallet.transparent_signing_set(), &[])
 }
 
+/// Create a 3-party swap transaction with matcher
+pub fn create_swap_transaction_with_matcher(
+    party_a: u32,
+    party_b: u32,
+    matcher: u32,
+    amount_asset_a: u64,
+    asset_a: AssetBase,
+    amount_asset_b: u64,
+    asset_b: AssetBase,
+    spread: u64,
+    wallet: &mut User,
+) -> Transaction {
+    info!("Swap with matcher: {} of asset_a to {} of asset_b with spread {}", amount_asset_a, amount_asset_b, spread);
+
+    let (swap_order_1, bsk_1) = create_swap_order(
+        party_a,
+        amount_asset_a,
+        asset_a,
+        amount_asset_b - spread,
+        asset_b,
+        wallet,
+    );
+
+    let (swap_order_2, bsk_2) = create_swap_order(
+        party_b,
+        amount_asset_b,
+        asset_b,
+        amount_asset_a - spread,
+        asset_a,
+        wallet,
+    );
+
+    // Matcher claims the spread
+    let (matcher_order, bsk_matcher) = create_matcher_swap_order(
+        matcher,
+        spread,
+        asset_a,
+        spread,
+        asset_b,
+        wallet,
+    );
+
+    let mut tx = create_tx(wallet);
+    tx.add_action_group::<FeeError>(swap_order_1, bsk_1).unwrap();
+    tx.add_action_group::<FeeError>(swap_order_2, bsk_2).unwrap();
+    tx.add_action_group::<FeeError>(matcher_order, bsk_matcher).unwrap();
+    build_tx(tx, &wallet.transparent_signing_set(), &[])
+}
+
 fn create_swap_order(
     account_index: u32,
     amount_to_send: u64,
@@ -445,6 +494,77 @@ fn create_swap_order(
         )
         .unwrap()
         .apply_signatures_for_action_group(OsRng, commitment, &orchard_saks)
+        .unwrap()
+}
+
+fn create_matcher_swap_order(
+    matcher_index: u32,
+    amount_asset_a: u64,
+    asset_a: AssetBase,
+    amount_asset_b: u64,
+    asset_b: AssetBase,
+    wallet: &mut User,
+) -> (
+    Bundle<ActionGroupAuthorized, ZatBalance, OrchardZSA>,
+    SigningKey<Binding>,
+) {
+    let ovk = wallet.orchard_ovk(matcher_index);
+    let address = wallet.address_for_account(matcher_index, External);
+
+    let mut ag_builder =
+        orchard::builder::Builder::new(BundleType::DEFAULT_SWAP, wallet.orchard_anchor().unwrap());
+
+    // Add reference input notes for both assets (no real spending, just for balance)
+    let reference_note_a = wallet.find_reference_note(asset_a).unwrap();
+    ag_builder
+        .add_spend(
+            ReferenceKeys::fvk(),
+            reference_note_a.note,
+            reference_note_a.merkle_path,
+        )
+        .unwrap();
+    
+    let reference_note_b = wallet.find_reference_note(asset_b).unwrap();
+    ag_builder
+        .add_spend(
+            ReferenceKeys::fvk(),
+            reference_note_b.note,
+            reference_note_b.merkle_path,
+        )
+        .unwrap();
+
+    // Add output for asset A (matcher receives this)
+    ag_builder
+        .add_output(
+            Some(ovk.clone()),
+            address,
+            NoteValue::from_raw(amount_asset_a),
+            asset_a,
+            [0; 512],
+        )
+        .unwrap();
+
+    // Add output for asset B (matcher receives this)
+    ag_builder
+        .add_output(
+            Some(ovk),
+            address,
+            NoteValue::from_raw(amount_asset_b),
+            asset_b,
+            [0; 512],
+        )
+        .unwrap();
+
+    // Build Swap Order (no orchard_saks needed since only reference notes are spent)
+    let (action_group, _) = ag_builder.build_action_group(OsRng, 10).unwrap();
+    let commitment = action_group.action_group_commitment().into();
+    action_group
+        .create_proof(
+            &orchard::circuit::ProvingKey::build::<OrchardZSA>(),
+            &mut OsRng,
+        )
+        .unwrap()
+        .apply_signatures_for_action_group(OsRng, commitment, &[])
         .unwrap()
 }
 
