@@ -57,7 +57,8 @@ impl Runnable for TestThreePartyCmd {
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
 
-        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]));
+        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]))
+            .expect("block mined successfully");
 
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Balances after issue ===", asset, &balances);
@@ -72,7 +73,7 @@ impl Runnable for TestThreePartyCmd {
 
         let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, txs);
+        mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
@@ -96,7 +97,7 @@ impl Runnable for TestThreePartyCmd {
 
         let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, txs);
+        mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
@@ -118,7 +119,7 @@ impl Runnable for TestThreePartyCmd {
 
         let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, txs);
+        mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 

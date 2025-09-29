@@ -16,7 +16,9 @@ use crate::commands::test_balances::{
     BurnInfo, TestBalances, TransferInfo, TxiBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
+use crate::components::transactions::{
+    create_issue_transaction, create_finalization_transaction, mine, sync_from_height,
+};
 use crate::components::user::User;
 use crate::prelude::*;
 
@@ -55,7 +57,8 @@ impl Runnable for TestOrchardZSACmd {
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
 
-        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]));
+        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]))
+            .expect("block mined successfully");
 
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Balances after issue ===", asset, &balances);
@@ -69,7 +72,7 @@ impl Runnable for TestOrchardZSACmd {
 
         let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, txs);
+        mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
@@ -91,12 +94,30 @@ impl Runnable for TestOrchardZSACmd {
 
         let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, txs);
+        mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
         // burn from issuer(account0) and alice(account1)
         check_balances(asset, &expected_balances, &mut wallet, num_users);
 
         print_balances("=== Balances after burning ===", asset, &expected_balances);
+
+        // --------------------- Finalization ---------------------
+
+        let finalization_tx = create_finalization_transaction(asset_desc_hash.clone(), &mut wallet);
+        mine(&mut wallet, &mut rpc_client, Vec::from([finalization_tx]))
+            .expect("block mined successfully");
+
+        let invalid_issue_tx =
+            create_issue_transaction(issuer_addr, 2000, asset_desc_hash, true, &mut wallet);
+        let result = mine(
+            &mut wallet,
+            &mut rpc_client,
+            Vec::from([invalid_issue_tx.0]),
+        );
+        assert!(
+            result.is_err(),
+            "Invalid issue transaction was unexpectedly accepted"
+        );
     }
 }
 
