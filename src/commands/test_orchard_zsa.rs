@@ -103,7 +103,7 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Finalization ---------------------
 
-        let finalization_tx = create_finalization_transaction(asset_desc_hash.clone(), &mut wallet);
+        let finalization_tx = create_finalization_transaction(asset_desc_hash, &mut wallet);
         mine(&mut wallet, &mut rpc_client, Vec::from([finalization_tx]))
             .expect("block mined successfully");
 
