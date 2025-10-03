@@ -45,7 +45,7 @@ pub fn mine_block(
     txs: Vec<Transaction>,
     activate: bool,
 ) -> Result<(u32, TxId), Box<dyn Error>> {
-    let block_template = rpc_client.get_block_template().unwrap();
+    let block_template = rpc_client.get_block_template()?;
     let block_height = block_template.height;
 
     let block_proposal = template_into_proposal(block_template, txs, activate);

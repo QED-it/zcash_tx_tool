@@ -116,7 +116,7 @@ impl Runnable for TestOrchardZSACmd {
         );
         assert!(
             result.is_err(),
-            "Invalid issue transaction was unexpectedly accepted"
+            "Issue transaction was unexpectedly accepted after asset finalization"
         );
     }
 }
