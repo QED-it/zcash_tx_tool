@@ -30,6 +30,7 @@ use zcash_protocol::consensus::{BlockHeight, REGTEST_NETWORK};
 use zcash_primitives::transaction::{OrchardBundle, Transaction, TxId};
 use bip0039::Mnemonic;
 use orchard::primitives::OrchardPrimitives;
+use rand::rngs::OsRng;
 use zcash_primitives::zip32::AccountId;
 use zcash_protocol::constants;
 use zcash_protocol::value::ZatBalance;
@@ -246,7 +247,7 @@ impl User {
         selected_notes
     }
 
-    pub(crate) fn find_reference_note(&mut self, asset: AssetBase) -> Option<NoteSpendMetadata> {
+    pub(crate) fn get_randomized_reference_note(&mut self, asset: AssetBase) -> Option<NoteSpendMetadata> {
         self.db.find_reference_note(asset).map(|note_data| {
             let merkle_path = MerklePath::from_parts(
                 note_data.position as u32,
@@ -257,8 +258,9 @@ impl User {
                     .unwrap(),
             );
 
+            let reference_note: Note = note_data.into();
             NoteSpendMetadata {
-                note: note_data.into(),
+                note: reference_note.create_split_note(&mut OsRng),
                 sk: ReferenceKeys::sk(),
                 merkle_path,
             }

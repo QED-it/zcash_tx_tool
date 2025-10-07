@@ -450,9 +450,9 @@ fn create_swap_order(
     });
 
     // Add reference input note for asset B
-    let reference_note = wallet.find_reference_note(asset_to_receive).unwrap();
+    let reference_note = wallet.get_randomized_reference_note(asset_to_receive).unwrap();
     ag_builder
-        .add_spend(
+        .add_reference_note(
             ReferenceKeys::fvk(),
             reference_note.note,
             reference_note.merkle_path,
@@ -515,18 +515,18 @@ fn create_matcher_swap_order(
         orchard::builder::Builder::new(BundleType::DEFAULT_SWAP, wallet.orchard_anchor().unwrap());
 
     // Add reference input notes for both assets (no real spending, just for balance)
-    let reference_note_a = wallet.find_reference_note(asset_a).unwrap();
+    let reference_note_a = wallet.get_randomized_reference_note(asset_a).unwrap();
     ag_builder
-        .add_spend(
+        .add_reference_note(
             ReferenceKeys::fvk(),
             reference_note_a.note,
             reference_note_a.merkle_path,
         )
         .unwrap();
     
-    let reference_note_b = wallet.find_reference_note(asset_b).unwrap();
+    let reference_note_b = wallet.get_randomized_reference_note(asset_b).unwrap();
     ag_builder
-        .add_spend(
+        .add_reference_note(
             ReferenceKeys::fvk(),
             reference_note_b.note,
             reference_note_b.merkle_path,
