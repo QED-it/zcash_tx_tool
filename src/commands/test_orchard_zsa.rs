@@ -12,7 +12,7 @@ use crate::commands::test_balances::{
     BurnInfo, TestBalances, TransferInfo, TxiBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{create_issue_transaction, create_swap_transaction, create_swap_transaction_with_matcher, mine, sync_from_height};
+use crate::components::transactions::{create_issue_transaction, create_swap_transaction_with_matcher, mine, sync_from_height};
 use crate::components::user::User;
 use crate::prelude::*;
 use abscissa_core::{Command, Runnable};
@@ -99,7 +99,6 @@ impl Runnable for TestOrchardZSACmd {
         // --------------------- Swap ---------------------
 
         let matcher_index = 2;
-        let matcher_addr = wallet.address_for_account(matcher_index, External);
 
         // Issue a new type of asset
         let asset_desc_hash_2 = compute_asset_desc_hash(&NonEmpty::from_slice(b"WBTC").unwrap());

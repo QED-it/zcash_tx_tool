@@ -340,6 +340,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bounded-vec"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09dc0086e469182132244e9b8d313a0742e1132da43a08c24b9dd3c18e0faf3a"
+dependencies = [
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "bridgetree"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -827,7 +836,7 @@ checksum = "c7f84e12ccf0a7ddc17a6c41c93326024c42920d7ee630d04950e6926645c0fe"
 [[package]]
 name = "equihash"
 version = "0.2.2"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#abb1a717474a27d770690b39a3585b63d30a1eee"
+source = "git+https://github.com/QED-it/librustzcash?rev=dfdf4f742bee24e763f6950619f40d2dbac83e27#dfdf4f742bee24e763f6950619f40d2dbac83e27"
 dependencies = [
  "blake2b_simd",
  "core2",
@@ -862,7 +871,7 @@ dependencies = [
 [[package]]
 name = "f4jumble"
 version = "0.1.1"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#abb1a717474a27d770690b39a3585b63d30a1eee"
+source = "git+https://github.com/QED-it/librustzcash?rev=dfdf4f742bee24e763f6950619f40d2dbac83e27#dfdf4f742bee24e763f6950619f40d2dbac83e27"
 dependencies = [
  "blake2b_simd",
 ]
@@ -1073,7 +1082,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http",
- "indexmap",
+ "indexmap 2.10.0",
  "slab",
  "tokio",
  "tokio-util",
@@ -1083,18 +1092,18 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.3.1"
-source = "git+https://github.com/QED-it/halo2?branch=zsa1#27b2b33b44e440fc11e74b5c11c96d40b2b96a4b"
+source = "git+https://github.com/zcash/halo2?rev=2308caf68c48c02468b66cfc452dad54e355e32f#2308caf68c48c02468b66cfc452dad54e355e32f"
 dependencies = [
  "arrayvec",
  "bitvec",
  "ff",
  "group",
- "halo2_poseidon 0.1.0 (git+https://github.com/QED-it/halo2?branch=zsa1)",
+ "halo2_poseidon 0.1.0 (git+https://github.com/zcash/halo2?rev=2308caf68c48c02468b66cfc452dad54e355e32f)",
  "halo2_proofs",
  "lazy_static",
  "pasta_curves",
  "rand",
- "sinsemilla 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sinsemilla",
  "subtle",
  "uint",
 ]
@@ -1120,7 +1129,7 @@ dependencies = [
 [[package]]
 name = "halo2_poseidon"
 version = "0.1.0"
-source = "git+https://github.com/QED-it/halo2?branch=zsa1#27b2b33b44e440fc11e74b5c11c96d40b2b96a4b"
+source = "git+https://github.com/zcash/halo2?rev=2308caf68c48c02468b66cfc452dad54e355e32f#2308caf68c48c02468b66cfc452dad54e355e32f"
 dependencies = [
  "bitvec",
  "ff",
@@ -1130,18 +1139,25 @@ dependencies = [
 
 [[package]]
 name = "halo2_proofs"
-version = "0.3.0"
-source = "git+https://github.com/QED-it/halo2?branch=zsa1#27b2b33b44e440fc11e74b5c11c96d40b2b96a4b"
+version = "0.3.1"
+source = "git+https://github.com/zcash/halo2?rev=2308caf68c48c02468b66cfc452dad54e355e32f#2308caf68c48c02468b66cfc452dad54e355e32f"
 dependencies = [
  "blake2b_simd",
  "ff",
  "group",
  "halo2_legacy_pdqsort",
+ "indexmap 1.9.3",
  "maybe-rayon",
  "pasta_curves",
  "rand_core",
  "tracing",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hashbrown"
@@ -1407,12 +1423,22 @@ checksum = "ce23b50ad8242c51a442f3ff322d56b02f08852c77e4c0b4d3fd684abc89c683"
 
 [[package]]
 name = "indexmap"
+version = "1.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
+dependencies = [
+ "autocfg",
+ "hashbrown 0.12.3",
+]
+
+[[package]]
+name = "indexmap"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe4cd85333e22411419a0bcae1297d25e58c9443848b11dc6a86fefe8c78a661"
 dependencies = [
  "equivalent",
- "hashbrown",
+ "hashbrown 0.15.4",
 ]
 
 [[package]]
@@ -1793,7 +1819,7 @@ dependencies = [
 [[package]]
 name = "orchard"
 version = "0.11.0"
-source = "git+https://github.com/QED-it/orchard?branch=zsa_swap#755bfb4630d5d649812c2e2a745f81746839fe99"
+source = "git+https://github.com/QED-it/orchard?rev=f6d87925c6ad32675790b828736f7321f85ecfe8#f6d87925c6ad32675790b828736f7321f85ecfe8"
 dependencies = [
  "aes",
  "bitvec",
@@ -1817,7 +1843,7 @@ dependencies = [
  "rand_core",
  "reddsa",
  "serde",
- "sinsemilla 0.1.0 (git+https://github.com/zcash/sinsemilla?rev=aabb707e862bc3d7b803c77d14e5a771bcee3e8c)",
+ "sinsemilla",
  "subtle",
  "tracing",
  "visibility",
@@ -1896,7 +1922,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
 dependencies = [
  "fixedbitset",
- "indexmap",
+ "indexmap 2.10.0",
 ]
 
 [[package]]
@@ -2130,7 +2156,7 @@ dependencies = [
  "pasta_curves",
  "rand_core",
  "serde",
- "thiserror",
+ "thiserror 1.0.69",
  "zeroize",
 ]
 
@@ -2142,7 +2168,7 @@ checksum = "89b0ac1bc6bb3696d2c6f52cff8fba57238b81da8c0214ee6cd146eb8fde364e"
 dependencies = [
  "rand_core",
  "reddsa",
- "thiserror",
+ "thiserror 1.0.69",
  "zeroize",
 ]
 
@@ -2291,7 +2317,7 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 [[package]]
 name = "sapling-crypto"
 version = "0.5.0"
-source = "git+https://github.com/QED-it/sapling-crypto?rev=b0d2e4c1139f23fb7e9e410f2e5d986d5662ee03#b0d2e4c1139f23fb7e9e410f2e5d986d5662ee03"
+source = "git+https://github.com/QED-it/sapling-crypto?rev=03b1e1644c7a65c8764741fe787114dd2349a2f5#03b1e1644c7a65c8764741fe787114dd2349a2f5"
 dependencies = [
  "aes",
  "bellman",
@@ -2447,6 +2473,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3bf829a2d51ab4a5ddf1352d8470c140cadc8301b2ae1789db023f01cedd6ba"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "digest 0.10.7",
+]
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2503,17 +2540,6 @@ checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 dependencies = [
  "digest 0.10.7",
  "rand_core",
-]
-
-[[package]]
-name = "sinsemilla"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d268ae0ea06faafe1662e9967cd4f9022014f5eeb798e0c302c876df8b7af9c"
-dependencies = [
- "group",
- "pasta_curves",
- "subtle",
 ]
 
 [[package]]
@@ -2694,7 +2720,16 @@ version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f63587ca0f12b72a0600bcba1d40081f830876000bb46dd2337a3051618f4fc8"
+dependencies = [
+ "thiserror-impl 2.0.17",
 ]
 
 [[package]]
@@ -2702,6 +2737,17 @@ name = "thiserror-impl"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ff15c8ecd7de3849db632e14d18d2571fa09dfc5ed93479bc4485c7a517c913"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3478,8 +3524,8 @@ dependencies = [
 
 [[package]]
 name = "zcash_address"
-version = "0.8.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#abb1a717474a27d770690b39a3585b63d30a1eee"
+version = "0.9.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=dfdf4f742bee24e763f6950619f40d2dbac83e27#dfdf4f742bee24e763f6950619f40d2dbac83e27"
 dependencies = [
  "bech32",
  "bs58",
@@ -3491,8 +3537,8 @@ dependencies = [
 
 [[package]]
 name = "zcash_client_backend"
-version = "0.19.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#abb1a717474a27d770690b39a3585b63d30a1eee"
+version = "0.20.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=dfdf4f742bee24e763f6950619f40d2dbac83e27#dfdf4f742bee24e763f6950619f40d2dbac83e27"
 dependencies = [
  "base64 0.22.1",
  "bech32",
@@ -3500,6 +3546,7 @@ dependencies = [
  "bs58",
  "crossbeam-channel",
  "document-features",
+ "getset",
  "group",
  "hex",
  "incrementalmerkletree",
@@ -3524,6 +3571,7 @@ dependencies = [
  "zcash_note_encryption",
  "zcash_primitives",
  "zcash_protocol",
+ "zcash_script",
  "zcash_transparent",
  "zip32",
  "zip321",
@@ -3532,7 +3580,7 @@ dependencies = [
 [[package]]
 name = "zcash_encoding"
 version = "0.3.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#abb1a717474a27d770690b39a3585b63d30a1eee"
+source = "git+https://github.com/QED-it/librustzcash?rev=dfdf4f742bee24e763f6950619f40d2dbac83e27#dfdf4f742bee24e763f6950619f40d2dbac83e27"
 dependencies = [
  "core2",
  "nonempty",
@@ -3540,8 +3588,8 @@ dependencies = [
 
 [[package]]
 name = "zcash_keys"
-version = "0.9.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#abb1a717474a27d770690b39a3585b63d30a1eee"
+version = "0.11.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=dfdf4f742bee24e763f6950619f40d2dbac83e27#dfdf4f742bee24e763f6950619f40d2dbac83e27"
 dependencies = [
  "bech32",
  "blake2b_simd",
@@ -3567,7 +3615,7 @@ dependencies = [
 [[package]]
 name = "zcash_note_encryption"
 version = "0.4.1"
-source = "git+https://github.com/zcash/zcash_note_encryption?rev=668ea44cf59a226715a5f3cb1bf88710a8c188a3#668ea44cf59a226715a5f3cb1bf88710a8c188a3"
+source = "git+https://github.com/zcash/zcash_note_encryption?rev=9f7e93d42cef839d02b9d75918117941d453f8cb#9f7e93d42cef839d02b9d75918117941d453f8cb"
 dependencies = [
  "chacha20",
  "chacha20poly1305",
@@ -3578,8 +3626,8 @@ dependencies = [
 
 [[package]]
 name = "zcash_primitives"
-version = "0.23.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#abb1a717474a27d770690b39a3585b63d30a1eee"
+version = "0.25.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=dfdf4f742bee24e763f6950619f40d2dbac83e27#dfdf4f742bee24e763f6950619f40d2dbac83e27"
 dependencies = [
  "bip32",
  "blake2b_simd",
@@ -3596,6 +3644,7 @@ dependencies = [
  "hex",
  "incrementalmerkletree",
  "jubjub",
+ "lazy_static",
  "memuse",
  "nonempty",
  "orchard",
@@ -3613,6 +3662,7 @@ dependencies = [
  "zcash_encoding",
  "zcash_note_encryption",
  "zcash_protocol",
+ "zcash_script",
  "zcash_spec",
  "zcash_transparent",
  "zip32",
@@ -3620,8 +3670,8 @@ dependencies = [
 
 [[package]]
 name = "zcash_proofs"
-version = "0.23.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#abb1a717474a27d770690b39a3585b63d30a1eee"
+version = "0.25.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=dfdf4f742bee24e763f6950619f40d2dbac83e27#dfdf4f742bee24e763f6950619f40d2dbac83e27"
 dependencies = [
  "bellman",
  "blake2b_simd",
@@ -3642,13 +3692,27 @@ dependencies = [
 
 [[package]]
 name = "zcash_protocol"
-version = "0.5.3"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#abb1a717474a27d770690b39a3585b63d30a1eee"
+version = "0.6.2"
+source = "git+https://github.com/QED-it/librustzcash?rev=dfdf4f742bee24e763f6950619f40d2dbac83e27#dfdf4f742bee24e763f6950619f40d2dbac83e27"
 dependencies = [
  "core2",
  "document-features",
  "hex",
  "memuse",
+]
+
+[[package]]
+name = "zcash_script"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c1d06ec5990ad2c51c3052fd41f87aa5ccab92d02d1ab5173712c2e37c24658"
+dependencies = [
+ "bitflags 2.9.1",
+ "bounded-vec",
+ "ripemd 0.1.3",
+ "sha1",
+ "sha2 0.10.9",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -3662,8 +3726,8 @@ dependencies = [
 
 [[package]]
 name = "zcash_transparent"
-version = "0.3.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#abb1a717474a27d770690b39a3585b63d30a1eee"
+version = "0.5.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=dfdf4f742bee24e763f6950619f40d2dbac83e27#dfdf4f742bee24e763f6950619f40d2dbac83e27"
 dependencies = [
  "bip32",
  "blake2b_simd",
@@ -3679,6 +3743,7 @@ dependencies = [
  "zcash_address",
  "zcash_encoding",
  "zcash_protocol",
+ "zcash_script",
  "zcash_spec",
  "zip32",
 ]
@@ -3707,7 +3772,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "thiserror",
+ "thiserror 1.0.69",
  "zcash_address",
  "zcash_client_backend",
  "zcash_encoding",
@@ -3826,8 +3891,8 @@ dependencies = [
 
 [[package]]
 name = "zip321"
-version = "0.4.0"
-source = "git+https://github.com/QED-it/librustzcash?branch=zsa-swap#abb1a717474a27d770690b39a3585b63d30a1eee"
+version = "0.5.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=dfdf4f742bee24e763f6950619f40d2dbac83e27#dfdf4f742bee24e763f6950619f40d2dbac83e27"
 dependencies = [
  "base64 0.22.1",
  "nom",

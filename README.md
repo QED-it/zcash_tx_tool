@@ -68,10 +68,10 @@ Open a terminal and execute the following commands:
 git clone -b zsa-integration-state-multiple-ag --single-branch https://github.com/QED-it/zebra.git
 
 # Navigate to the testnet deployment directory
-cd zebra/testnet-single-node-deploy
+cd zebra
 
 # Build the Zebra Docker image
-docker build -t qedit/zebra-regtest-txv6 .
+docker build -f testnet-single-node-deploy/dockerfile -t qedit/zebra-regtest-txv6 .
 
 # Run the Zebra Docker container
 docker run -p 18232:18232 qedit/zebra-regtest-txv6

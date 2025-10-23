@@ -12,7 +12,8 @@ use rand::rngs::OsRng;
 use std::convert::TryFrom;
 use std::ops::Add;
 use orchard::builder::BundleType;
-use orchard::keys::{FullViewingKey, IssuanceValidatingKey, SpendAuthorizingKey};
+use orchard::issuance_auth::IssueValidatingKey;
+use orchard::keys::{FullViewingKey, SpendAuthorizingKey};
 use orchard::keys::Scope::External;
 use orchard::orchard_flavor::OrchardZSA;
 use orchard::swap_bundle::ActionGroupAuthorized;
@@ -95,7 +96,7 @@ pub fn create_shield_coinbase_transaction(
         OutPoint::new(coinbase_txid.into(), 0),
         TxOut {
             value: coinbase_amount,
-            script_pubkey: miner_taddr.script(),
+            script_pubkey: miner_taddr.script().into(),
         },
     )
     .unwrap();
@@ -309,7 +310,7 @@ pub fn create_issue_transaction(
     )
     .unwrap();
     let asset = AssetBase::derive(
-        &IssuanceValidatingKey::from(&wallet.issuance_key()),
+        &IssueValidatingKey::from(&wallet.issuance_key()),
         &asset_desc_hash,
     );
     (build_tx(tx, &wallet.transparent_signing_set(), &[]), asset)

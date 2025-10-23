@@ -9,8 +9,9 @@ use std::convert::TryInto;
 use abscissa_core::prelude::info;
 
 use orchard::issuance::{IssueBundle, Signed};
+use orchard::issuance_auth::{IssueAuthKey, ZSASchnorr};
 use orchard::keys::{
-    FullViewingKey, IncomingViewingKey, IssuanceAuthorizingKey, OutgoingViewingKey, Scope,
+    FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope,
     SpendingKey,
 };
 use orchard::note::{AssetBase, ExtractedNoteCommitment};
@@ -302,8 +303,8 @@ impl User {
         Some(Anchor::from(self.commitment_tree.root(0).unwrap()))
     }
 
-    pub(crate) fn issuance_key(&self) -> IssuanceAuthorizingKey {
-        IssuanceAuthorizingKey::from_zip32_seed(
+    pub(crate) fn issuance_key(&self) -> IssueAuthKey<ZSASchnorr> {
+        IssueAuthKey::from_zip32_seed(
             self.seed.as_slice(),
             constants::testnet::COIN_TYPE,
             0,
