@@ -27,8 +27,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: QED-it/zebra
-          # FIXME: Temporarily pin to a fixed branch to avoid env/var overrides while testing this PR.
-          # Revert to: ref: ${{ vars.ZEBRA_BRANCH_TO_TEST || 'zsa-integration-demo-with-state' }} after this PR is verified.
+          # FIXME: Change to: ref: ${{ vars.ZEBRA_BRANCH_TO_TEST || 'zsa-integration-demo-with-state' }} after this PR is verified.
           ref: zsa-integration-demo-with-state
           path: zebra
 
