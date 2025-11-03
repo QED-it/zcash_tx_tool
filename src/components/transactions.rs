@@ -69,7 +69,7 @@ pub fn mine_empty_blocks(
     let (block_height, coinbase_txid) = mine_block(rpc_client, vec![], activate)?;
 
     for _ in 1..num_blocks {
-        mine_block(rpc_client, vec![], false).expect("block mined successfully");
+        mine_block(rpc_client, vec![], false)?;
     }
 
     Ok((block_height, coinbase_txid))
