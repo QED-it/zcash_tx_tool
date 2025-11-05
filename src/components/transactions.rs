@@ -9,6 +9,7 @@ use orchard::note::AssetBase;
 use orchard::value::NoteValue;
 use orchard::Address;
 use rand::rngs::OsRng;
+use std::error::Error;
 use std::convert::TryFrom;
 use std::ops::Add;
 use orchard::keys::{IssuanceValidatingKey, SpendAuthorizingKey};
@@ -27,10 +28,15 @@ use zcash_transparent::bundle::{OutPoint, TxOut};
 const COINBASE_VALUE: u64 = 625_000_000;
 
 /// Mine a block with the given transactions and sync the user
-pub fn mine(wallet: &mut User, rpc_client: &mut dyn RpcClient, txs: Vec<Transaction>) {
+pub fn mine(
+    wallet: &mut User,
+    rpc_client: &mut dyn RpcClient,
+    txs: Vec<Transaction>,
+) -> Result<(), Box<dyn Error>> {
     let activate = wallet.last_block_height().is_none();
-    let (_, _) = mine_block(rpc_client, txs, activate);
+    let (_, _) = mine_block(rpc_client, txs, activate)?;
     sync(wallet, rpc_client);
+    Ok(())
 }
 
 /// Mine a block with the given transactions and return the block height and coinbase txid
@@ -38,16 +44,16 @@ pub fn mine_block(
     rpc_client: &mut dyn RpcClient,
     txs: Vec<Transaction>,
     activate: bool,
-) -> (u32, TxId) {
-    let block_template = rpc_client.get_block_template().unwrap();
+) -> Result<(u32, TxId), Box<dyn Error>> {
+    let block_template = rpc_client.get_block_template()?;
     let block_height = block_template.height;
 
     let block_proposal = template_into_proposal(block_template, txs, activate);
     let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
 
-    rpc_client.submit_block(block_proposal).unwrap();
+    rpc_client.submit_block(block_proposal)?;
 
-    (block_height, coinbase_txid)
+    Ok((block_height, coinbase_txid))
 }
 
 /// Mine the given number of empty blocks and return the block height and coinbase txid of the first block
@@ -55,18 +61,18 @@ pub fn mine_empty_blocks(
     num_blocks: u32,
     rpc_client: &mut dyn RpcClient,
     activate: bool,
-) -> (u32, TxId) {
+) -> Result<(u32, TxId), Box<dyn Error>> {
     if num_blocks == 0 {
         panic!("num_blocks must be greater than 0")
     }
 
-    let (block_height, coinbase_txid) = mine_block(rpc_client, vec![], activate);
+    let (block_height, coinbase_txid) = mine_block(rpc_client, vec![], activate)?;
 
     for _ in 1..num_blocks {
-        mine_block(rpc_client, vec![], false);
+        mine_block(rpc_client, vec![], false)?;
     }
 
-    (block_height, coinbase_txid)
+    Ok((block_height, coinbase_txid))
 }
 
 /// Create a shielded coinbase transaction
