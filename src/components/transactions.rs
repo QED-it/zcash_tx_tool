@@ -94,10 +94,7 @@ pub fn create_shield_coinbase_transaction(
     tx.add_transparent_input(
         sk,
         OutPoint::new(coinbase_txid.into(), 0),
-        TxOut {
-            value: coinbase_amount,
-            script_pubkey: miner_taddr.script().into(),
-        },
+        TxOut::new(coinbase_amount, miner_taddr.script().into()),
     )
     .unwrap();
     tx.add_orchard_output::<FeeError>(
