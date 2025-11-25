@@ -102,22 +102,22 @@ impl Runnable for TestOrchardZSACmd {
         print_balances("=== Balances after burning ===", asset, &expected_balances);
 
         // --------------------- Finalization ---------------------
-
-        let finalization_tx = create_finalization_transaction(asset_desc_hash, &mut wallet);
-        mine(&mut wallet, &mut rpc_client, Vec::from([finalization_tx]))
-            .expect("block mined successfully");
-
-        let invalid_issue_tx =
-            create_issue_transaction(issuer_addr, 2000, asset_desc_hash, true, &mut wallet);
-        let result = mine(
-            &mut wallet,
-            &mut rpc_client,
-            Vec::from([invalid_issue_tx.0]),
-        );
-        assert!(
-            result.is_err(),
-            "Issue transaction was unexpectedly accepted after asset finalization"
-        );
+        // TODO uncomment once finalization is supported in Zebra
+        // let finalization_tx = create_finalization_transaction(asset_desc_hash, &mut wallet);
+        // mine(&mut wallet, &mut rpc_client, Vec::from([finalization_tx]))
+        //     .expect("block mined successfully");
+        //
+        // let invalid_issue_tx =
+        //     create_issue_transaction(issuer_addr, 2000, asset_desc_hash, true, &mut wallet);
+        // let result = mine(
+        //     &mut wallet,
+        //     &mut rpc_client,
+        //     Vec::from([invalid_issue_tx.0]),
+        // );
+        // assert!(
+        //     result.is_err(),
+        //     "Issue transaction was unexpectedly accepted after asset finalization"
+        // );
     }
 }
 
