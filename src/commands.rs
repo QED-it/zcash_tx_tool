@@ -14,8 +14,10 @@ mod clean;
 mod test_balances;
 mod test_orchard_zsa;
 mod test_three_party;
+mod test_asset_swaps;
 
 use crate::commands::clean::CleanCmd;
+use crate::commands::test_asset_swaps::TestAssetSwapsCmd;
 use crate::commands::test_orchard_zsa::TestOrchardZSACmd;
 use crate::commands::test_three_party::TestThreePartyCmd;
 use crate::config::AppConfig;
@@ -29,6 +31,7 @@ pub const CONFIG_FILE: &str = "config.toml";
 #[derive(clap::Parser, Command, Debug, Runnable)]
 pub enum AppCmd {
     TestOrchardZSA(TestOrchardZSACmd),
+    TestAssetSwaps(TestAssetSwapsCmd),
     TestThreeParty(TestThreePartyCmd),
     Clean(CleanCmd),
 }

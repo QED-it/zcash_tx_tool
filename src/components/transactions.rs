@@ -341,7 +341,7 @@ pub fn create_swap_transaction(
 ) -> Transaction {
     info!("Swap {} to {}", amount_asset_a, amount_asset_b);
 
-    let (swap_order_1, bsk_1) = create_swap_order(
+    let (action_group_1, bsk_1) = create_action_group(
         party_a,
         amount_asset_a,
         asset_a,
@@ -349,7 +349,7 @@ pub fn create_swap_transaction(
         asset_b,
         wallet,
     );
-    let (swap_order_2, bsk_2) = create_swap_order(
+    let (action_group_2, bsk_2) = create_action_group(
         party_b,
         amount_asset_b,
         asset_b,
@@ -359,9 +359,9 @@ pub fn create_swap_transaction(
     );
 
     let mut tx = create_tx(wallet);
-    tx.add_action_group::<FeeError>(swap_order_1, bsk_1)
+    tx.add_action_group::<FeeError>(action_group_1, bsk_1)
         .unwrap();
-    tx.add_action_group::<FeeError>(swap_order_2, bsk_2)
+    tx.add_action_group::<FeeError>(action_group_2, bsk_2)
         .unwrap();
     build_tx(tx, &wallet.transparent_signing_set(), &[])
 }
@@ -380,7 +380,7 @@ pub fn create_swap_transaction_with_matcher(
 ) -> Transaction {
     info!("Swap with matcher: {} of asset_a to {} of asset_b with spread {}", amount_asset_a, amount_asset_b, spread);
 
-    let (swap_order_1, bsk_1) = create_swap_order(
+    let (action_group_1, bsk_1) = create_action_group(
         party_a,
         amount_asset_a,
         asset_a,
@@ -389,7 +389,7 @@ pub fn create_swap_transaction_with_matcher(
         wallet,
     );
 
-    let (swap_order_2, bsk_2) = create_swap_order(
+    let (action_group_2, bsk_2) = create_action_group(
         party_b,
         amount_asset_b,
         asset_b,
@@ -399,7 +399,7 @@ pub fn create_swap_transaction_with_matcher(
     );
 
     // Matcher claims the spread
-    let (matcher_order, bsk_matcher) = create_matcher_swap_order(
+    let (matcher_action_group, bsk_matcher) = create_matcher_action_group(
         matcher,
         spread,
         asset_a,
@@ -409,13 +409,13 @@ pub fn create_swap_transaction_with_matcher(
     );
 
     let mut tx = create_tx(wallet);
-    tx.add_action_group::<FeeError>(swap_order_1, bsk_1).unwrap();
-    tx.add_action_group::<FeeError>(swap_order_2, bsk_2).unwrap();
-    tx.add_action_group::<FeeError>(matcher_order, bsk_matcher).unwrap();
+    tx.add_action_group::<FeeError>(action_group_1, bsk_1).unwrap();
+    tx.add_action_group::<FeeError>(action_group_2, bsk_2).unwrap();
+    tx.add_action_group::<FeeError>(matcher_action_group, bsk_matcher).unwrap();
     build_tx(tx, &wallet.transparent_signing_set(), &[])
 }
 
-fn create_swap_order(
+fn create_action_group(
     account_index: u32,
     amount_to_send: u64,
     asset_to_send: AssetBase,
@@ -485,7 +485,7 @@ fn create_swap_order(
             .unwrap();
     }
 
-    // Build Swap Order
+    // Build action group
     let (action_group, _) = ag_builder.build_action_group(OsRng, 10).unwrap();
     let commitment = action_group.action_group_commitment().into();
     action_group
@@ -498,7 +498,7 @@ fn create_swap_order(
         .unwrap()
 }
 
-fn create_matcher_swap_order(
+fn create_matcher_action_group(
     matcher_index: u32,
     amount_asset_a: u64,
     asset_a: AssetBase,
@@ -556,7 +556,7 @@ fn create_matcher_swap_order(
         )
         .unwrap();
 
-    // Build Swap Order (no orchard_saks needed since only reference notes are spent)
+    // Build action group (no orchard_saks needed since only reference notes are spent)
     let (action_group, _) = ag_builder.build_action_group(OsRng, 10).unwrap();
     let commitment = action_group.action_group_commitment().into();
     action_group
