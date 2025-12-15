@@ -59,7 +59,12 @@ impl Runnable for TestThreePartyCmd {
         mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]));
 
         let balances = TestBalances::get_asset_balances(asset, num_accounts, &mut wallet);
-        print_balances("=== Balances after issue ===", asset, num_accounts, &mut wallet);
+        print_balances(
+            "=== Balances after issue ===",
+            asset,
+            num_accounts,
+            &mut wallet,
+        );
 
         // --------------------- ZSA transfer from manufacturer to purchaser ---------------------
         let amount_to_transfer_1 = 3;

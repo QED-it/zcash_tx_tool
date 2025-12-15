@@ -10,10 +10,7 @@ use abscissa_core::prelude::info;
 
 use orchard::issuance::{IssueBundle, Signed};
 use orchard::issuance_auth::{IssueAuthKey, ZSASchnorr};
-use orchard::keys::{
-    FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope,
-    SpendingKey,
-};
+use orchard::keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey};
 use orchard::note::{AssetBase, ExtractedNoteCommitment};
 use orchard::tree::{MerkleHashOrchard, MerklePath};
 use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note, ReferenceKeys};
@@ -248,7 +245,10 @@ impl User {
         selected_notes
     }
 
-    pub(crate) fn get_randomized_reference_note(&mut self, asset: AssetBase) -> Option<NoteSpendMetadata> {
+    pub(crate) fn get_randomized_reference_note(
+        &mut self,
+        asset: AssetBase,
+    ) -> Option<NoteSpendMetadata> {
         self.db.find_reference_note(asset).map(|note_data| {
             let merkle_path = MerklePath::from_parts(
                 note_data.position as u32,
@@ -304,12 +304,8 @@ impl User {
     }
 
     pub(crate) fn issuance_key(&self) -> IssueAuthKey<ZSASchnorr> {
-        IssueAuthKey::from_zip32_seed(
-            self.seed.as_slice(),
-            constants::testnet::COIN_TYPE,
-            0,
-        )
-        .unwrap()
+        IssueAuthKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, 0)
+            .unwrap()
     }
 
     // Hack for claiming coinbase
@@ -592,15 +588,15 @@ impl User {
                 Vec::new()
             };
 
-            if let Some(issue_bundle) = issue_bundle_opt {
-                let mut issued_note_commitments: Vec<ExtractedNoteCommitment> = issue_bundle
-                    .actions()
-                    .iter()
-                    .flat_map(|a| a.notes())
-                    .map(|note| note.commitment().into())
-                    .collect();
-                note_commitments.append(&mut issued_note_commitments);
-            }
+        if let Some(issue_bundle) = issue_bundle_opt {
+            let mut issued_note_commitments: Vec<ExtractedNoteCommitment> = issue_bundle
+                .actions()
+                .iter()
+                .flat_map(|a| a.notes())
+                .map(|note| note.commitment().into())
+                .collect();
+            note_commitments.append(&mut issued_note_commitments);
+        }
 
         for (note_index, commitment) in note_commitments.iter().enumerate() {
             info!("Adding note commitment ({}, {})", txid, note_index);

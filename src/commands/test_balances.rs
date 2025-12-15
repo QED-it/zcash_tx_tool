@@ -9,7 +9,6 @@ use zcash_primitives::transaction::Transaction;
 pub(crate) struct TestBalances(pub(crate) Vec<u64>);
 
 impl TestBalances {
-
     pub(crate) fn get_asset_balances(
         asset: AssetBase,
         num_accounts: u32,
@@ -57,12 +56,7 @@ pub(crate) trait TransactionCreator {
 }
 
 impl TransferInfo {
-    pub(crate) fn new(
-        acc_idx_from: u32,
-        acc_idx_to: u32,
-        asset: AssetBase,
-        amount: u64,
-    ) -> Self {
+    pub(crate) fn new(acc_idx_from: u32, acc_idx_to: u32, asset: AssetBase, amount: u64) -> Self {
         Self {
             acc_idx_from,
             acc_idx_to,
@@ -84,7 +78,13 @@ impl BurnInfo {
 
 impl TransactionCreator for TransferInfo {
     fn create_tx(&self, wallet: &mut User) -> Transaction {
-        create_transfer_transaction(self.acc_idx_from, self.acc_idx_to, self.amount, self.asset, wallet)
+        create_transfer_transaction(
+            self.acc_idx_from,
+            self.acc_idx_to,
+            self.amount,
+            self.asset,
+            wallet,
+        )
     }
 }
 
@@ -180,7 +180,7 @@ pub(crate) fn check_balances(
     assert_eq!(&actual_balances, expected_balances);
 }
 
-pub(crate) fn print_balances(header: &str, asset: AssetBase, num_accounts: u32,  wallet: &mut User) {
+pub(crate) fn print_balances(header: &str, asset: AssetBase, num_accounts: u32, wallet: &mut User) {
     info!("{}", header);
     let balances = TestBalances::get_asset_balances(asset, num_accounts, wallet);
     if asset.is_native().into() {

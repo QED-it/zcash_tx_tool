@@ -378,7 +378,10 @@ pub fn create_swap_transaction_with_matcher(
     spread: u64,
     wallet: &mut User,
 ) -> Transaction {
-    info!("Swap with matcher: {} of asset_a to {} of asset_b with spread {}", amount_asset_a, amount_asset_b, spread);
+    info!(
+        "Swap with matcher: {} of asset_a to {} of asset_b with spread {}",
+        amount_asset_a, amount_asset_b, spread
+    );
 
     let (action_group_1, bsk_1) = create_action_group(
         party_a,
@@ -399,19 +402,16 @@ pub fn create_swap_transaction_with_matcher(
     );
 
     // Matcher claims the spread
-    let (matcher_action_group, bsk_matcher) = create_matcher_action_group(
-        matcher,
-        spread,
-        asset_a,
-        spread,
-        asset_b,
-        wallet,
-    );
+    let (matcher_action_group, bsk_matcher) =
+        create_matcher_action_group(matcher, spread, asset_a, spread, asset_b, wallet);
 
     let mut tx = create_tx(wallet);
-    tx.add_action_group::<FeeError>(action_group_1, bsk_1).unwrap();
-    tx.add_action_group::<FeeError>(action_group_2, bsk_2).unwrap();
-    tx.add_action_group::<FeeError>(matcher_action_group, bsk_matcher).unwrap();
+    tx.add_action_group::<FeeError>(action_group_1, bsk_1)
+        .unwrap();
+    tx.add_action_group::<FeeError>(action_group_2, bsk_2)
+        .unwrap();
+    tx.add_action_group::<FeeError>(matcher_action_group, bsk_matcher)
+        .unwrap();
     build_tx(tx, &wallet.transparent_signing_set(), &[])
 }
 
@@ -451,7 +451,9 @@ fn create_action_group(
     });
 
     // Add reference input note for asset B
-    let reference_note = wallet.get_randomized_reference_note(asset_to_receive).unwrap();
+    let reference_note = wallet
+        .get_randomized_reference_note(asset_to_receive)
+        .unwrap();
     ag_builder
         .add_reference_note(
             ReferenceKeys::fvk(),
@@ -524,7 +526,7 @@ fn create_matcher_action_group(
             reference_note_a.merkle_path,
         )
         .unwrap();
-    
+
     let reference_note_b = wallet.get_randomized_reference_note(asset_b).unwrap();
     ag_builder
         .add_reference_note(

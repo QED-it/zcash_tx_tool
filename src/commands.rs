@@ -11,10 +11,10 @@
 //! application's configuration file.
 
 mod clean;
+mod test_asset_swaps;
 mod test_balances;
 mod test_orchard_zsa;
 mod test_three_party;
-mod test_asset_swaps;
 
 use crate::commands::clean::CleanCmd;
 use crate::commands::test_asset_swaps::TestAssetSwapsCmd;

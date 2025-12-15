@@ -8,11 +8,13 @@
 //! The tests ensure correct balance updates and transaction validity at each step.
 
 use crate::commands::test_balances::{
-    check_balances, expected_balances_after_burn, expected_balances_after_transfer, print_balances,
-    BurnInfo, TestBalances, TransferInfo, TxiBatch,
+    check_balances, expected_balances_after_transfer, print_balances, TestBalances, TransferInfo,
+    TxiBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{create_issue_transaction, create_swap_transaction_with_matcher, mine, sync_from_height};
+use crate::components::transactions::{
+    create_issue_transaction, create_swap_transaction_with_matcher, mine, sync_from_height,
+};
 use crate::components::user::User;
 use crate::prelude::*;
 use abscissa_core::{Command, Runnable};
@@ -57,7 +59,12 @@ impl Runnable for TestAssetSwapsCmd {
 
         mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]));
 
-        print_balances("=== Balances after issue ===", asset, num_accounts, &mut wallet);
+        print_balances(
+            "=== Balances after issue ===",
+            asset,
+            num_accounts,
+            &mut wallet,
+        );
 
         let matcher_index = 2;
 
@@ -77,36 +84,44 @@ impl Runnable for TestAssetSwapsCmd {
             .unwrap()
             .asset();
 
-        mine(
-            &mut wallet,
-            &mut rpc_client,
-            Vec::from([issue_tx_2]),
-        );
+        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx_2]));
 
-        let mut expected_balances_asset_1 = TestBalances::get_asset_balances(asset, num_accounts, &mut wallet);
-        let mut expected_balances_asset_2 = TestBalances::get_asset_balances(asset_2, num_accounts, &mut wallet);
+        let mut expected_balances_asset_1 =
+            TestBalances::get_asset_balances(asset, num_accounts, &mut wallet);
+        let mut expected_balances_asset_2 =
+            TestBalances::get_asset_balances(asset_2, num_accounts, &mut wallet);
 
         let spread = 1;
         let swap_asset_a_amount = 10;
         let swap_asset_b_amount = 6;
-        let swap_tx = create_swap_transaction_with_matcher(issuer_idx, alice_idx, matcher_index, swap_asset_a_amount, asset, swap_asset_b_amount, asset_2, spread, &mut wallet);
+        let swap_tx = create_swap_transaction_with_matcher(
+            issuer_idx,
+            alice_idx,
+            matcher_index,
+            swap_asset_a_amount,
+            asset,
+            swap_asset_b_amount,
+            asset_2,
+            spread,
+            &mut wallet,
+        );
 
         expected_balances_asset_1.decrement(issuer_idx, swap_asset_a_amount);
         expected_balances_asset_1.increment(alice_idx, swap_asset_a_amount - spread);
 
-        expected_balances_asset_2.decrement(alice_idx, swap_asset_b_amount );
+        expected_balances_asset_2.decrement(alice_idx, swap_asset_b_amount);
         expected_balances_asset_2.increment(issuer_idx, swap_asset_b_amount - spread);
 
         mine(&mut wallet, &mut rpc_client, Vec::from([swap_tx]));
 
-        check_balances(
-            asset,
-            &expected_balances_asset_1,
-            &mut wallet,
-            num_accounts,
-        );
+        check_balances(asset, &expected_balances_asset_1, &mut wallet, num_accounts);
 
-        print_balances("=== Balances after swap for the first asset ===", asset, num_accounts, &mut wallet);
+        print_balances(
+            "=== Balances after swap for the first asset ===",
+            asset,
+            num_accounts,
+            &mut wallet,
+        );
 
         check_balances(
             asset_2,
@@ -115,21 +130,23 @@ impl Runnable for TestAssetSwapsCmd {
             num_accounts,
         );
 
-        print_balances("=== Balances after swap for the second asset ===", asset_2, num_accounts, &mut wallet);
+        print_balances(
+            "=== Balances after swap for the second asset ===",
+            asset_2,
+            num_accounts,
+            &mut wallet,
+        );
 
         // --------------------- Use swapped notes ---------------------
 
         let amount_to_transfer_2 = 1;
         let transfer_info = TransferInfo::new(issuer_idx, alice_idx, asset_2, amount_to_transfer_2);
         let txi = TxiBatch::from_item(transfer_info);
-        let expected_balances_asset_2 = expected_balances_after_transfer(&expected_balances_asset_2, &txi);
+        let expected_balances_asset_2 =
+            expected_balances_after_transfer(&expected_balances_asset_2, &txi);
         let txns = txi.to_transactions(&mut wallet);
 
-        mine(
-            &mut wallet,
-            &mut rpc_client,
-            txns,
-        );
+        mine(&mut wallet, &mut rpc_client, txns);
 
         check_balances(
             asset_2,
@@ -138,34 +155,39 @@ impl Runnable for TestAssetSwapsCmd {
             num_accounts,
         );
 
-        print_balances("=== Balances after transfer ===", asset_2, num_accounts, &mut wallet);
+        print_balances(
+            "=== Balances after transfer ===",
+            asset_2,
+            num_accounts,
+            &mut wallet,
+        );
 
         let balances = TestBalances::get_asset_balances(asset, num_accounts, &mut wallet);
         let amount_to_transfer_3 = balances.0[alice_idx as usize];
-        print_balances("=== Balances before transfer ===", asset, num_accounts, &mut wallet);
+        print_balances(
+            "=== Balances before transfer ===",
+            asset,
+            num_accounts,
+            &mut wallet,
+        );
 
         let transfer_info = TransferInfo::new(alice_idx, issuer_idx, asset, amount_to_transfer_3);
         let txi = TxiBatch::from_item(transfer_info);
         let expected_balances = expected_balances_after_transfer(&expected_balances_asset_1, &txi);
         let txns = txi.to_transactions(&mut wallet);
 
-        mine(
-            &mut wallet,
-            &mut rpc_client,
-            txns,
-        );
+        mine(&mut wallet, &mut rpc_client, txns);
 
-        check_balances(
+        check_balances(asset, &expected_balances, &mut wallet, num_accounts);
+        print_balances(
+            "=== Balances after transfer ===",
             asset,
-            &expected_balances,
+            num_accounts,
             &mut wallet,
-            num_accounts
         );
-        print_balances("=== Balances after transfer ===", asset, num_accounts, &mut wallet);
     }
 }
 
 fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) {
     sync_from_height(target_height, wallet, rpc_client);
 }
-

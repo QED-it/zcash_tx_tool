@@ -12,7 +12,7 @@ use crate::commands::test_balances::{
     BurnInfo, TestBalances, TransferInfo, TxiBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{create_issue_transaction, create_swap_transaction_with_matcher, mine, sync_from_height};
+use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
 use crate::components::user::User;
 use crate::prelude::*;
 use abscissa_core::{Command, Runnable};
@@ -57,7 +57,12 @@ impl Runnable for TestOrchardZSACmd {
 
         mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]));
 
-        print_balances("=== Balances after issue ===", asset, num_accounts, &mut wallet);
+        print_balances(
+            "=== Balances after issue ===",
+            asset,
+            num_accounts,
+            &mut wallet,
+        );
 
         // --------------------- ZSA transfer ---------------------
 
@@ -73,7 +78,12 @@ impl Runnable for TestOrchardZSACmd {
 
         check_balances(asset, &expected_balances, &mut wallet, num_accounts);
 
-        print_balances("=== Balances after transfer ===", asset, num_accounts, &mut wallet);
+        print_balances(
+            "=== Balances after transfer ===",
+            asset,
+            num_accounts,
+            &mut wallet,
+        );
 
         // --------------------- Burn asset ---------------------
 
@@ -94,11 +104,15 @@ impl Runnable for TestOrchardZSACmd {
         // burn from issuer(account0) and alice(account1)
         check_balances(asset, &expected_balances, &mut wallet, num_accounts);
 
-        print_balances("=== Balances after burning ===", asset, num_accounts, &mut wallet);
+        print_balances(
+            "=== Balances after burning ===",
+            asset,
+            num_accounts,
+            &mut wallet,
+        );
     }
 }
 
 fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) {
     sync_from_height(target_height, wallet, rpc_client);
 }
-
