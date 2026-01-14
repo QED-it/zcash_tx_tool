@@ -15,6 +15,7 @@ impl Runnable for CleanCmd {
         let config = APP.config();
         let mut wallet = User::new(&config.wallet.seed_phrase, &config.wallet.miner_seed_phrase);
 
-        wallet.reset();
+        // Use reset_full() to clear everything including block cache
+        wallet.reset_full();
     }
 }

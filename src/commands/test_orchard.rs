@@ -30,6 +30,7 @@ impl Runnable for TestOrchardCmd {
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
         let mut wallet = User::random(&config.wallet.miner_seed_phrase);
 
+        // reset() clears wallet state but preserves block cache for faster re-sync
         wallet.reset();
 
         let num_users = 2;

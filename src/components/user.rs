@@ -173,16 +173,54 @@ impl User {
         }
     }
 
+    pub fn random_with_uniqueness(miner_seed_phrase: &String, uniqueness: u64) -> Self {
+        let mut seed_random_bytes = [0u8; 64];
+        // Use uniqueness parameter to make seed deterministic but unique per run
+        // Fill with deterministic bytes based on uniqueness
+        for (i, byte) in uniqueness.to_le_bytes().iter().cycle().enumerate() {
+            if i >= seed_random_bytes.len() {
+                break;
+            }
+            seed_random_bytes[i] = *byte;
+        }
+
+        User {
+            db: SqliteDataStorage::new(),
+            key_store: KeyStore::empty(),
+            commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
+            last_block_height: None,
+            last_block_hash: None,
+            seed: seed_random_bytes,
+            miner_seed: <Mnemonic>::from_phrase(miner_seed_phrase)
+                .unwrap()
+                .to_seed(""),
+        }
+    }
+
     /// Reset the state to be suitable for rescan from the NU5 activation
     /// height.  This removes all witness and spentness information from the user. The
     /// keystore is unmodified and decrypted note, nullifier, and conflict data are left
     /// in place with the expectation that they will be overwritten and/or updated in
     /// the rescan process.
+    ///
+    /// Note: The block cache is intentionally preserved to allow faster re-sync
+    /// by resuming from the last valid cached block. Use `reset_full()` to also
+    /// clear the block cache for a completely fresh start.
     pub fn reset(&mut self) {
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
         self.db.delete_all_notes();
+        // Block cache is NOT deleted - allows resuming sync from last cached block
+    }
+
+    /// Full reset including the block cache.
+    /// Use this when you need a completely fresh start (e.g., new wallet seed,
+    /// or when the cached chain state is incompatible with current test).
+    pub fn reset_full(&mut self) {
+        use crate::components::block_cache::BlockCache;
+        self.reset();
+        BlockCache::delete_file();
     }
 
     pub fn last_block_hash(&self) -> Option<BlockHash> {

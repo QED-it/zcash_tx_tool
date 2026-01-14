@@ -17,3 +17,15 @@ diesel::table! {
         spend_action_index -> Integer,
     }
 }
+
+diesel::table! {
+    /// Cached blocks used for syncing and reorg detection.
+    ///
+    /// Note: `tx_hex_json` stores a JSON array of hex-encoded transaction bytes.
+    block_cache (height) {
+        height -> Integer,
+        hash -> Text,
+        prev_hash -> Text,
+        tx_hex_json -> Text,
+    }
+}

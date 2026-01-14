@@ -17,7 +17,7 @@ use crate::commands::test_balances::{
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{
-    create_issue_transaction, create_finalization_transaction, mine, sync_from_height,
+    create_issue_transaction, create_finalization_transaction, mine, mine_block_with_retries, sync_from_height,
 };
 use crate::components::user::User;
 use crate::prelude::*;
@@ -31,8 +31,11 @@ impl Runnable for TestOrchardZSACmd {
     fn run(&self) {
         let config = APP.config();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = User::random(&config.wallet.miner_seed_phrase);
+        // Use a unique wallet for each test run to avoid conflicts with cached blocks
+        let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let mut wallet = User::random_with_uniqueness(&config.wallet.miner_seed_phrase, timestamp);
 
+        // reset() clears wallet state but preserves block cache for faster re-sync
         wallet.reset();
 
         let num_users = 2;
@@ -109,11 +112,10 @@ impl Runnable for TestOrchardZSACmd {
 
         let invalid_issue_tx =
             create_issue_transaction(issuer_addr, 2000, asset_desc_hash, true, &mut wallet);
-        let result = mine(
-            &mut wallet,
-            &mut rpc_client,
-            Vec::from([invalid_issue_tx.0]),
-        );
+        // This step is *expected* to be rejected; don't waste time retrying.
+        let result = mine_block_with_retries(&mut rpc_client, vec![invalid_issue_tx.0], false, 1, 0)
+            .map(|_| ())
+            .map_err(|e| e);
         assert!(
             result.is_err(),
             "Issue transaction was unexpectedly accepted after asset finalization"

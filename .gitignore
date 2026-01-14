@@ -2,6 +2,7 @@
 /target
 **/*.rs.bk
 /*.sqlite
+block_cache.json
 
 # Terraform git
 # Local .terraform directories

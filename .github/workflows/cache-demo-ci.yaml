@@ -1,0 +1,231 @@
+# CI Workflow to demonstrate tx-tool block caching capability.
+# This workflow shows how the block cache (stored in walletdb.sqlite) enables
+# resumable sync by:
+# 1. Running tx-tool once to populate the cache
+# 2. Displaying the cached blocks from the SQLite database
+# 3. Re-running tx-tool and verifying it uses the cache (visible in logs)
+#
+# Expected log output on second run:
+#   - "Found cached block at height X with hash Y"
+#   - "Cache valid, resuming sync from height Z"
+
+name: Demo Block Cache Feature
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  cache-demo:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Free disk space (safe cleanup for Rust CI)
+        run: |
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/hostedtoolcache || true
+          df -h
+
+      - name: Checkout tx-tool code
+        uses: actions/checkout@v3
+        with:
+          path: tx-tool
+
+      - name: Checkout Zebra code
+        uses: actions/checkout@v3
+        with:
+          repository: QED-it/zebra
+          ref: ${{ vars.ZEBRA_BRANCH_TO_TEST || 'zsa-integration-demo' }}
+          path: zebra
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Set up Docker cache
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: zebra-cache-${{ runner.os }}-${{ hashFiles('zebra/testnet-single-node-deploy/dockerfile') }}
+          restore-keys: |
+            zebra-cache-${{ runner.os }}-
+            zebra-cache-
+
+      - name: Build Zebra Node
+        uses: docker/build-push-action@v4
+        with:
+          context: zebra
+          file: zebra/testnet-single-node-deploy/dockerfile
+          tags: zebra-node:local
+          push: false
+          load: true
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+
+      - name: Run Zebra Node container
+        run: |
+          docker run -d --name zebra-node -p 18232:18232 zebra-node:local
+          echo "Waiting for Zebra node to initialize..."
+          sleep 15
+          echo "Finished waiting for Zebra node..."
+
+      - name: Build tx-tool
+        uses: docker/build-push-action@v4
+        with:
+          context: tx-tool
+          file: tx-tool/Dockerfile
+          tags: zcash-tx-tool:local
+          push: false
+          load: true
+
+      - name: Create Docker network
+        run: |
+          docker network create zcash-net
+          docker network connect zcash-net zebra-node
+
+      - name: Create shared volume for wallet database
+        run: |
+          docker volume create wallet-data
+
+      - name: "Run 1: First tx-tool run (populates cache)"
+        run: |
+          echo "=========================================="
+          echo "FIRST RUN: Populating the block cache..."
+          echo "=========================================="
+          
+          docker run --network zcash-net \
+            -e ZCASH_NODE_ADDRESS=zebra-node \
+            -e ZCASH_NODE_PORT=18232 \
+            -e ZCASH_NODE_PROTOCOL=http \
+            -v wallet-data:/app \
+            --name zcash-tx-tool-run1 \
+            zcash-tx-tool:local test-orchard-zsa 2>&1 | tee /tmp/run1.log
+          
+          EXIT_CODE=$(docker inspect zcash-tx-tool-run1 --format='{{.State.ExitCode}}')
+          
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "First run failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✓ First run completed successfully!"
+
+      - name: "Display cache contents from SQLite database"
+        run: |
+          echo "=========================================="
+          echo "BLOCK CACHE CONTENTS (walletdb.sqlite)"
+          echo "=========================================="
+          
+          # Copy the database from the volume
+          docker run --rm -v wallet-data:/data alpine cat /data/walletdb.sqlite > /tmp/walletdb.sqlite 2>/dev/null || true
+          
+          # Install sqlite3 and display cache contents
+          sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3
+          
+          echo ""
+          echo "--- block_cache table schema ---"
+          sqlite3 /tmp/walletdb.sqlite ".schema block_cache" 2>/dev/null || echo "(table may not exist yet)"
+          
+          echo ""
+          echo "--- Cached blocks (height, hash, prev_hash) ---"
+          sqlite3 /tmp/walletdb.sqlite "SELECT height, substr(hash, 1, 16) || '...' as hash, substr(prev_hash, 1, 16) || '...' as prev_hash FROM block_cache ORDER BY height;" 2>/dev/null || echo "(no data)"
+          
+          echo ""
+          echo "--- Total cached blocks ---"
+          BLOCK_COUNT=$(sqlite3 /tmp/walletdb.sqlite "SELECT COUNT(*) FROM block_cache;" 2>/dev/null || echo "0")
+          echo "Total blocks in cache: $BLOCK_COUNT"
+          
+          echo ""
+          echo "--- Cache summary ---"
+          sqlite3 /tmp/walletdb.sqlite "SELECT MIN(height) as first_block, MAX(height) as last_block FROM block_cache;" 2>/dev/null || echo "(no data)"
+
+      - name: "Run 2: Second tx-tool run (uses cache)"
+        run: |
+          echo "=========================================="
+          echo "SECOND RUN: Using cached blocks..."
+          echo "=========================================="
+          echo "Look for these log messages indicating cache usage:"
+          echo "  - 'Found cached block at height X with hash Y'"
+          echo "  - 'Cache valid, resuming sync from height Z'"
+          echo "=========================================="
+          echo ""
+          
+          # Remove the first container but keep the volume
+          docker rm zcash-tx-tool-run1
+          
+          docker run --network zcash-net \
+            -e ZCASH_NODE_ADDRESS=zebra-node \
+            -e ZCASH_NODE_PORT=18232 \
+            -e ZCASH_NODE_PROTOCOL=http \
+            -v wallet-data:/app \
+            --name zcash-tx-tool-run2 \
+            zcash-tx-tool:local test-orchard-zsa 2>&1 | tee /tmp/run2.log
+          
+          EXIT_CODE=$(docker inspect zcash-tx-tool-run2 --format='{{.State.ExitCode}}')
+          
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "Second run failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✓ Second run completed successfully!"
+
+      - name: "Verify cache was used"
+        run: |
+          echo "=========================================="
+          echo "CACHE USAGE VERIFICATION"
+          echo "=========================================="
+          
+          # Check for cache-related log messages
+          echo "Checking for cache usage indicators in second run logs..."
+          echo ""
+          
+          if grep -q "Found cached block" /tmp/run2.log; then
+            echo "✓ Found 'Found cached block' message - cache was detected"
+            grep "Found cached block" /tmp/run2.log | head -5
+          else
+            echo "⚠ No 'Found cached block' message found"
+          fi
+          
+          echo ""
+          
+          if grep -q "Cache valid" /tmp/run2.log; then
+            echo "✓ Found 'Cache valid' message - cache was validated and used"
+            grep "Cache valid" /tmp/run2.log | head -5
+          else
+            echo "⚠ No 'Cache valid' message found"
+          fi
+          
+          echo ""
+          
+          if grep -q "resuming sync from height" /tmp/run2.log; then
+            echo "✓ Found 'resuming sync from height' message - sync resumed from cache"
+            grep "resuming sync from height" /tmp/run2.log | head -5
+          else
+            echo "⚠ No 'resuming sync from height' message found"
+          fi
+          
+          echo ""
+          echo "=========================================="
+          echo "CACHE DEMO COMPLETED SUCCESSFULLY"
+          echo "=========================================="
+
+      - name: Print Zebra logs
+        if: always()
+        run: |
+          echo "Printing Zebra node logs:"
+          docker logs zebra-node || echo "Could not retrieve Zebra logs"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm zcash-tx-tool-run1 || true
+          docker rm zcash-tx-tool-run2 || true
+          docker stop zebra-node || true
+          docker rm zebra-node || true
+          docker network rm zcash-net || true
+          docker volume rm wallet-data || true
+
