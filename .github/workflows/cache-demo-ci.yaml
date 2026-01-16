@@ -115,7 +115,7 @@ jobs:
       - name: "Display cache contents from SQLite database"
         run: |
           echo "=========================================="
-          echo "BLOCK CACHE CONTENTS (walletdb.sqlite)"
+          echo "CACHE CONTENTS (walletdb.sqlite)"
           echo "=========================================="
           
           # Copy the database from the volume
@@ -125,7 +125,7 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3
           
           echo ""
-          echo "--- block_cache table schema ---"
+          echo "--- block_cache table (chain validation) ---"
           sqlite3 /tmp/walletdb.sqlite ".schema block_cache" 2>/dev/null || echo "(table may not exist yet)"
           
           echo ""
@@ -133,22 +133,39 @@ jobs:
           sqlite3 /tmp/walletdb.sqlite "SELECT height, substr(hash, 1, 16) || '...' as hash, substr(prev_hash, 1, 16) || '...' as prev_hash FROM block_cache ORDER BY height;" 2>/dev/null || echo "(no data)"
           
           echo ""
-          echo "--- Total cached blocks ---"
+          echo "--- Block cache summary ---"
           BLOCK_COUNT=$(sqlite3 /tmp/walletdb.sqlite "SELECT COUNT(*) FROM block_cache;" 2>/dev/null || echo "0")
           echo "Total blocks in cache: $BLOCK_COUNT"
+          sqlite3 /tmp/walletdb.sqlite "SELECT MIN(height) as first_block, MAX(height) as last_block FROM block_cache;" 2>/dev/null || echo "(no data)"
           
           echo ""
-          echo "--- Cache summary ---"
-          sqlite3 /tmp/walletdb.sqlite "SELECT MIN(height) as first_block, MAX(height) as last_block FROM block_cache;" 2>/dev/null || echo "(no data)"
+          echo "--- notes table (wallet state) ---"
+          NOTE_COUNT=$(sqlite3 /tmp/walletdb.sqlite "SELECT COUNT(*) FROM notes;" 2>/dev/null || echo "0")
+          echo "Total notes in wallet: $NOTE_COUNT"
+          
+          echo ""
+          echo "NOTE: The test commands call reset() which clears wallet state between runs."
+          echo "This demonstrates block cache (chain validation), but wallet still rescans."
+          echo "To enable FULL caching (skip wallet rescan):"
+          echo "  1. Keep wallet state between runs (don't call reset())"
+          echo "  2. Wallet will validate cached blocks and skip sync if chain is unchanged"
 
-      - name: "Run 2: Second tx-tool run (uses cache)"
+      - name: "Run 2: Second tx-tool run (uses block cache)"
         run: |
           echo "=========================================="
-          echo "SECOND RUN: Using cached blocks..."
+          echo "SECOND RUN: Demonstrating block cache usage"
           echo "=========================================="
-          echo "Look for these log messages indicating cache usage:"
+          echo "What's cached:"
+          echo "  ✓ Block hashes (for chain validation & reorg detection)"
+          echo "  ✗ Wallet state (cleared by test reset())"
+          echo ""
+          echo "Look for these log messages:"
           echo "  - 'Found cached block at height X with hash Y'"
           echo "  - 'Cache valid, resuming sync from height Z'"
+          echo "  - 'Wallet has no synced blocks; ignoring cache and rescanning'"
+          echo ""
+          echo "Note: Wallet still rescans because test clears wallet state."
+          echo "For FULL cache (skip wallet scan), keep wallet state between runs."
           echo "=========================================="
           echo ""
           

@@ -316,6 +316,22 @@ fn replay_cache_to_wallet(from_height: u32, wallet: &mut User, cache: &BlockCach
 /// 1. The requested from_height
 /// 2. The wallet's last processed block
 /// 3. The block cache with chain validation
+///
+/// ## Caching Behavior
+///
+/// This function enables two levels of caching:
+///
+/// 1. **Block Cache Only** (current default in tests):
+///    - Tests call `wallet.reset()` which clears wallet state but keeps block cache
+///    - Benefit: Validates chain continuity without re-fetching block metadata
+///    - Limitation: Still requires full wallet rescan (note decryption, nullifiers, etc.)
+///
+/// 2. **Full Cache** (block cache + wallet state):
+///    - Keep wallet state between runs (don't call `reset()`)
+///    - If `wallet_last_block_height > 0` AND cache is valid:
+///      → Skips the entire sync (no block fetching, no wallet scanning)
+///    - Use case: Production wallets that persist between sessions
+///
 fn determine_sync_start_height(
     from_height: u32,
     wallet: &User,
@@ -329,6 +345,8 @@ fn determine_sync_start_height(
     // `from_height`. The block cache only tracks hashes for chain progression / reorg
     // detection; resuming from the cached tip would skip processing historical txs and
     // yield an invalid Orchard anchor, causing mined blocks to be rejected.
+    //
+    // To enable full caching (skip rescan entirely), keep wallet state between runs.
     if wallet_last_block_height == 0 {
         info!(
             "Wallet has no synced blocks; ignoring cache and rescanning from height {}",
