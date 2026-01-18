@@ -213,10 +213,7 @@ impl BlockCache {
 
         // Only import if SQLite cache is empty.
         use crate::schema::block_cache::dsl as bc;
-        let existing: i64 = bc::block_cache
-            .count()
-            .get_result(conn)
-            .unwrap_or(0);
+        let existing: i64 = bc::block_cache.count().get_result(conn).unwrap_or(0);
         if existing > 0 {
             let _ = fs::remove_file(path);
             return;
@@ -400,13 +397,21 @@ mod tests {
 
         // Verify blocks 100-105 still exist
         for i in 100..=105 {
-            assert!(cache.get(i).is_some(), "Block {} should still exist after truncate", i);
+            assert!(
+                cache.get(i).is_some(),
+                "Block {} should still exist after truncate",
+                i
+            );
         }
         println!("✓ Blocks 100-105 preserved after truncate");
 
         // Verify blocks 106-110 are gone
         for i in 106..=110 {
-            assert!(cache.get(i).is_none(), "Block {} should be removed after truncate", i);
+            assert!(
+                cache.get(i).is_none(),
+                "Block {} should be removed after truncate",
+                i
+            );
         }
         println!("✓ Blocks 106-110 removed after truncate");
 
@@ -418,7 +423,11 @@ mod tests {
         for i in 101..=105 {
             let block = cache.get(i).unwrap();
             let expected_prev = format!("hash{}", i - 1);
-            assert_eq!(block.prev_hash, expected_prev, "Block {} prev_hash mismatch", i);
+            assert_eq!(
+                block.prev_hash, expected_prev,
+                "Block {} prev_hash mismatch",
+                i
+            );
         }
         println!("✓ Remaining chain integrity verified");
 
@@ -429,4 +438,3 @@ mod tests {
         println!("   - Ready to resync from block 106");
     }
 }
-

@@ -64,20 +64,24 @@ pub fn mine_block_with_retries(
     retry_delay_ms: u64,
 ) -> Result<(u32, TxId), Box<dyn Error>> {
     // Serialize transactions once for potential retries
-    let tx_bytes: Vec<Vec<u8>> = txs.iter().map(|tx| {
-        let mut bytes = vec![];
-        tx.write(&mut bytes).unwrap();
-        bytes
-    }).collect();
-    
+    let tx_bytes: Vec<Vec<u8>> = txs
+        .iter()
+        .map(|tx| {
+            let mut bytes = vec![];
+            tx.write(&mut bytes).unwrap();
+            bytes
+        })
+        .collect();
+
     for attempt in 1..=max_retries {
         let block_template = rpc_client.get_block_template()?;
         let block_height = block_template.height;
 
         // Re-parse transactions from bytes for each attempt
-        let txs_for_attempt: Vec<Transaction> = tx_bytes.iter().map(|bytes| {
-            Transaction::read(&bytes[..], BranchId::Nu6).unwrap()
-        }).collect();
+        let txs_for_attempt: Vec<Transaction> = tx_bytes
+            .iter()
+            .map(|bytes| Transaction::read(&bytes[..], BranchId::Nu6).unwrap())
+            .collect();
 
         let block_proposal = template_into_proposal(block_template, txs_for_attempt, activate);
         let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
@@ -95,7 +99,7 @@ pub fn mine_block_with_retries(
             Err(e) => return Err(e),
         }
     }
-    
+
     Err("Max retries exceeded for mining block".into())
 }
 
@@ -180,10 +184,12 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
     // If this is a fresh wallet, but the cache contains full tx data, rebuild the wallet
     // commitment tree locally by replaying cached blocks. This avoids re-downloading
     // all historical blocks/transactions on subsequent runs.
-    if wallet.last_block_height().is_none() && cache.last_height().is_some() && cache.has_complete_tx_data() {
-        if let Some(replayed) = replay_cache_to_wallet(from_height, wallet, &cache) {
-            info!("Replayed cached blocks locally up to height {}", replayed);
-        }
+    if wallet.last_block_height().is_none()
+        && cache.last_height().is_some()
+        && cache.has_complete_tx_data()
+        && let Some(replayed) = replay_cache_to_wallet(from_height, wallet, &cache)
+    {
+        info!("Replayed cached blocks locally up to height {}", replayed);
     }
 
     // Determine the starting height based on cache and chain validation
@@ -203,28 +209,29 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
 
                 // If the cache has tx data for this height and the hash matches, use it.
                 // Otherwise fetch from RPC and write it to the cache for next run.
-                let (transactions, tx_hex): (Vec<Transaction>, Vec<String>) = if let Some(cached) = cache.get(next_height) {
-                    let chain_hash_hex = hex::encode(block.hash.0);
-                    if cached.hash == chain_hash_hex && !cached.tx_hex.is_empty() {
-                        let txs = cached
-                            .tx_hex
-                            .iter()
-                            .map(|hex_tx| {
-                                let bytes = hex::decode(hex_tx).unwrap();
-                                Transaction::read(bytes.as_slice(), BranchId::Nu6).unwrap()
-                            })
-                            .collect::<Vec<_>>();
-                        (txs, cached.tx_hex.clone())
+                let (transactions, tx_hex): (Vec<Transaction>, Vec<String>) =
+                    if let Some(cached) = cache.get(next_height) {
+                        let chain_hash_hex = hex::encode(block.hash.0);
+                        if cached.hash == chain_hash_hex && !cached.tx_hex.is_empty() {
+                            let txs = cached
+                                .tx_hex
+                                .iter()
+                                .map(|hex_tx| {
+                                    let bytes = hex::decode(hex_tx).unwrap();
+                                    Transaction::read(bytes.as_slice(), BranchId::Nu6).unwrap()
+                                })
+                                .collect::<Vec<_>>();
+                            (txs, cached.tx_hex.clone())
+                        } else {
+                            let txs = fetch_block_txs(&block.tx_ids, rpc);
+                            let hexes = serialize_txs(&txs);
+                            (txs, hexes)
+                        }
                     } else {
                         let txs = fetch_block_txs(&block.tx_ids, rpc);
                         let hexes = serialize_txs(&txs);
                         (txs, hexes)
-                    }
-                } else {
-                    let txs = fetch_block_txs(&block.tx_ids, rpc);
-                    let hexes = serialize_txs(&txs);
-                    (txs, hexes)
-                };
+                    };
 
                 let prev_hash = if next_height > 0 {
                     if let Some(prev_cached) = cache.get(next_height - 1) {
@@ -239,12 +246,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     hex::encode(block.previous_block_hash.0)
                 };
 
-                cache.insert(
-                    next_height,
-                    hex::encode(block.hash.0),
-                    prev_hash,
-                    tx_hex,
-                );
+                cache.insert(next_height, hex::encode(block.hash.0), prev_hash, tx_hex);
 
                 wallet
                     .add_notes_from_block(block.height, block.hash, transactions)
@@ -715,8 +717,7 @@ pub fn template_into_proposal(
         .iter()
         .map(|tx| {
             if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
-                let bytes = <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
-                bytes
+                <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap()
             } else {
                 AUTH_COMMITMENT_PLACEHOLDER
             }
@@ -758,12 +759,11 @@ fn create_tx(wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),
     };
-    let tx = Builder::new(
+    Builder::new(
         REGTEST_NETWORK,
         /*user.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_420),
         build_config,
-    );
-    tx
+    )
 }
 
 fn build_tx(
