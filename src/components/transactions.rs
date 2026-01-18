@@ -184,12 +184,14 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
     // If this is a fresh wallet, but the cache contains full tx data, rebuild the wallet
     // commitment tree locally by replaying cached blocks. This avoids re-downloading
     // all historical blocks/transactions on subsequent runs.
+    #[allow(clippy::collapsible_if)]
     if wallet.last_block_height().is_none()
         && cache.last_height().is_some()
         && cache.has_complete_tx_data()
-        && let Some(replayed) = replay_cache_to_wallet(from_height, wallet, &cache)
     {
-        info!("Replayed cached blocks locally up to height {}", replayed);
+        if let Some(replayed) = replay_cache_to_wallet(from_height, wallet, &cache) {
+            info!("Replayed cached blocks locally up to height {}", replayed);
+        }
     }
 
     // Determine the starting height based on cache and chain validation
