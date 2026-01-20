@@ -1,4 +1,4 @@
-name: Demo Block Cache Feature
+name: Demo Block Data Feature
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  cache-demo:
+  block-data-demo:
     runs-on: ubuntu-latest
 
     steps:
@@ -99,26 +99,26 @@ jobs:
           fi
           
           echo ""
-          echo "✓ First run completed successfully!"
+          echo "First run completed successfully"
 
-      - name: "Display cache contents"
+      - name: "Display block data storage contents"
         run: |
           echo "=========================================="
-          echo "CACHE CONTENTS"
+          echo "BLOCK DATA STORAGE CONTENTS"
           echo "=========================================="
           
           docker run --rm -v wallet-data:/data alpine cat /data/walletdb.sqlite > /tmp/walletdb.sqlite 2>/dev/null || true
           sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3
           
-          BLOCK_COUNT=$(sqlite3 /tmp/walletdb.sqlite "SELECT COUNT(*) FROM block_cache;" 2>/dev/null || echo "0")
-          echo "Total blocks in cache: $BLOCK_COUNT"
+          BLOCK_COUNT=$(sqlite3 /tmp/walletdb.sqlite "SELECT COUNT(*) FROM block_data;" 2>/dev/null || echo "0")
+          echo "Total blocks in storage: $BLOCK_COUNT"
           
           NOTE_COUNT=$(sqlite3 /tmp/walletdb.sqlite "SELECT COUNT(*) FROM notes;" 2>/dev/null || echo "0")
           echo "Total notes in wallet: $NOTE_COUNT"
           
           echo ""
           echo "First 3 blocks:"
-          sqlite3 /tmp/walletdb.sqlite "SELECT height, substr(hash, 1, 16) || '...' FROM block_cache ORDER BY height LIMIT 3;" 2>/dev/null || echo "(no data)"
+          sqlite3 /tmp/walletdb.sqlite "SELECT height, substr(hash, 1, 16) || '...' FROM block_data ORDER BY height LIMIT 3;" 2>/dev/null || echo "(no data)"
           
           if [ "$BLOCK_COUNT" -gt 6 ]; then
             echo "..."
@@ -126,7 +126,7 @@ jobs:
           
           echo ""
           echo "Last 3 blocks:"
-          sqlite3 /tmp/walletdb.sqlite "SELECT height, substr(hash, 1, 16) || '...' FROM block_cache ORDER BY height DESC LIMIT 3;" 2>/dev/null | tac || echo "(no data)"
+          sqlite3 /tmp/walletdb.sqlite "SELECT height, substr(hash, 1, 16) || '...' FROM block_data ORDER BY height DESC LIMIT 3;" 2>/dev/null | tac || echo "(no data)"
 
       - name: "Run 2: Second tx-tool run"
         run: |
@@ -152,33 +152,33 @@ jobs:
           fi
           
           echo ""
-          echo "✓ Second run completed successfully!"
+          echo "Second run completed successfully"
 
-      - name: "Verify cache was used"
+      - name: "Verify block data storage was used"
         run: |
-          if grep -q "Found cached block" /tmp/run2.log; then
-            echo "✓ Found 'Found cached block' message - cache was detected"
-            grep "Found cached block" /tmp/run2.log | head -5
+          if grep -q "Found stored block" /tmp/run2.log; then
+            echo "Found 'Found stored block' message - stored data was detected"
+            grep "Found stored block" /tmp/run2.log | head -5
           else
-            echo "⚠ No 'Found cached block' message found"
+            echo "WARNING: No 'Found stored block' message found"
           fi
           
           echo ""
           
-          if grep -q "Cache valid" /tmp/run2.log; then
-            echo "✓ Found 'Cache valid' message - cache was validated and used"
-            grep "Cache valid" /tmp/run2.log | head -5
+          if grep -q "Stored data valid" /tmp/run2.log; then
+            echo "Found 'Stored data valid' message - stored data was validated and used"
+            grep "Stored data valid" /tmp/run2.log | head -5
           else
-            echo "⚠ No 'Cache valid' message found"
+            echo "WARNING: No 'Stored data valid' message found"
           fi
           
           echo ""
           
           if grep -q "resuming sync from height" /tmp/run2.log; then
-            echo "✓ Found 'resuming sync from height' message - sync resumed from cache"
+            echo "Found 'resuming sync from height' message - sync resumed from stored data"
             grep "resuming sync from height" /tmp/run2.log | head -5
           else
-            echo "⚠ No 'resuming sync from height' message found"
+            echo "WARNING: No 'resuming sync from height' message found"
           fi
 
       - name: Print Zebra logs

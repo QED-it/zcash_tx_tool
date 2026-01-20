@@ -39,7 +39,7 @@ impl Runnable for TestOrchardZSACmd {
             .as_secs();
         let mut wallet = User::random_with_uniqueness(&config.wallet.miner_seed_phrase, timestamp);
 
-        // reset() clears wallet state but preserves block cache for faster re-sync
+        // reset() clears wallet state but preserves block data for faster re-sync
         wallet.reset();
 
         let num_users = 2;

@@ -1,4 +1,4 @@
-use crate::components::block_cache::BlockCache;
+use crate::components::block_data::BlockData;
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::components::user::User;
 use crate::components::zebra_merkle::{
@@ -168,34 +168,34 @@ pub fn sync(wallet: &mut User, rpc: &mut dyn RpcClient) {
 }
 
 /// Sync the user with the node from the given height.
-/// Uses a SQLite-backed block cache to:
+/// Uses SQLite-backed block data storage to:
 /// 1. Track chain progression with block hashes
 /// 2. Detect chain reorganizations by verifying block hashes match
 /// 3. Handle reorgs by finding the common ancestor and rescanning from there
 ///
 /// Note: Each wallet run must process all transactions to build its own commitment tree.
-/// The cache only stores hashes for chain validation, not transaction data.
+/// The storage only keeps hashes for chain validation, not transaction data.
 pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcClient) {
     info!("Starting sync from height {}", from_height);
 
-    // Load the block cache
-    let mut cache = BlockCache::load();
+    // Load the block data storage
+    let mut block_data = BlockData::load();
 
-    // If this is a fresh wallet, but the cache contains full tx data, rebuild the wallet
-    // commitment tree locally by replaying cached blocks. This avoids re-downloading
+    // If this is a fresh wallet, but the storage contains full tx data, rebuild the wallet
+    // commitment tree locally by replaying stored blocks. This avoids re-downloading
     // all historical blocks/transactions on subsequent runs.
     #[allow(clippy::collapsible_if)]
     if wallet.last_block_height().is_none()
-        && cache.last_height().is_some()
-        && cache.has_complete_tx_data()
+        && block_data.last_height().is_some()
+        && block_data.has_complete_tx_data()
     {
-        if let Some(replayed) = replay_cache_to_wallet(from_height, wallet, &cache) {
-            info!("Replayed cached blocks locally up to height {}", replayed);
+        if let Some(replayed) = replay_stored_blocks_to_wallet(from_height, wallet, &block_data) {
+            info!("Replayed stored blocks locally up to height {}", replayed);
         }
     }
 
-    // Determine the starting height based on cache and chain validation
-    let start_height = determine_sync_start_height(from_height, wallet, &mut cache, rpc);
+    // Determine the starting height based on stored blocks and chain validation
+    let start_height = determine_sync_start_height(from_height, wallet, &mut block_data, rpc);
 
     info!("Determined sync start height: {}", start_height);
 
@@ -209,13 +209,13 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     block.hash, block.height
                 );
 
-                // If the cache has tx data for this height and the hash matches, use it.
-                // Otherwise fetch from RPC and write it to the cache for next run.
+                // If the storage has tx data for this height and the hash matches, use it.
+                // Otherwise fetch from RPC and write it to the storage for next run.
                 let (transactions, tx_hex): (Vec<Transaction>, Vec<String>) =
-                    if let Some(cached) = cache.get(next_height) {
+                    if let Some(stored) = block_data.get(next_height) {
                         let chain_hash_hex = hex::encode(block.hash.0);
-                        if cached.hash == chain_hash_hex && !cached.tx_hex.is_empty() {
-                            let txs = cached
+                        if stored.hash == chain_hash_hex && !stored.tx_hex.is_empty() {
+                            let txs = stored
                                 .tx_hex
                                 .iter()
                                 .map(|hex_tx| {
@@ -223,7 +223,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                                     Transaction::read(bytes.as_slice(), BranchId::Nu6).unwrap()
                                 })
                                 .collect::<Vec<_>>();
-                            (txs, cached.tx_hex.clone())
+                            (txs, stored.tx_hex.clone())
                         } else {
                             let txs = fetch_block_txs(&block.tx_ids, rpc);
                             let hexes = serialize_txs(&txs);
@@ -236,8 +236,8 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     };
 
                 let prev_hash = if next_height > 0 {
-                    if let Some(prev_cached) = cache.get(next_height - 1) {
-                        prev_cached.hash.clone()
+                    if let Some(prev_stored) = block_data.get(next_height - 1) {
+                        prev_stored.hash.clone()
                     } else {
                         match rpc.get_block(next_height - 1) {
                             Ok(prev_block) => hex::encode(prev_block.hash.0),
@@ -248,7 +248,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     hex::encode(block.previous_block_hash.0)
                 };
 
-                cache.insert(next_height, hex::encode(block.hash.0), prev_hash, tx_hex);
+                block_data.insert(next_height, hex::encode(block.hash.0), prev_hash, tx_hex);
 
                 wallet
                     .add_notes_from_block(block.height, block.hash, transactions)
@@ -262,8 +262,8 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     next_height - 1
                 );
                 debug!("rpc.get_block err: {:?}", err);
-                // Save the cache before returning
-                cache.save();
+                // Save the block data before returning
+                block_data.save();
                 return;
             }
         }
@@ -280,18 +280,18 @@ fn serialize_txs(txs: &[Transaction]) -> Vec<String> {
         .collect()
 }
 
-fn replay_cache_to_wallet(from_height: u32, wallet: &mut User, cache: &BlockCache) -> Option<u32> {
-    // Replay cached txs in ascending height order, starting from from_height.
+fn replay_stored_blocks_to_wallet(from_height: u32, wallet: &mut User, block_data: &BlockData) -> Option<u32> {
+    // Replay stored txs in ascending height order, starting from from_height.
     let mut last = None;
-    for (height, cached) in cache.blocks_iter() {
+    for (height, stored) in block_data.blocks_iter() {
         if *height < from_height {
             continue;
         }
-        if cached.tx_hex.is_empty() {
+        if stored.tx_hex.is_empty() {
             return None;
         }
 
-        let txs = cached
+        let txs = stored
             .tx_hex
             .iter()
             .map(|hex_tx| {
@@ -300,8 +300,8 @@ fn replay_cache_to_wallet(from_height: u32, wallet: &mut User, cache: &BlockCach
             })
             .collect::<Vec<_>>();
 
-        // Reconstruct BlockHash bytes from cached big-endian hex (no reversal).
-        let hash_bytes = hex::decode(&cached.hash).ok()?;
+        // Reconstruct BlockHash bytes from stored big-endian hex (no reversal).
+        let hash_bytes = hex::decode(&stored.hash).ok()?;
         if hash_bytes.len() != 32 {
             return None;
         }
@@ -319,86 +319,86 @@ fn replay_cache_to_wallet(from_height: u32, wallet: &mut User, cache: &BlockCach
 /// Determines the height from which to start syncing based on:
 /// 1. The requested from_height
 /// 2. The wallet's last processed block
-/// 3. The block cache with chain validation
+/// 3. The stored block data with chain validation
 ///
-/// ## Caching Behavior
+/// ## Storage Behavior
 ///
-/// This function enables two levels of caching:
+/// This function enables two levels of persistence:
 ///
-/// 1. **Block Cache Only** (current default in tests):
-///    - Tests call `wallet.reset()` which clears wallet state but keeps block cache
+/// 1. **Block Data Only** (current default in tests):
+///    - Tests call `wallet.reset()` which clears wallet state but keeps block data
 ///    - Benefit: Validates chain continuity without re-fetching block metadata
 ///    - Limitation: Still requires full wallet rescan (note decryption, nullifiers, etc.)
 ///
-/// 2. **Full Cache** (block cache + wallet state):
+/// 2. **Full Persistence** (block data + wallet state):
 ///    - Keep wallet state between runs (don't call `reset()`)
-///    - If `wallet_last_block_height > 0` AND cache is valid:
+///    - If `wallet_last_block_height > 0` AND stored data is valid:
 ///      → Skips the entire sync (no block fetching, no wallet scanning)
 ///    - Use case: Production wallets that persist between sessions
 ///
 fn determine_sync_start_height(
     from_height: u32,
     wallet: &User,
-    cache: &mut BlockCache,
+    block_data: &mut BlockData,
     rpc: &mut dyn RpcClient,
 ) -> u32 {
     let wallet_last_block_height = wallet.last_block_height().map_or(0, u32::from);
 
     // IMPORTANT:
     // If the wallet has no local state, we must rebuild the note commitment tree from
-    // `from_height`. The block cache only tracks hashes for chain progression / reorg
-    // detection; resuming from the cached tip would skip processing historical txs and
+    // `from_height`. The block data storage only tracks hashes for chain progression / reorg
+    // detection; resuming from the stored tip would skip processing historical txs and
     // yield an invalid Orchard anchor, causing mined blocks to be rejected.
     //
-    // To enable full caching (skip rescan entirely), keep wallet state between runs.
+    // To enable full persistence (skip rescan entirely), keep wallet state between runs.
     if wallet_last_block_height == 0 {
         info!(
-            "Wallet has no synced blocks; ignoring cache and rescanning from height {}",
+            "Wallet has no synced blocks; rescanning from height {}",
             from_height
         );
         return from_height;
     }
 
-    // Get the last cached block height
-    let last_cached_height = cache.last_height();
+    // Get the last stored block height
+    let last_stored_height = block_data.last_height();
 
-    match last_cached_height {
-        Some(cached_height) => {
-            let cached_block = cache.get(cached_height).unwrap();
+    match last_stored_height {
+        Some(stored_height) => {
+            let stored_block = block_data.get(stored_height).unwrap();
             info!(
-                "Found cached block at height {} with hash {}",
-                cached_height, cached_block.hash
+                "Found stored block at height {} with hash {}",
+                stored_height, stored_block.hash
             );
 
-            // Validate the cached chain against the current blockchain
-            match validate_cached_chain(cached_height, cache, rpc) {
+            // Validate the stored chain against the current blockchain
+            match validate_stored_chain(stored_height, block_data, rpc) {
                 ChainValidationResult::Valid => {
-                    // Chain is valid, continue from after the last cached block
-                    let resume_height = cached_height + 1;
-                    info!("Cache valid, resuming sync from height {}", resume_height);
+                    // Chain is valid, continue from after the last stored block
+                    let resume_height = stored_height + 1;
+                    info!("Stored data valid, resuming sync from height {}", resume_height);
                     resume_height.max(from_height)
                 }
                 ChainValidationResult::Reorg(reorg_height) => {
                     // Chain reorganization detected, need to rescan from reorg point
                     info!(
-                        "Chain reorganization detected at height {}, clearing cache from that point",
+                        "Chain reorganization detected at height {}, clearing stored data from that point",
                         reorg_height
                     );
-                    cache.truncate_from(reorg_height);
-                    cache.save();
+                    block_data.truncate_from(reorg_height);
+                    block_data.save();
                     reorg_height.max(from_height)
                 }
                 ChainValidationResult::NoBlockOnChain => {
-                    // This should rarely happen now since validate_cached_chain walks back
-                    // But if it does, just start from from_height without clearing cache
-                    info!("No valid cached block found, starting from requested height");
+                    // This should rarely happen now since validate_stored_chain walks back
+                    // But if it does, just start from from_height without clearing stored data
+                    info!("No valid stored block found, starting from requested height");
                     from_height.max(wallet_last_block_height)
                 }
             }
         }
         None => {
-            // No cache, use the higher of from_height or wallet's last height
-            info!("No block cache found, starting fresh");
+            // No stored data, use the higher of from_height or wallet's last height
+            info!("No block data found, starting fresh");
             from_height.max(wallet_last_block_height)
         }
     }
@@ -435,73 +435,73 @@ fn fetch_block_txs(tx_ids: &[TxId], rpc: &mut dyn RpcClient) -> Vec<Transaction>
         .collect()
 }
 
-/// Result of validating the cached chain against the current blockchain
+/// Result of validating the stored chain against the current blockchain
 enum ChainValidationResult {
-    /// The cached chain matches the current blockchain
+    /// The stored chain matches the current blockchain
     Valid,
     /// A reorganization was detected at the specified height
     Reorg(u32),
-    /// The cached block doesn't exist on the chain
+    /// The stored block doesn't exist on the chain
     NoBlockOnChain,
 }
 
-/// Validates that the cached chain matches the current blockchain.
-/// Walks backwards from the last cached block to find where the chains diverge.
-fn validate_cached_chain(
-    cached_height: u32,
-    cache: &BlockCache,
+/// Validates that the stored chain matches the current blockchain.
+/// Walks backwards from the last stored block to find where the chains diverge.
+fn validate_stored_chain(
+    stored_height: u32,
+    block_data: &BlockData,
     rpc: &mut dyn RpcClient,
 ) -> ChainValidationResult {
-    let cached_block = match cache.get(cached_height) {
+    let stored_block = match block_data.get(stored_height) {
         Some(b) => b,
         None => return ChainValidationResult::NoBlockOnChain,
     };
 
-    // First, check if the last cached block matches
-    match rpc.get_block(cached_height) {
+    // First, check if the last stored block matches
+    match rpc.get_block(stored_height) {
         Ok(chain_block) => {
             let chain_hash = hex::encode(chain_block.hash.0);
-            if chain_hash == cached_block.hash {
+            if chain_hash == stored_block.hash {
                 // Perfect match, chain is valid
                 return ChainValidationResult::Valid;
             }
 
             // Hash mismatch - walk backwards to find where chains diverge
             info!(
-                "Block hash mismatch at height {}: cached {} vs chain {}",
-                cached_height, cached_block.hash, chain_hash
+                "Block hash mismatch at height {}: stored {} vs chain {}",
+                stored_height, stored_block.hash, chain_hash
             );
 
-            find_common_ancestor(cached_height, cache, rpc)
+            find_common_ancestor(stored_height, block_data, rpc)
         }
         Err(_) => {
-            // Block at cached height doesn't exist on chain yet
+            // Block at stored height doesn't exist on chain yet
             // Walk backwards to find the highest block that does exist and matches
             info!(
-                "Block at height {} not found on chain, walking back to find valid cache point",
-                cached_height
+                "Block at height {} not found on chain, walking back to find valid stored point",
+                stored_height
             );
 
-            find_common_ancestor(cached_height, cache, rpc)
+            find_common_ancestor(stored_height, block_data, rpc)
         }
     }
 }
 
-/// Walk backwards through the cache to find the fork point / common ancestor
+/// Walk backwards through the stored data to find the fork point / common ancestor
 fn find_common_ancestor(
     from_height: u32,
-    cache: &BlockCache,
+    block_data: &BlockData,
     rpc: &mut dyn RpcClient,
 ) -> ChainValidationResult {
     let mut check_height = from_height;
     while check_height > 1 {
         check_height -= 1;
 
-        if let Some(check_cached) = cache.get(check_height) {
+        if let Some(check_stored) = block_data.get(check_height) {
             match rpc.get_block(check_height) {
                 Ok(block) => {
                     let block_hash = hex::encode(block.hash.0);
-                    if block_hash == check_cached.hash {
+                    if block_hash == check_stored.hash {
                         // Found the common ancestor, reorg starts at check_height + 1
                         info!(
                             "Found common ancestor at height {}, will resume from {}",
@@ -517,13 +517,13 @@ fn find_common_ancestor(
                 }
             }
         } else {
-            // No cached block at this height, reorg starts here
+            // No stored block at this height, reorg starts here
             return ChainValidationResult::Reorg(check_height + 1);
         }
     }
 
-    // Couldn't find common ancestor, treat cache as invalid but preserve it
-    info!("No common ancestor found, ignoring cache and starting fresh");
+    // Couldn't find common ancestor, treat stored data as invalid but preserve it
+    info!("No common ancestor found, ignoring stored data and starting fresh");
     ChainValidationResult::NoBlockOnChain
 }
 

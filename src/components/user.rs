@@ -203,24 +203,24 @@ impl User {
     /// in place with the expectation that they will be overwritten and/or updated in
     /// the rescan process.
     ///
-    /// Note: The block cache is intentionally preserved to allow faster re-sync
-    /// by resuming from the last valid cached block. Use `reset_full()` to also
-    /// clear the block cache for a completely fresh start.
+    /// Note: The block data storage is intentionally preserved to allow faster re-sync
+    /// by resuming from the last valid stored block. Use `reset_full()` to also
+    /// clear the block data for a completely fresh start.
     pub fn reset(&mut self) {
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
         self.db.delete_all_notes();
-        // Block cache is NOT deleted - allows resuming sync from last cached block
+        // Block data is NOT deleted - allows resuming sync from last stored block
     }
 
-    /// Full reset including the block cache.
+    /// Full reset including the block data storage.
     /// Use this when you need a completely fresh start (e.g., new wallet seed,
-    /// or when the cached chain state is incompatible with current test).
+    /// or when the stored chain state is incompatible with current test).
     pub fn reset_full(&mut self) {
-        use crate::components::block_cache::BlockCache;
+        use crate::components::block_data::BlockData;
         self.reset();
-        BlockCache::delete_file();
+        BlockData::delete_file();
     }
 
     pub fn last_block_hash(&self) -> Option<BlockHash> {

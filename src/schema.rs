@@ -19,10 +19,10 @@ diesel::table! {
 }
 
 diesel::table! {
-    /// Cached blocks used for syncing and reorg detection.
+    /// Stored block data used for syncing and reorg detection.
     ///
     /// Note: `tx_hex_json` stores a JSON array of hex-encoded transaction bytes.
-    block_cache (height) {
+    block_data (height) {
         height -> Integer,
         hash -> Text,
         prev_hash -> Text,

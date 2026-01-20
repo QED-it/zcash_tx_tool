@@ -22,6 +22,7 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
     - [Orchard-ZSA Two Party Scenario](#orchard-zsa-two-party-scenario)
     - [Orchard-ZSA Three Party Scenario](#orchard-zsa-three-party-scenario)
     - [Creating your own scenario](#creating-your-own-scenario)
+- [Testing Block Data Storage Locally](#testing-block-data-storage-locally)
 - [Connecting to the Public ZSA Testnet](#connecting-to-the-public-ZSA-testnet)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
@@ -92,7 +93,7 @@ Install Diesel CLI and set up the database and get Zcash Params for Sapling:
 cargo install diesel_cli --no-default-features --features sqlite
 
 # Set up the database
-diesel setup
+diesel setup # Investigate this for the table generations (migrations)
 
 # Get Zcash Params for Sapling (if needed)
 ./zcutil/fetch-params.sh
@@ -202,6 +203,47 @@ You should then be able to run your scenario via (assuming `test-scenario` is th
 ```bash
 cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-scenario
 ```
+
+## Testing Block Data Storage Locally
+
+The `tx-tool` includes a block data storage feature that speeds up wallet synchronization and enables chain reorganization detection. You can test this feature locally by running the GitHub Actions workflow with `act`.
+
+### Using `act` to Run GitHub Actions Locally
+
+[`act`](https://github.com/nektos/act) allows you to run GitHub Actions workflows on your local machine:
+
+```bash
+# Install act (macOS)
+brew install act
+
+# Install act (Linux)
+curl https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
+
+# Run the block data demo workflow
+act workflow_dispatch -W .github/workflows/cache-demo-ci.yaml
+
+# Or run on push event (simulating a push to main)
+act push -W .github/workflows/cache-demo-ci.yaml
+```
+
+**Note**: The workflow requires significant disk space (~20GB) and may take 15-30 minutes to complete due to Docker image builds.
+
+### Understanding Block Data Storage Behavior
+
+The block data storage stores:
+- **Block hashes**: For chain validation and reorg detection  
+- **Transaction data**: To avoid re-downloading blocks
+
+On subsequent runs, the tool:
+1. Validates the stored chain matches the node's chain
+2. Resumes sync from the last stored block (if valid)
+3. Detects and handles chain reorganizations
+
+**Note**: Test commands call `reset()` which clears wallet state but preserves the block data. For full persistence (skipping wallet rescan entirely), ensure wallet state persists between runs.
+
+### About the Workflow
+
+The `act` tool runs the GitHub Actions workflow locally, which uses Docker to build and run both the Zebra node and the tx-tool in containers. This approach is similar to the manual Docker setup described in the [Getting Started](#getting-started) section above, where we build Docker images and run them with environment variables and volume mounts. The workflow automates this process and demonstrates block data persistence between multiple runs of the tx-tool.
 
 ## Connecting to the Public ZSA Testnet
 
