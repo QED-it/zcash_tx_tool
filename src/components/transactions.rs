@@ -280,7 +280,11 @@ fn serialize_txs(txs: &[Transaction]) -> Vec<String> {
         .collect()
 }
 
-fn replay_stored_blocks_to_wallet(from_height: u32, wallet: &mut User, block_data: &BlockData) -> Option<u32> {
+fn replay_stored_blocks_to_wallet(
+    from_height: u32,
+    wallet: &mut User,
+    block_data: &BlockData,
+) -> Option<u32> {
     // Replay stored txs in ascending height order, starting from from_height.
     let mut last = None;
     for (height, stored) in block_data.blocks_iter() {
@@ -375,7 +379,10 @@ fn determine_sync_start_height(
                 ChainValidationResult::Valid => {
                     // Chain is valid, continue from after the last stored block
                     let resume_height = stored_height + 1;
-                    info!("Stored data valid, resuming sync from height {}", resume_height);
+                    info!(
+                        "Stored data valid, resuming sync from height {}",
+                        resume_height
+                    );
                     resume_height.max(from_height)
                 }
                 ChainValidationResult::Reorg(reorg_height) => {

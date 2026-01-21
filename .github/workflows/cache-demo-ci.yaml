@@ -101,32 +101,29 @@ jobs:
           echo ""
           echo "First run completed successfully"
 
-      - name: "Display block data storage contents"
+      - name: "Display block data storage contents after first run"
         run: |
           echo "=========================================="
-          echo "BLOCK DATA STORAGE CONTENTS"
+          echo "BLOCK DATA STORAGE CONTENTS (After Run 1)"
           echo "=========================================="
           
-          docker run --rm -v wallet-data:/data alpine cat /data/walletdb.sqlite > /tmp/walletdb.sqlite 2>/dev/null || true
-          sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3
-          
-          BLOCK_COUNT=$(sqlite3 /tmp/walletdb.sqlite "SELECT COUNT(*) FROM block_data;" 2>/dev/null || echo "0")
-          echo "Total blocks in storage: $BLOCK_COUNT"
-          
-          NOTE_COUNT=$(sqlite3 /tmp/walletdb.sqlite "SELECT COUNT(*) FROM notes;" 2>/dev/null || echo "0")
-          echo "Total notes in wallet: $NOTE_COUNT"
+          echo ""
+          echo "Block 0 (first block):"
+          docker run --rm --network zcash-net \
+            -e ZCASH_NODE_ADDRESS=zebra-node \
+            -e ZCASH_NODE_PORT=18232 \
+            -e ZCASH_NODE_PROTOCOL=http \
+            -v wallet-data:/app \
+            zcash-tx-tool:local get-block-data 0
           
           echo ""
-          echo "First 3 blocks:"
-          sqlite3 /tmp/walletdb.sqlite "SELECT height, substr(hash, 1, 16) || '...' FROM block_data ORDER BY height LIMIT 3;" 2>/dev/null || echo "(no data)"
-          
-          if [ "$BLOCK_COUNT" -gt 6 ]; then
-            echo "..."
-          fi
-          
-          echo ""
-          echo "Last 3 blocks:"
-          sqlite3 /tmp/walletdb.sqlite "SELECT height, substr(hash, 1, 16) || '...' FROM block_data ORDER BY height DESC LIMIT 3;" 2>/dev/null | tac || echo "(no data)"
+          echo "Last block in storage:"
+          docker run --rm --network zcash-net \
+            -e ZCASH_NODE_ADDRESS=zebra-node \
+            -e ZCASH_NODE_PORT=18232 \
+            -e ZCASH_NODE_PROTOCOL=http \
+            -v wallet-data:/app \
+            zcash-tx-tool:local get-block-data
 
       - name: "Run 2: Second tx-tool run"
         run: |
@@ -154,32 +151,29 @@ jobs:
           echo ""
           echo "Second run completed successfully"
 
-      - name: "Verify block data storage was used"
+      - name: "Display block data storage contents after second run"
         run: |
-          if grep -q "Found stored block" /tmp/run2.log; then
-            echo "Found 'Found stored block' message - stored data was detected"
-            grep "Found stored block" /tmp/run2.log | head -5
-          else
-            echo "WARNING: No 'Found stored block' message found"
-          fi
+          echo "=========================================="
+          echo "BLOCK DATA STORAGE CONTENTS (After Run 2)"
+          echo "=========================================="
           
           echo ""
-          
-          if grep -q "Stored data valid" /tmp/run2.log; then
-            echo "Found 'Stored data valid' message - stored data was validated and used"
-            grep "Stored data valid" /tmp/run2.log | head -5
-          else
-            echo "WARNING: No 'Stored data valid' message found"
-          fi
+          echo "Block 0 (first block):"
+          docker run --rm --network zcash-net \
+            -e ZCASH_NODE_ADDRESS=zebra-node \
+            -e ZCASH_NODE_PORT=18232 \
+            -e ZCASH_NODE_PROTOCOL=http \
+            -v wallet-data:/app \
+            zcash-tx-tool:local get-block-data 0
           
           echo ""
-          
-          if grep -q "resuming sync from height" /tmp/run2.log; then
-            echo "Found 'resuming sync from height' message - sync resumed from stored data"
-            grep "resuming sync from height" /tmp/run2.log | head -5
-          else
-            echo "WARNING: No 'resuming sync from height' message found"
-          fi
+          echo "Last block in storage:"
+          docker run --rm --network zcash-net \
+            -e ZCASH_NODE_ADDRESS=zebra-node \
+            -e ZCASH_NODE_PORT=18232 \
+            -e ZCASH_NODE_PROTOCOL=http \
+            -v wallet-data:/app \
+            zcash-tx-tool:local get-block-data
 
       - name: Print Zebra logs
         if: always()
