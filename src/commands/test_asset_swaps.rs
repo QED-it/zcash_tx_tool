@@ -177,8 +177,7 @@ impl Runnable for TestAssetSwapsCmd {
             expected_balances_after_transfer(&expected_balances_asset_2, &txi);
         let txns = txi.to_transactions(&mut blockchain_state);
 
-        mine(&mut blockchain_state, &mut rpc_client, txns)
-            .expect("block mined successfully");
+        mine(&mut blockchain_state, &mut rpc_client, txns).expect("block mined successfully");
 
         check_balances(
             asset_2,
@@ -208,8 +207,7 @@ impl Runnable for TestAssetSwapsCmd {
         let expected_balances = expected_balances_after_transfer(&expected_balances_asset_1, &txi);
         let txns = txi.to_transactions(&mut blockchain_state);
 
-        mine(&mut blockchain_state, &mut rpc_client, txns)
-            .expect("block mined successfully");
+        mine(&mut blockchain_state, &mut rpc_client, txns).expect("block mined successfully");
 
         check_balances(
             asset,
