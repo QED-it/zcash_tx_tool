@@ -71,7 +71,8 @@ impl Runnable for TestAssetSwapsCmd {
             &mut blockchain_state,
             &mut rpc_client,
             Vec::from([issue_tx]),
-        );
+        )
+        .expect("block mined successfully");
 
         print_balances(
             "=== Balances after issue ===",
@@ -107,7 +108,8 @@ impl Runnable for TestAssetSwapsCmd {
             &mut blockchain_state,
             &mut rpc_client,
             Vec::from([issue_tx_2]),
-        );
+        )
+        .expect("block mined successfully");
 
         let mut expected_balances_asset_1 =
             TestBalances::get_asset_balances(asset, num_accounts, &mut blockchain_state);
@@ -135,7 +137,8 @@ impl Runnable for TestAssetSwapsCmd {
         expected_balances_asset_2.decrement(alice, swap_asset_b_amount);
         expected_balances_asset_2.increment(issuer, swap_asset_b_amount - spread);
 
-        mine(&mut blockchain_state, &mut rpc_client, Vec::from([swap_tx]));
+        mine(&mut blockchain_state, &mut rpc_client, Vec::from([swap_tx]))
+            .expect("block mined successfully");
 
         check_balances(
             asset,
@@ -174,7 +177,8 @@ impl Runnable for TestAssetSwapsCmd {
             expected_balances_after_transfer(&expected_balances_asset_2, &txi);
         let txns = txi.to_transactions(&mut blockchain_state);
 
-        mine(&mut blockchain_state, &mut rpc_client, txns);
+        mine(&mut blockchain_state, &mut rpc_client, txns)
+            .expect("block mined successfully");
 
         check_balances(
             asset_2,
@@ -204,7 +208,8 @@ impl Runnable for TestAssetSwapsCmd {
         let expected_balances = expected_balances_after_transfer(&expected_balances_asset_1, &txi);
         let txns = txi.to_transactions(&mut blockchain_state);
 
-        mine(&mut blockchain_state, &mut rpc_client, txns);
+        mine(&mut blockchain_state, &mut rpc_client, txns)
+            .expect("block mined successfully");
 
         check_balances(
             asset,

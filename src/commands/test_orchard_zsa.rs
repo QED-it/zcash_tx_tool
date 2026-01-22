@@ -12,9 +12,7 @@ use crate::commands::test_balances::{
     BurnInfo, TestBalances, TransferInfo, TxiBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{
-    create_issue_transaction, create_finalization_transaction, mine, sync_from_height,
-};
+use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
 use crate::components::user::User;
 use crate::prelude::*;
 use abscissa_core::{Command, Runnable};
@@ -41,7 +39,7 @@ impl Runnable for TestOrchardZSACmd {
         let alice_idx = 1;
 
         let issuer_addr = wallet.address_for_account(issuer_idx, External);
-        let alice_addr = wallet.address_for_account(alice_idx, External);
+        let _alice_addr = wallet.address_for_account(alice_idx, External);
 
         let asset_desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(b"WETH").unwrap());
         prepare_test(
@@ -98,7 +96,7 @@ impl Runnable for TestOrchardZSACmd {
         txi.add_to_batch(BurnInfo::new(alice_idx, asset, amount_to_burn_alice));
 
         // Generate expected balances after burn
-        let mut expected_balances = expected_balances_after_burn(&expected_balances, &txi);
+        let expected_balances = expected_balances_after_burn(&expected_balances, &txi);
 
         let txs = txi.to_transactions(&mut wallet);
 
