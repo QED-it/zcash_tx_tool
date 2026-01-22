@@ -398,7 +398,9 @@ fn determine_sync_start_height(
                 ChainValidationResult::NoBlockOnChain => {
                     // Zebra node has been reset or chain data is completely different
                     // Clear all stored block data and start fresh
-                    info!("No common ancestor found, clearing all stored block data and starting fresh");
+                    info!(
+                        "No common ancestor found, clearing all stored block data and starting fresh"
+                    );
                     block_data.truncate_from(1);
                     block_data.save();
                     from_height.max(wallet_last_block_height)
