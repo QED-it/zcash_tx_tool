@@ -342,7 +342,7 @@ fn replay_stored_blocks_to_wallet(
 ///
 fn determine_sync_start_height(
     from_height: u32,
-    wallet: &User,
+    wallet: &mut User,
     block_data: &mut BlockData,
     rpc: &mut dyn RpcClient,
 ) -> u32 {
@@ -396,10 +396,20 @@ fn determine_sync_start_height(
                     reorg_height.max(from_height)
                 }
                 ChainValidationResult::NoBlockOnChain => {
-                    // This should rarely happen now since validate_stored_chain walks back
-                    // But if it does, just start from from_height without clearing stored data
-                    info!("No valid stored block found, starting from requested height");
-                    from_height.max(wallet_last_block_height)
+                    // Zebra node has been reset or chain data is completely different
+                    // Clear all stored block data AND reset wallet state since it was built from
+                    // blocks that no longer exist on the chain
+                    info!(
+                        "No common ancestor found, clearing all stored block data and resetting wallet state"
+                    );
+                    block_data.truncate_from(1);
+                    block_data.save();
+
+                    // Reset wallet state back to initial state since the blocks it was synced
+                    // from are no longer valid on the current chain
+                    wallet.reset();
+
+                    from_height
                 }
             }
         }

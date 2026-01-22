@@ -3,6 +3,9 @@
 **/*.rs.bk
 /*.sqlite
 block_cache.json
+.secrets
+.claude/
+**/*.sqlite.prev
 
 # Terraform git
 # Local .terraform directories

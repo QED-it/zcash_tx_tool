@@ -194,7 +194,22 @@ jobs:
           docker network connect zcash-net zebra-node
 
           echo "Waiting for Zebra node to reinitialize..."
-          sleep 15
+          sleep 30
+
+          echo "Checking if Zebra node is ready..."
+          for i in {1..10}; do
+            if docker run --rm --network zcash-net \
+              -e ZCASH_NODE_ADDRESS=zebra-node \
+              -e ZCASH_NODE_PORT=18232 \
+              -e ZCASH_NODE_PROTOCOL=http \
+              zcash-tx-tool:local get-block-data 0 2>/dev/null | grep -q "Block 0"; then
+              echo "Zebra node is ready!"
+              break
+            fi
+            echo "Zebra node not ready yet, waiting 10 seconds... (attempt $i/10)"
+            sleep 10
+          done
+
           echo "Zebra node restarted successfully"
 
       - name: "Run 3: Third tx-tool run (after Zebra restart)"
