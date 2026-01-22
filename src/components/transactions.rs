@@ -673,7 +673,16 @@ fn build_tx(
         }
         Some(prover) => {
             let tx = builder
-                .build(tss, &[], orchard_saks, OsRng, &prover, &prover, fee_rule, |_| false)
+                .build(
+                    tss,
+                    &[],
+                    orchard_saks,
+                    OsRng,
+                    &prover,
+                    &prover,
+                    fee_rule,
+                    |_| false,
+                )
                 .unwrap()
                 .into_transaction();
             info!("Build tx: {}", tx.txid());

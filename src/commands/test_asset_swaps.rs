@@ -52,12 +52,26 @@ impl Runnable for TestAssetSwapsCmd {
 
         // --------------------- Issue asset ---------------------
 
-        let (issue_tx, asset) =
-            create_issue_transaction(issuer_addr, 1000, asset_desc_hash, true, &mut blockchain_state);
+        let (issue_tx, asset) = create_issue_transaction(
+            issuer_addr,
+            1000,
+            asset_desc_hash,
+            true,
+            &mut blockchain_state,
+        );
 
-        print_balances("=== Initial balances ===", asset, num_accounts, &mut blockchain_state);
+        print_balances(
+            "=== Initial balances ===",
+            asset,
+            num_accounts,
+            &mut blockchain_state,
+        );
 
-        mine(&mut blockchain_state, &mut rpc_client, Vec::from([issue_tx]));
+        mine(
+            &mut blockchain_state,
+            &mut rpc_client,
+            Vec::from([issue_tx]),
+        );
 
         print_balances(
             "=== Balances after issue ===",
@@ -71,8 +85,13 @@ impl Runnable for TestAssetSwapsCmd {
         // Issue a new type of asset
         let asset_desc_hash_2 = compute_asset_desc_hash(&NonEmpty::from_slice(b"WBTC").unwrap());
 
-        let (issue_tx_2, _) =
-            create_issue_transaction(alice_addr, 10, asset_desc_hash_2, true, &mut blockchain_state);
+        let (issue_tx_2, _) = create_issue_transaction(
+            alice_addr,
+            10,
+            asset_desc_hash_2,
+            true,
+            &mut blockchain_state,
+        );
 
         let asset_2 = issue_tx_2
             .issue_bundle()
@@ -84,7 +103,11 @@ impl Runnable for TestAssetSwapsCmd {
             .unwrap()
             .asset();
 
-        mine(&mut blockchain_state, &mut rpc_client, Vec::from([issue_tx_2]));
+        mine(
+            &mut blockchain_state,
+            &mut rpc_client,
+            Vec::from([issue_tx_2]),
+        );
 
         let mut expected_balances_asset_1 =
             TestBalances::get_asset_balances(asset, num_accounts, &mut blockchain_state);
@@ -114,7 +137,12 @@ impl Runnable for TestAssetSwapsCmd {
 
         mine(&mut blockchain_state, &mut rpc_client, Vec::from([swap_tx]));
 
-        check_balances(asset, &expected_balances_asset_1, &mut blockchain_state, num_accounts);
+        check_balances(
+            asset,
+            &expected_balances_asset_1,
+            &mut blockchain_state,
+            num_accounts,
+        );
 
         print_balances(
             "=== Balances after swap for the first asset ===",
@@ -178,7 +206,12 @@ impl Runnable for TestAssetSwapsCmd {
 
         mine(&mut blockchain_state, &mut rpc_client, txns);
 
-        check_balances(asset, &expected_balances, &mut blockchain_state, num_accounts);
+        check_balances(
+            asset,
+            &expected_balances,
+            &mut blockchain_state,
+            num_accounts,
+        );
         print_balances(
             "=== Balances after transfer ===",
             asset,
