@@ -12,7 +12,9 @@ use crate::commands::test_balances::{
     BurnInfo, TestBalances, TransferInfo, TxiBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
+use crate::components::transactions::{
+    create_issue_transaction, create_finalization_transaction, mine, sync_from_height,
+};
 use crate::components::user::User;
 use crate::prelude::*;
 use abscissa_core::{Command, Runnable};
@@ -55,7 +57,8 @@ impl Runnable for TestOrchardZSACmd {
 
         print_balances("=== Initial balances ===", asset, num_accounts, &mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]));
+        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]))
+            .expect("block mined successfully");
 
         print_balances(
             "=== Balances after issue ===",
@@ -74,7 +77,7 @@ impl Runnable for TestOrchardZSACmd {
 
         let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, txs);
+        mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
         check_balances(asset, &expected_balances, &mut wallet, num_accounts);
 
@@ -99,7 +102,7 @@ impl Runnable for TestOrchardZSACmd {
 
         let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, txs);
+        mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
         // burn from issuer(account0) and alice(account1)
         check_balances(asset, &expected_balances, &mut wallet, num_accounts);

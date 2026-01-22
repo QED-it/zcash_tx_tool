@@ -52,7 +52,8 @@ impl Runnable for TestOrchardCmd {
 
         let shielding_tx =
             create_shield_coinbase_transaction(miner_addr, coinbase_txid, &mut wallet);
-        mine(&mut wallet, &mut rpc_client, Vec::from([shielding_tx]));
+        mine(&mut wallet, &mut rpc_client, Vec::from([shielding_tx]))
+            .expect("block mined successfully");
 
         let expected_balances = expected_balances_after_mine(&balances, 0);
         check_balances(
@@ -84,7 +85,7 @@ impl Runnable for TestOrchardCmd {
 
         let txs = txi.to_transactions(&mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, txs);
+        mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
         check_balances(
             AssetBase::native(),
@@ -104,6 +105,7 @@ impl Runnable for TestOrchardCmd {
 fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) -> TxId {
     sync_from_height(target_height, wallet, rpc_client);
     let activate = wallet.last_block_height().is_none();
-    let (_, coinbase_txid) = mine_empty_blocks(100, rpc_client, activate); // coinbase maturity = 100
+    let (_, coinbase_txid) =
+        mine_empty_blocks(100, rpc_client, activate).expect("block mined successfully"); // coinbase maturity = 100
     coinbase_txid
 }
