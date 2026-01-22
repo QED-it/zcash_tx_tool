@@ -659,7 +659,7 @@ fn build_tx(
     tss: &TransparentSigningSet,
     orchard_saks: &[SpendAuthorizingKey],
 ) -> Transaction {
-    let fee_rule = &FeeRule::non_standard(Zatoshis::from_u64(0).unwrap(), 20, 150, 34).unwrap();
+    let fee_rule = &FeeRule::non_standard(Zatoshis::from_u64(0).unwrap(), 20, 150, 34, 0).unwrap();
     let prover = LocalTxProver::with_default_location();
     match prover {
         None => {
@@ -667,7 +667,7 @@ fn build_tx(
         }
         Some(prover) => {
             let tx = builder
-                .build(tss, &[], orchard_saks, OsRng, &prover, &prover, fee_rule)
+                .build(tss, &[], orchard_saks, OsRng, &prover, &prover, fee_rule, |_| false)
                 .unwrap()
                 .into_transaction();
             info!("Build tx: {}", tx.txid());
