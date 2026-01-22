@@ -25,11 +25,11 @@ impl TestBalances {
     }
 
     pub(crate) fn increment(&mut self, account: u32, amount: u64) {
-        self.0[account as usize] = self.0[account as usize] + amount;
+        self.0[account as usize] += amount;
     }
 
     pub(crate) fn decrement(&mut self, account: u32, amount: u64) {
-        self.0[account as usize] = self.0[account as usize] - amount;
+        self.0[account as usize] -= amount;
     }
 }
 

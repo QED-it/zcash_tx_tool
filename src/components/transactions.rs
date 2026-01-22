@@ -370,6 +370,7 @@ pub fn create_swap_transaction(
 }
 
 /// Create a 3-party swap transaction with matcher
+#[allow(clippy::too_many_arguments)]
 pub fn create_swap_transaction_with_matcher(
     party_a: u32,
     party_b: u32,
