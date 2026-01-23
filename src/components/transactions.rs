@@ -36,7 +36,6 @@ pub fn mine(
 ) -> Result<(), Box<dyn Error>> {
     let activate = wallet.last_block_height().is_none();
     let (_, _) = mine_block(rpc_client, txs, activate)?;
-    // Only sync if mining succeeded
     sync(wallet, rpc_client);
     Ok(())
 }

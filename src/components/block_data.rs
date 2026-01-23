@@ -4,19 +4,13 @@
 //! database as the wallet state (via `DATABASE_URL`), enabling:
 //! - Resumable sync from the last stored block
 //! - Chain reorganization detection by verifying block hash continuity
-//!
-//! Backwards compatibility: if a legacy `block_cache.json` file is present, it will be
-//! imported into SQLite on load and then removed.
 
 use diesel::prelude::*;
 use diesel::sql_query;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::fs;
-use std::path::PathBuf;
 use std::{env, fmt};
 
-const LEGACY_FILE_NAME: &str = "block_cache.json";
 const CREATE_TABLE_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS block_data (
     height INTEGER PRIMARY KEY NOT NULL,
@@ -32,7 +26,6 @@ pub struct BlockInfo {
     pub hash: String,
     pub prev_hash: String,
     /// Hex-encoded full transactions for this block.
-    /// Optional for backwards compatibility with older legacy files.
     #[serde(default)]
     pub tx_hex: Vec<String>,
 }
@@ -59,9 +52,6 @@ impl BlockData {
             blocks: BTreeMap::new(),
             dirty: false,
         };
-
-        // If a legacy JSON file exists, import it first (best-effort).
-        data.import_legacy_json_if_present(&mut conn);
 
         // Load from SQLite.
         use crate::schema::block_data::dsl as bd;
@@ -135,14 +125,6 @@ impl BlockData {
         }
     }
 
-    /// Get the path to the legacy JSON file
-    fn legacy_file_path() -> PathBuf {
-        // Keep the path stable regardless of the current working directory.
-        // Without anchoring the path, running the binary from a different CWD
-        // would create a new file and force a full re-download of blocks.
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(LEGACY_FILE_NAME)
-    }
-
     /// Get the last (highest) stored block height
     pub fn last_height(&self) -> Option<u32> {
         self.blocks.keys().last().copied()
@@ -188,12 +170,8 @@ impl BlockData {
         self.dirty = true;
     }
 
-    /// Clear the persistent block data from SQLite (and remove any legacy JSON file).
+    /// Clear the persistent block data from SQLite.
     pub fn delete_file() {
-        // Remove legacy JSON file if present.
-        let path = Self::legacy_file_path();
-        let _ = fs::remove_file(path);
-
         let database_url = database_url();
         Self::delete_from_url(&database_url);
     }
@@ -204,41 +182,6 @@ impl BlockData {
         use crate::schema::block_data::dsl as bd;
         let _ = diesel::delete(bd::block_data).execute(&mut conn);
     }
-
-    fn import_legacy_json_if_present(&mut self, conn: &mut SqliteConnection) {
-        let path = Self::legacy_file_path();
-        if !path.exists() {
-            return;
-        }
-
-        // Only import if SQLite storage is empty.
-        use crate::schema::block_data::dsl as bd;
-        let existing: i64 = bd::block_data.count().get_result(conn).unwrap_or(0);
-        if existing > 0 {
-            let _ = fs::remove_file(path);
-            return;
-        }
-
-        let json = match fs::read_to_string(&path) {
-            Ok(s) => s,
-            Err(_) => return,
-        };
-        let legacy: LegacyJsonBlockData = match serde_json::from_str(&json) {
-            Ok(v) => v,
-            Err(_) => return,
-        };
-
-        self.blocks = legacy.blocks;
-        self.dirty = true;
-        // Persist immediately so that load reads from SQLite consistently.
-        self.save_to_connection(conn);
-        let _ = fs::remove_file(path);
-    }
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct LegacyJsonBlockData {
-    blocks: BTreeMap<u32, BlockInfo>,
 }
 
 #[derive(Queryable, Selectable)]

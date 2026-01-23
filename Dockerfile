@@ -17,7 +17,7 @@ COPY . .
 # Install diesel_cli with specific version
 RUN cargo install diesel_cli@2.1.1 --no-default-features --features sqlite --locked
 
-# Run migrations for wallet_init only (block_cache is created programmatically)
+# Run migrations
 RUN diesel migration run
 
 # Build the application in release mode

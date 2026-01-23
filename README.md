@@ -93,7 +93,7 @@ Install Diesel CLI and set up the database and get Zcash Params for Sapling:
 cargo install diesel_cli --no-default-features --features sqlite
 
 # Set up the database
-diesel setup # Investigate this for the table generations (migrations)
+diesel setup
 
 # Get Zcash Params for Sapling (if needed)
 ./zcutil/fetch-params.sh

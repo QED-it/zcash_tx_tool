@@ -32,7 +32,6 @@ impl Runnable for TestThreePartyCmd {
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
         let mut wallet = User::random(&config.wallet.miner_seed_phrase);
 
-        // reset() clears wallet state but preserves block data for faster re-sync
         wallet.reset();
         prepare_test(
             config.chain.nu7_activation_height,

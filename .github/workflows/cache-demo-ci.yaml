@@ -11,12 +11,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Free disk space (safe cleanup for Rust CI)
-        run: |
-          sudo rm -rf /usr/local/lib/android || true
-          sudo rm -rf /opt/hostedtoolcache || true
-          df -h
-
       - name: Checkout tx-tool code
         uses: actions/checkout@v3
         with:
