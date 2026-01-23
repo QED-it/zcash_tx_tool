@@ -1,0 +1,9 @@
+If I get
+
+The application panicked (crashed).
+Message:  Error loading notes: DatabaseError(Unknown, "no such column: notes.rho")
+
+Do
+
+mv walletdb.sqlite walletdb.sqlite.prev
+diesel setup
