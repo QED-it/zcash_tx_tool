@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 use std::iter::FromIterator;
 /// Partially copied from `zebra/zebra-chain/src/block/merkle.rs`
-use std::fmt;
+use std::{fmt, iter};
 
 use hex::{FromHex, ToHex};
 use sha2::{Digest, Sha256};
@@ -239,7 +239,7 @@ impl FromIterator<[u8; 32]> for AuthDataRoot {
         // https://zips.z.cash/zip-0244#block-header-changes
         // Pad with enough leaves to make the tree full (a power of 2).
         let pad_count = hashes.len().next_power_of_two() - hashes.len();
-        hashes.extend(std::iter::repeat_n([0u8; 32], pad_count));
+        hashes.extend(iter::repeat([0u8; 32]).take(pad_count));
         assert!(hashes.len().is_power_of_two());
 
         while hashes.len() > 1 {
