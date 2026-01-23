@@ -198,7 +198,7 @@ struct RpcResponse<T> {
 
 // Trim the log string if longer than INFO_MAX_LEN
 fn trim_info_log_string(s: &str) -> String {
-    const INFO_MAX_LEN: usize = 50;
+    const INFO_MAX_LEN: usize = 500;
 
     if s.len() > INFO_MAX_LEN {
         format!("{}...", &s.chars().take(INFO_MAX_LEN).collect::<String>())
