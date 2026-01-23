@@ -1,3 +1,1 @@
 DROP TABLE IF EXISTS block_data;
-
-

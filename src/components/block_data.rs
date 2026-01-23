@@ -171,7 +171,7 @@ impl BlockData {
     }
 
     /// Clear the persistent block data from SQLite.
-    pub fn delete_file() {
+    pub fn clear_from_db() {
         let database_url = database_url();
         Self::delete_from_url(&database_url);
     }

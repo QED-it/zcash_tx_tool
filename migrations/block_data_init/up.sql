@@ -4,5 +4,3 @@ CREATE TABLE IF NOT EXISTS block_data (
     prev_hash TEXT NOT NULL,
     tx_hex_json TEXT NOT NULL DEFAULT '[]'
 );
-
-

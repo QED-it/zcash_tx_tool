@@ -220,7 +220,7 @@ impl User {
     pub fn reset_full(&mut self) {
         use crate::components::block_data::BlockData;
         self.reset();
-        BlockData::delete_file();
+        BlockData::clear_from_db();
     }
 
     pub fn last_block_hash(&self) -> Option<BlockHash> {
