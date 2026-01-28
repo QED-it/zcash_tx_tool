@@ -17,8 +17,7 @@ use crate::commands::test_balances::{
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{
-    create_issue_transaction, create_finalization_transaction, mine,
-    sync_from_height,
+    create_issue_transaction, create_finalization_transaction, mine, sync_from_height,
 };
 use crate::components::user::User;
 use crate::prelude::*;
