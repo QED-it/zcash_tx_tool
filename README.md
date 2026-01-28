@@ -220,10 +220,10 @@ brew install act
 curl https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
 
 # Run the block data demo workflow
-act workflow_dispatch -W .github/workflows/cache-demo-ci.yaml
+act workflow_dispatch -W .github/workflows/block-data-test-ci.yaml
 
 # Or run on push event (simulating a push to main)
-act push -W .github/workflows/cache-demo-ci.yaml
+act push -W .github/workflows/block-data-test-ci.yaml
 ```
 
 **Note**: The workflow requires significant disk space (~20GB) and may take 15-30 minutes to complete due to Docker image builds.
