@@ -226,7 +226,7 @@ act workflow_dispatch -W .github/workflows/block-data-test-ci.yaml
 act push -W .github/workflows/block-data-test-ci.yaml
 ```
 
-**Note**: The workflow requires significant disk space (~20GB) and may take 15-30 minutes to complete due to Docker image builds.
+**Note**: The workflow requires significant disk space (~20GB) and may take 15-30 minutes to complete due to Docker image builds. Subsequent runs will be faster, as Docker caches images locally.
 
 ### Understanding Block Data Storage Behavior
 
