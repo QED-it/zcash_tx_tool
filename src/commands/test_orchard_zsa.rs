@@ -17,7 +17,7 @@ use crate::commands::test_balances::{
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{
-    create_issue_transaction, create_finalization_transaction, mine, mine_block_with_retries,
+    create_issue_transaction, create_finalization_transaction, mine,
     sync_from_height,
 };
 use crate::components::user::User;
@@ -115,10 +115,11 @@ impl Runnable for TestOrchardZSACmd {
 
         let invalid_issue_tx =
             create_issue_transaction(issuer_addr, 2000, asset_desc_hash, true, &mut wallet);
-        // This step is *expected* to be rejected; don't waste time retrying.
-        let result =
-            mine_block_with_retries(&mut rpc_client, vec![invalid_issue_tx.0], false, 1, 0)
-                .map(|_| ());
+        let result = mine(
+            &mut wallet,
+            &mut rpc_client,
+            Vec::from([invalid_issue_tx.0]),
+        );
         assert!(
             result.is_err(),
             "Issue transaction was unexpectedly accepted after asset finalization"

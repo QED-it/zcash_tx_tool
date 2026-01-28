@@ -41,65 +41,20 @@ pub fn mine(
 }
 
 /// Mine a block with the given transactions and return the block height and coinbase txid
-/// Retries up to MAX_MINE_RETRIES times if block is rejected (e.g., due to race condition on shared testnet)
 pub fn mine_block(
     rpc_client: &mut dyn RpcClient,
     txs: Vec<Transaction>,
     activate: bool,
 ) -> Result<(u32, TxId), Box<dyn Error>> {
-    // Shared testnet is noisy; give ourselves more chances with a longer backoff.
-    const MAX_MINE_RETRIES: u32 = 10;
-    const RETRY_DELAY_MS: u64 = 1_000;
-    mine_block_with_retries(rpc_client, txs, activate, MAX_MINE_RETRIES, RETRY_DELAY_MS)
-}
+    let block_template = rpc_client.get_block_template()?;
+    let block_height = block_template.height;
 
-/// Mine a block but control retry policy.
-/// Use `max_retries = 1` for "expected rejection" tests to avoid wasting time.
-pub fn mine_block_with_retries(
-    rpc_client: &mut dyn RpcClient,
-    txs: Vec<Transaction>,
-    activate: bool,
-    max_retries: u32,
-    retry_delay_ms: u64,
-) -> Result<(u32, TxId), Box<dyn Error>> {
-    // Serialize transactions once for potential retries
-    let tx_bytes: Vec<Vec<u8>> = txs
-        .iter()
-        .map(|tx| {
-            let mut bytes = vec![];
-            tx.write(&mut bytes).unwrap();
-            bytes
-        })
-        .collect();
+    let block_proposal = template_into_proposal(block_template, txs, activate);
+    let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
 
-    for attempt in 1..=max_retries {
-        let block_template = rpc_client.get_block_template()?;
-        let block_height = block_template.height;
+    rpc_client.submit_block(block_proposal)?;
 
-        // Re-parse transactions from bytes for each attempt
-        let txs_for_attempt: Vec<Transaction> = tx_bytes
-            .iter()
-            .map(|bytes| Transaction::read(&bytes[..], BranchId::Nu6).unwrap())
-            .collect();
-
-        let block_proposal = template_into_proposal(block_template, txs_for_attempt, activate);
-        let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
-
-        match rpc_client.submit_block(block_proposal) {
-            Ok(_) => return Ok((block_height, coinbase_txid)),
-            Err(e) if e.to_string().contains("rejected") && attempt < max_retries => {
-                info!(
-                    "Block rejected (attempt {}/{}), retrying after {}ms...",
-                    attempt, max_retries, retry_delay_ms
-                );
-                std::thread::sleep(std::time::Duration::from_millis(retry_delay_ms));
-                continue;
-            }
-            Err(e) => return Err(e),
-        }
-    }
-
-    Err("Max retries exceeded for mining block".into())
+    Ok((block_height, coinbase_txid))
 }
 
 /// Mine the given number of empty blocks and return the block height and coinbase txid of the first block
@@ -421,33 +376,9 @@ fn determine_sync_start_height(
 }
 
 fn fetch_block_txs(tx_ids: &[TxId], rpc: &mut dyn RpcClient) -> Vec<Transaction> {
-    const MAX_TX_RETRIES: u32 = 3;
-    const TX_RETRY_DELAY_MS: u64 = 1000;
-
     tx_ids
         .iter()
-        .map(|tx_id| {
-            for attempt in 1..=MAX_TX_RETRIES {
-                match rpc.get_transaction(tx_id) {
-                    Ok(tx) => return tx,
-                    Err(e) => {
-                        if attempt < MAX_TX_RETRIES {
-                            info!(
-                                "Failed to fetch tx {} (attempt {}/{}): {}, retrying...",
-                                tx_id, attempt, MAX_TX_RETRIES, e
-                            );
-                            std::thread::sleep(std::time::Duration::from_millis(TX_RETRY_DELAY_MS));
-                        } else {
-                            panic!(
-                                "Failed to fetch tx {} after {} attempts: {}",
-                                tx_id, MAX_TX_RETRIES, e
-                            );
-                        }
-                    }
-                }
-            }
-            unreachable!()
-        })
+        .map(|tx_id| rpc.get_transaction(tx_id).unwrap())
         .collect()
 }
 
