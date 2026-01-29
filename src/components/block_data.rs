@@ -78,7 +78,7 @@ impl BlockData {
             );
         }
 
-        block_data;
+        block_data
     }
 
     /// Save the block data to SQLite.
