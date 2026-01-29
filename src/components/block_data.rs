@@ -34,7 +34,8 @@ pub struct BlockInfo {
 pub struct BlockData {
     /// Map of block height to block info
     pub(crate) blocks: BTreeMap<u32, BlockInfo>,
-    dirty: bool,
+    /// True when in-memory state has changed and should be persisted.
+    unsaved: bool,
 }
 
 impl BlockData {
@@ -48,9 +49,9 @@ impl BlockData {
         let mut conn = establish_connection_with_url(database_url);
         ensure_table(&mut conn);
 
-        let mut data = Self {
+        let mut block_data = Self {
             blocks: BTreeMap::new(),
-            dirty: false,
+            unsaved: false,
         };
 
         // Load from SQLite.
@@ -67,7 +68,7 @@ impl BlockData {
                 Err(_) => continue,
             };
             let tx_hex: Vec<String> = serde_json::from_str(&row.tx_hex_json).unwrap_or_default();
-            data.blocks.insert(
+            block_data.blocks.insert(
                 height_u32,
                 BlockInfo {
                     hash: row.hash,
@@ -77,12 +78,12 @@ impl BlockData {
             );
         }
 
-        data
+        return block_data;
     }
 
     /// Save the block data to SQLite.
     pub fn save(&mut self) {
-        if !self.dirty {
+        if !self.unsaved {
             return;
         }
 
@@ -121,7 +122,7 @@ impl BlockData {
         });
 
         if res.is_ok() {
-            self.dirty = false;
+            self.unsaved = false;
         }
     }
 
@@ -145,7 +146,7 @@ impl BlockData {
                 tx_hex,
             },
         );
-        self.dirty = true;
+        self.unsaved = true;
     }
 
     /// Iterate stored blocks in height order.
@@ -161,13 +162,13 @@ impl BlockData {
     /// Remove all blocks from the given height onwards (for reorg handling)
     pub fn truncate_from(&mut self, from_height: u32) {
         self.blocks.retain(|&h, _| h < from_height);
-        self.dirty = true;
+        self.unsaved = true;
     }
 
     /// Clear all stored blocks
     pub fn clear(&mut self) {
         self.blocks.clear();
-        self.dirty = true;
+        self.unsaved = true;
     }
 
     /// Clear the persistent block data from SQLite.

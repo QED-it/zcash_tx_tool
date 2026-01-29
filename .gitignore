@@ -2,7 +2,6 @@
 /target
 **/*.rs.bk
 /*.sqlite
-block_cache.json
 .secrets
 .claude/
 **/*.sqlite.prev
