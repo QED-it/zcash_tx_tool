@@ -2,9 +2,6 @@
 /target
 **/*.rs.bk
 /*.sqlite
-.secrets
-.claude/
-**/*.sqlite.prev
 
 # Terraform git
 # Local .terraform directories
