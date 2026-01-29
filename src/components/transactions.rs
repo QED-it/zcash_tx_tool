@@ -281,18 +281,15 @@ fn replay_stored_blocks_to_wallet(
 ///
 /// ## Storage Behavior
 ///
-/// This function enables two levels of persistence:
+/// This function handles persistence by checking both wallet state and stored block data:
 ///
-/// 1. **Block Data Only** (current default in tests):
-///    - Tests call `wallet.reset()` which clears wallet state but keeps block data
-///    - Benefit: Validates chain continuity without re-fetching block metadata
-///    - Limitation: Still requires full wallet rescan (note decryption, nullifiers, etc.)
+/// - If wallet has no synced blocks (`wallet_last_block_height == 0`):
+///   → Must start from `from_height` to rebuild note commitment tree
 ///
-/// 2. **Full Persistence** (block data + wallet state):
-///    - Keep wallet state between runs (don't call `reset()`)
-///    - If `wallet_last_block_height > 0` AND stored data is valid:
-///      → Skips the entire sync (no block fetching, no wallet scanning)
-///    - Use case: Production wallets that persist between sessions
+/// - If wallet has synced blocks AND stored block data exists:
+///   → Validates chain continuity and resumes from last valid block
+///   → Handles reorgs by rolling back to the reorg point
+///   → Clears invalid data if chain has diverged completely
 ///
 fn determine_sync_start_height(
     from_height: u32,
