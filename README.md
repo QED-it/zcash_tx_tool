@@ -241,6 +241,22 @@ On subsequent runs, the tool:
 
 **Note**: Test commands call `reset()` which clears wallet state but preserves the block data. For full persistence (skipping wallet rescan entirely), ensure wallet state persists between runs.
 
+## Block Data Storage Considerations
+
+When block data storage is enabled, disk usage depends on average block size and the amount of blocks.
+
+There are currently (January 2026) ~3.2M blocks on Zcash mainnet (i.e., the total number of blocks mined since genesis at the time of writing).
+Approximate totals for ~3.2M Zcash blocks:
+
+- **Minimal blocks (0.5–1 KB):** ~1.6–3.2 GB
+- **Average blocks (50–100 KB):** ~160–322 GB
+- **Heavy blocks (300–500 KB):** ~1.0–1.6 TB
+
+**Notes:**
+- Regtest / ZSA testnet runs are usually near the minimal range.
+- Long-running testnet or mainnet syncs trend toward the average case.
+- Disk usage grows over time unless block data is pruned.
+
 ### About the Workflow
 
 The `act` tool runs the GitHub Actions workflow locally, which uses Docker to build and run both the Zebra node and the tx-tool in containers. This approach is similar to the manual Docker setup described in the [Getting Started](#getting-started) section above, where we build Docker images and run them with environment variables and volume mounts. The workflow automates this process and demonstrates block data persistence between multiple runs of the tx-tool.
