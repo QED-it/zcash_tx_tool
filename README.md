@@ -104,6 +104,7 @@ There are multiple test scenarios provided in the repository, viz.
 * `test-orchard-zsa` (The detailed script for the flow is at [test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs).)
 * `test-three-party` (The detailed script for the flow is at [test_three_party.rs](src/commands/test_three_party.rs).)
 * `test-orchard` (The detailed script for the flow is at [test_orchard.rs](src/commands/test_orchard.rs).)
+* `test-issue-one` (The detailed script for the flow is at [test_issue_one.rs](src/commands/test_issue_one.rs).)
 
 Build and run the test case of your choice using the Zcash Transaction Tool, by replacing `<test-case>` in the command below with either of the test scenarios listed above:
 
@@ -188,6 +189,20 @@ To run the test scenario:
 
 ```bash
 cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-three-party
+```
+
+### Issue One Asset Scenario
+
+This test scenario ([src/commands/test_issue_one.rs](src/commands/test_issue_one.rs)) is a minimal test that performs only the asset issuance step:
+
+1. **Issue an Asset**: Create and issue a single ZSA asset (1 unit).
+
+This simplified scenario is useful for quick testing of the asset issuance functionality without the complexity of transfers and burns.
+
+To run the test scenario:
+
+```bash
+cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-issue-one
 ```
 
 ### Creating your own scenario

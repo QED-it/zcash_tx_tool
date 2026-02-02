@@ -12,11 +12,13 @@
 
 mod clean;
 mod test_balances;
+mod test_issue_one;
 mod test_orchard;
 mod test_orchard_zsa;
 mod test_three_party;
 
 use crate::commands::clean::CleanCmd;
+use crate::commands::test_issue_one::TestIssueOneCmd;
 use crate::commands::test_orchard::TestOrchardCmd;
 use crate::commands::test_orchard_zsa::TestOrchardZSACmd;
 use crate::commands::test_three_party::TestThreePartyCmd;
@@ -33,6 +35,7 @@ pub enum AppCmd {
     TestOrchard(TestOrchardCmd),
     TestOrchardZSA(TestOrchardZSACmd),
     TestThreeParty(TestThreePartyCmd),
+    TestIssueOne(TestIssueOneCmd),
     Clean(CleanCmd),
 }
 
