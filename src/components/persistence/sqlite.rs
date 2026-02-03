@@ -124,8 +124,7 @@ impl SqliteDataStorage {
         if deleted > 0 {
             info!(
                 "Reorg: deleted {} notes created at or after height {}",
-                deleted,
-                reorg_height
+                deleted, reorg_height
             );
         }
 
@@ -149,8 +148,7 @@ impl SqliteDataStorage {
         if updated > 0 {
             info!(
                 "Reorg: cleared spend info for {} notes spent at or after height {}",
-                updated,
-                reorg_height
+                updated, reorg_height
             );
         }
     }

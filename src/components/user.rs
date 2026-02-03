@@ -70,6 +70,14 @@ pub struct NoteSpendMetadata {
     pub merkle_path: MerklePath,
 }
 
+/// Holds decrypted note information for storage
+struct DecryptedNoteData {
+    ivk: IncomingViewingKey,
+    note: Note,
+    recipient: Address,
+    memo_bytes: [u8; 512],
+}
+
 struct KeyStore {
     accounts: BTreeMap<u32, Address>,
     payment_addresses: BTreeMap<OrderedAddress, IncomingViewingKey>,
@@ -402,7 +410,11 @@ impl User {
 
     /// Add note data to the user, and return a data structure that describes
     /// the actions that are involved with this user.
-    fn add_notes_from_tx(&mut self, tx: Transaction, block_height: i32) -> Result<(), BundleLoadError> {
+    fn add_notes_from_tx(
+        &mut self,
+        tx: Transaction,
+        block_height: i32,
+    ) -> Result<(), BundleLoadError> {
         let mut issued_notes_offset = 0;
 
         if let Some(orchard_bundle) = tx.orchard_bundle() {
@@ -423,7 +435,12 @@ impl User {
 
         // Add notes from Issue bundle
         if let Some(issue_bundle) = tx.issue_bundle() {
-            self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, issued_notes_offset, block_height);
+            self.add_notes_from_issue_bundle(
+                &tx.txid(),
+                issue_bundle,
+                issued_notes_offset,
+                block_height,
+            );
         };
 
         self.add_note_commitments(&tx.txid(), tx.orchard_bundle(), tx.issue_bundle())
@@ -451,8 +468,18 @@ impl User {
 
         for (action_idx, ivk, note, recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
             info!("Store note");
-            self.store_note(txid, action_idx, ivk.clone(), note, recipient, memo, block_height)
-                .unwrap();
+            self.store_note(
+                txid,
+                action_idx,
+                DecryptedNoteData {
+                    ivk: ivk.clone(),
+                    note,
+                    recipient,
+                    memo_bytes: memo,
+                },
+                block_height,
+            )
+            .unwrap();
         }
     }
 
@@ -471,10 +498,12 @@ impl User {
                 self.store_note(
                     txid,
                     note_index,
-                    ivk.clone(),
-                    *note,
-                    note.recipient(),
-                    [0; 512],
+                    DecryptedNoteData {
+                        ivk: ivk.clone(),
+                        note: *note,
+                        recipient: note.recipient(),
+                        memo_bytes: [0; 512],
+                    },
                     block_height,
                 )
                 .unwrap();
@@ -486,44 +515,42 @@ impl User {
         &mut self,
         txid: &TxId,
         action_index: usize,
-        ivk: IncomingViewingKey,
-        note: Note,
-        recipient: Address,
-        memo_bytes: [u8; 512],
+        note_data: DecryptedNoteData,
         block_height: i32,
     ) -> Result<(), BundleLoadError> {
-        if let Some(fvk) = self.key_store.viewing_keys.get(&ivk) {
+        if let Some(fvk) = self.key_store.viewing_keys.get(&note_data.ivk) {
             info!("Adding decrypted note to the user");
 
             let mut note_bytes = vec![];
-            write_note(&mut note_bytes, &note).unwrap();
+            write_note(&mut note_bytes, &note_data.note).unwrap();
 
-            let note_data = NoteData {
+            let db_note_data = NoteData {
                 id: 0,
-                amount: note.value().inner() as i64,
-                asset: note.asset().to_bytes().to_vec(),
+                amount: note_data.note.value().inner() as i64,
+                asset: note_data.note.asset().to_bytes().to_vec(),
                 tx_id: txid.as_ref().to_vec(),
                 action_index: action_index as i32,
                 position: -1,
-                memo: memo_bytes.to_vec(),
-                rho: note.rho().to_bytes().to_vec(),
-                nullifier: note.nullifier(fvk).to_bytes().to_vec(),
-                rseed: note.rseed().as_bytes().to_vec(),
-                recipient_address: recipient.to_raw_address_bytes().to_vec(),
+                memo: note_data.memo_bytes.to_vec(),
+                rho: note_data.note.rho().to_bytes().to_vec(),
+                nullifier: note_data.note.nullifier(fvk).to_bytes().to_vec(),
+                rseed: note_data.note.rseed().as_bytes().to_vec(),
+                recipient_address: note_data.recipient.to_raw_address_bytes().to_vec(),
                 spend_tx_id: None,
                 spend_action_index: -1,
                 origin_block_height: block_height,
                 spend_block_height: None,
             };
-            self.db.insert_note(note_data);
+            self.db.insert_note(db_note_data);
 
             // add the association between the address and the IVK used
             // to decrypt the note
-            self.key_store.add_raw_address(recipient, ivk.clone());
+            self.key_store
+                .add_raw_address(note_data.recipient, note_data.ivk.clone());
             Ok(())
         } else {
             info!("Can't add decrypted note, missing FVK");
-            Err(BundleLoadError::FvkNotFound(ivk.clone()))
+            Err(BundleLoadError::FvkNotFound(note_data.ivk.clone()))
         }
     }
 
