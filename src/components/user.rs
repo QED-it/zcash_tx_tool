@@ -537,7 +537,6 @@ impl User {
                 rseed: note_data.note.rseed().as_bytes().to_vec(),
                 recipient_address: note_data.recipient.to_raw_address_bytes().to_vec(),
                 spend_tx_id: None,
-                spend_action_index: -1,
                 origin_block_height: block_height,
                 spend_block_height: None,
             };
@@ -560,11 +559,11 @@ impl User {
         orchard_bundle: &Bundle<Authorized, ZatBalance, O>,
         block_height: i32,
     ) {
-        for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
+        for (_action_index, action) in orchard_bundle.actions().iter().enumerate() {
             if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {
                 info!("Adding spend of nullifier {:?}", action.nullifier());
                 self.db
-                    .mark_as_potentially_spent(note.id, txid, action_index as i32, block_height);
+                    .mark_as_potentially_spent(note.id, txid, block_height);
             }
         }
     }
