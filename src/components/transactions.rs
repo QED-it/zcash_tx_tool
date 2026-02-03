@@ -342,6 +342,8 @@ fn determine_sync_start_height(
                         "Chain reorganization detected at height {}, clearing stored data from that point",
                         reorg_height
                     );
+                    // Clean up notes from invalidated blocks before truncating block data
+                    wallet.handle_reorg(reorg_height);
                     block_data.truncate_from(reorg_height);
                     block_data.save();
                     reorg_height.max(from_height)

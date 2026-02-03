@@ -17,6 +17,8 @@ pub struct NoteData {
     pub recipient_address: Vec<u8>,
     pub spend_tx_id: Option<Vec<u8>>,
     pub spend_action_index: i32,
+    pub origin_block_height: i32,
+    pub spend_block_height: Option<i32>,
 }
 
 #[derive(Insertable)]
@@ -35,6 +37,8 @@ pub struct InsertableNoteData {
     pub recipient_address: Vec<u8>,
     pub spend_tx_id: Option<Vec<u8>>,
     pub spend_action_index: i32,
+    pub origin_block_height: i32,
+    pub spend_block_height: Option<i32>,
 }
 
 impl InsertableNoteData {
@@ -50,8 +54,10 @@ impl InsertableNoteData {
             nullifier: note.nullifier,
             rseed: note.rseed,
             recipient_address: note.recipient_address,
-            spend_tx_id: note.spend_tx_id,
-            spend_action_index: note.spend_action_index,
+            spend_tx_id: note.spend_tx_id, // If set (not null), the note has been spent
+            spend_action_index: note.spend_action_index, // If set (not -1), the action index of the spend
+            origin_block_height: note.origin_block_height,
+            spend_block_height: note.spend_block_height,
         }
     }
 }

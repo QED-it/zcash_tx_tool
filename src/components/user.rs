@@ -198,6 +198,19 @@ impl User {
         BlockData::clear_from_db();
     }
 
+    /// Handle blockchain reorganization by cleaning up invalidated note data.
+    /// This should be called when a reorg is detected, before truncating block data.
+    /// - Deletes notes that were created in blocks at or after `reorg_height`
+    /// - Clears spend info for notes that were spent in blocks at or after `reorg_height`
+    pub fn handle_reorg(&mut self, reorg_height: u32) {
+        info!("Handling reorg from height {}", reorg_height);
+        self.db.handle_reorg(reorg_height as i32);
+        // Reset the commitment tree since it may contain commitments from invalidated blocks
+        self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
+        self.last_block_height = None;
+        self.last_block_hash = None;
+    }
+
     pub fn last_block_hash(&self) -> Option<BlockHash> {
         self.last_block_hash
     }
@@ -374,9 +387,10 @@ impl User {
         block_hash: BlockHash,
         transactions: Vec<Transaction>,
     ) -> Result<(), BundleLoadError> {
+        let height_i32 = u32::from(block_height) as i32;
         transactions.into_iter().try_for_each(|tx| {
             if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
-                self.add_notes_from_tx(tx)?;
+                self.add_notes_from_tx(tx, height_i32)?;
             };
             Ok(())
         })?;
@@ -388,7 +402,7 @@ impl User {
 
     /// Add note data to the user, and return a data structure that describes
     /// the actions that are involved with this user.
-    pub fn add_notes_from_tx(&mut self, tx: Transaction) -> Result<(), BundleLoadError> {
+    fn add_notes_from_tx(&mut self, tx: Transaction, block_height: i32) -> Result<(), BundleLoadError> {
         let mut issued_notes_offset = 0;
 
         if let Some(orchard_bundle) = tx.orchard_bundle() {
@@ -396,20 +410,20 @@ impl User {
             match orchard_bundle {
                 OrchardBundle::OrchardVanilla(b) => {
                     issued_notes_offset = b.actions().len();
-                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
-                    self.mark_potential_spends(&tx.txid(), b);
+                    self.add_notes_from_orchard_bundle(&tx.txid(), b, block_height);
+                    self.mark_potential_spends(&tx.txid(), b, block_height);
                 }
                 OrchardBundle::OrchardZSA(b) => {
                     issued_notes_offset = b.actions().len();
-                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
-                    self.mark_potential_spends(&tx.txid(), b);
+                    self.add_notes_from_orchard_bundle(&tx.txid(), b, block_height);
+                    self.mark_potential_spends(&tx.txid(), b, block_height);
                 }
             }
         };
 
         // Add notes from Issue bundle
         if let Some(issue_bundle) = tx.issue_bundle() {
-            self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, issued_notes_offset);
+            self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, issued_notes_offset, block_height);
         };
 
         self.add_note_commitments(&tx.txid(), tx.orchard_bundle(), tx.issue_bundle())
@@ -426,6 +440,7 @@ impl User {
         &mut self,
         txid: &TxId,
         bundle: &Bundle<Authorized, ZatBalance, O>,
+        block_height: i32,
     ) {
         let keys = self
             .key_store
@@ -436,7 +451,7 @@ impl User {
 
         for (action_idx, ivk, note, recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
             info!("Store note");
-            self.store_note(txid, action_idx, ivk.clone(), note, recipient, memo)
+            self.store_note(txid, action_idx, ivk.clone(), note, recipient, memo, block_height)
                 .unwrap();
         }
     }
@@ -448,6 +463,7 @@ impl User {
         txid: &TxId,
         bundle: &IssueBundle<Signed>,
         note_index_offset: usize,
+        block_height: i32,
     ) {
         for (note_index, note) in bundle.actions().iter().flat_map(|a| a.notes()).enumerate() {
             if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
@@ -459,6 +475,7 @@ impl User {
                     *note,
                     note.recipient(),
                     [0; 512],
+                    block_height,
                 )
                 .unwrap();
             }
@@ -473,6 +490,7 @@ impl User {
         note: Note,
         recipient: Address,
         memo_bytes: [u8; 512],
+        block_height: i32,
     ) -> Result<(), BundleLoadError> {
         if let Some(fvk) = self.key_store.viewing_keys.get(&ivk) {
             info!("Adding decrypted note to the user");
@@ -494,6 +512,8 @@ impl User {
                 recipient_address: recipient.to_raw_address_bytes().to_vec(),
                 spend_tx_id: None,
                 spend_action_index: -1,
+                origin_block_height: block_height,
+                spend_block_height: None,
             };
             self.db.insert_note(note_data);
 
@@ -511,12 +531,13 @@ impl User {
         &mut self,
         txid: &TxId,
         orchard_bundle: &Bundle<Authorized, ZatBalance, O>,
+        block_height: i32,
     ) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {
                 info!("Adding spend of nullifier {:?}", action.nullifier());
                 self.db
-                    .mark_as_potentially_spent(note.id, txid, action_index as i32);
+                    .mark_as_potentially_spent(note.id, txid, action_index as i32, block_height);
             }
         }
     }
