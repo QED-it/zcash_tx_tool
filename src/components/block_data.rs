@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS block_data (
     height INTEGER PRIMARY KEY NOT NULL,
     hash TEXT NOT NULL,
     prev_hash TEXT NOT NULL,
-    tx_hex_json TEXT NOT NULL DEFAULT '[]'
+    tx_data_json TEXT NOT NULL DEFAULT '[]'
 );
 "#;
 
@@ -67,7 +67,7 @@ impl BlockData {
                 Ok(h) => h,
                 Err(_) => continue,
             };
-            let tx_hex: Vec<String> = serde_json::from_str(&row.tx_hex_json).unwrap_or_default();
+            let tx_hex: Vec<String> = serde_json::from_str(&row.tx_data_json).unwrap_or_default();
             block_data.blocks.insert(
                 height_u32,
                 BlockInfo {
@@ -100,12 +100,12 @@ impl BlockData {
             .iter()
             .filter_map(|(h, b)| {
                 let height_i32 = i32::try_from(*h).ok()?;
-                let tx_hex_json = serde_json::to_string(&b.tx_hex).ok()?;
+                let tx_data_json = serde_json::to_string(&b.tx_hex).ok()?;
                 Some(NewBlockDataRow {
                     height: height_i32,
                     hash: b.hash.clone(),
                     prev_hash: b.prev_hash.clone(),
-                    tx_hex_json,
+                    tx_data_json,
                 })
             })
             .collect::<Vec<_>>();
@@ -192,7 +192,7 @@ struct BlockDataRow {
     height: i32,
     hash: String,
     prev_hash: String,
-    tx_hex_json: String,
+    tx_data_json: String,
 }
 
 #[derive(Insertable)]
@@ -202,7 +202,7 @@ struct NewBlockDataRow {
     height: i32,
     hash: String,
     prev_hash: String,
-    tx_hex_json: String,
+    tx_data_json: String,
 }
 
 fn ensure_table(conn: &mut SqliteConnection) {
