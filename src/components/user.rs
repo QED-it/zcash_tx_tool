@@ -559,7 +559,7 @@ impl User {
         orchard_bundle: &Bundle<Authorized, ZatBalance, O>,
         block_height: i32,
     ) {
-        for (_action_index, action) in orchard_bundle.actions().iter().enumerate() {
+        for action in orchard_bundle.actions().iter() {
             if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {
                 info!("Adding spend of nullifier {:?}", action.nullifier());
                 self.db
