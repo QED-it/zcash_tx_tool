@@ -11,6 +11,7 @@ CREATE TABLE notes (
     rseed BINARY(32) NOT NULL,
     recipient_address BINARY(43) NOT NULL,
     spend_tx_id BINARY(32),
+    spend_action_index INTEGER NOT NULL,
     origin_block_height INTEGER NOT NULL DEFAULT 0,
     spend_block_height INTEGER
 )

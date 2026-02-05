@@ -515,28 +515,29 @@ impl User {
         &mut self,
         txid: &TxId,
         action_index: usize,
-        note_data: DecryptedNoteData,
+        note: DecryptedNoteData,
         block_height: i32,
     ) -> Result<(), BundleLoadError> {
-        if let Some(fvk) = self.key_store.viewing_keys.get(&note_data.ivk) {
+        if let Some(fvk) = self.key_store.viewing_keys.get(&note.ivk) {
             info!("Adding decrypted note to the user");
 
             let mut note_bytes = vec![];
-            write_note(&mut note_bytes, &note_data.note).unwrap();
+            write_note(&mut note_bytes, &note.note).unwrap();
 
             let db_note_data = NoteData {
                 id: 0,
-                amount: note_data.note.value().inner() as i64,
-                asset: note_data.note.asset().to_bytes().to_vec(),
+                amount: note.note.value().inner() as i64,
+                asset: note.note.asset().to_bytes().to_vec(),
                 tx_id: txid.as_ref().to_vec(),
                 action_index: action_index as i32,
                 position: -1,
-                memo: note_data.memo_bytes.to_vec(),
-                rho: note_data.note.rho().to_bytes().to_vec(),
-                nullifier: note_data.note.nullifier(fvk).to_bytes().to_vec(),
-                rseed: note_data.note.rseed().as_bytes().to_vec(),
-                recipient_address: note_data.recipient.to_raw_address_bytes().to_vec(),
+                memo: note.memo_bytes.to_vec(),
+                rho: note.note.rho().to_bytes().to_vec(),
+                nullifier: note.note.nullifier(fvk).to_bytes().to_vec(),
+                rseed: note.note.rseed().as_bytes().to_vec(),
+                recipient_address: note.recipient.to_raw_address_bytes().to_vec(),
                 spend_tx_id: None,
+                spend_action_index: -1,
                 origin_block_height: block_height,
                 spend_block_height: None,
             };
@@ -545,11 +546,11 @@ impl User {
             // add the association between the address and the IVK used
             // to decrypt the note
             self.key_store
-                .add_raw_address(note_data.recipient, note_data.ivk.clone());
+                .add_raw_address(note.recipient, note.ivk.clone());
             Ok(())
         } else {
             info!("Can't add decrypted note, missing FVK");
-            Err(BundleLoadError::FvkNotFound(note_data.ivk.clone()))
+            Err(BundleLoadError::FvkNotFound(note.ivk.clone()))
         }
     }
 
@@ -559,11 +560,11 @@ impl User {
         orchard_bundle: &Bundle<Authorized, ZatBalance, O>,
         block_height: i32,
     ) {
-        for action in orchard_bundle.actions().iter() {
+        for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {
                 info!("Adding spend of nullifier {:?}", action.nullifier());
                 self.db
-                    .mark_as_potentially_spent(note.id, txid, block_height);
+                    .mark_as_potentially_spent(note.id, txid, action_index as i32, block_height);
             }
         }
     }

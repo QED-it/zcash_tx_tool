@@ -75,12 +75,14 @@ impl SqliteDataStorage {
         &mut self,
         note_id: i32,
         spend_tx_id_value: &TxId,
+        spend_action_index_value: i32,
         spend_block_height_value: i32,
     ) {
         diesel::update(notes)
             .filter(id.eq(note_id))
             .set((
                 spend_tx_id.eq(spend_tx_id_value.as_ref().to_vec()),
+                spend_action_index.eq(spend_action_index_value),
                 spend_block_height.eq(spend_block_height_value),
             ))
             .execute(&mut self.connection)
