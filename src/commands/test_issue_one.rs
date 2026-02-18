@@ -30,13 +30,9 @@ impl Runnable for TestIssueOneCmd {
         let mut wallet = User::random_with_uniqueness(&config.wallet.miner_seed_phrase, timestamp);
 
         wallet.reset();
-
         let num_users = 1;
-
         let issuer_idx = 0;
-
         let issuer_addr = wallet.address_for_account(issuer_idx, External);
-
         let asset_desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(b"WETH").unwrap());
         prepare_test(
             config.chain.nu7_activation_height,
@@ -48,7 +44,6 @@ impl Runnable for TestIssueOneCmd {
 
         let (issue_tx, asset) =
             create_issue_transaction(issuer_addr, 1, asset_desc_hash, true, &mut wallet);
-
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
 
