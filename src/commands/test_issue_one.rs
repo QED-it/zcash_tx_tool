@@ -9,9 +9,7 @@ use orchard::issuance::compute_asset_desc_hash;
 use orchard::keys::Scope::External;
 use crate::commands::test_balances::{print_balances, TestBalances};
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{
-    create_issue_transaction, mine, sync_from_height,
-};
+use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
 use crate::components::user::User;
 use crate::prelude::*;
 
@@ -65,4 +63,3 @@ impl Runnable for TestIssueOneCmd {
 fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) {
     sync_from_height(target_height, wallet, rpc_client);
 }
-
