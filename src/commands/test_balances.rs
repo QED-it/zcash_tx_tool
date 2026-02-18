@@ -141,29 +141,25 @@ pub(crate) fn expected_balances_after_transfer(
     balances: &TestBalances,
     txi: &TxiBatch<TransferInfo>,
 ) -> TestBalances {
-    let new_balances = txi
-        .to_vec()
+    txi.to_vec()
         .iter()
         .fold(balances.clone(), |mut acc, transfer_info| {
             acc.0[transfer_info.acc_idx_from] -= transfer_info.amount;
             acc.0[transfer_info.acc_idx_to] += transfer_info.amount;
             acc
-        });
-    new_balances
+        })
 }
 
 pub(crate) fn expected_balances_after_burn(
     balances: &TestBalances,
     txi: &TxiBatch<BurnInfo>,
 ) -> TestBalances {
-    let new_balances = txi
-        .to_vec()
+    txi.to_vec()
         .iter()
         .fold(balances.clone(), |mut acc, burn_info| {
             acc.0[burn_info.burner_acc_idx] -= burn_info.amount;
             acc
-        });
-    new_balances
+        })
 }
 
 pub(crate) fn check_balances(

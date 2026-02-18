@@ -173,6 +173,30 @@ impl User {
         }
     }
 
+    /// Like `random`, but the wallet seed is derived from `uniqueness` (e.g. a timestamp)
+    /// so that each test run gets a deterministic, unique wallet and avoids conflicts with cached blocks.
+    pub fn random_with_uniqueness(miner_seed_phrase: &String, uniqueness: u64) -> Self {
+        let mut seed_random_bytes = [0u8; 64];
+        seed_random_bytes[..8].copy_from_slice(&uniqueness.to_le_bytes());
+        // Fill the rest with a simple deterministic expansion so different uniqueness values
+        // produce different seeds.
+        for i in 8..64 {
+            seed_random_bytes[i] = seed_random_bytes[i % 8].wrapping_add(i as u8);
+        }
+
+        User {
+            db: SqliteDataStorage::new(),
+            key_store: KeyStore::empty(),
+            commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
+            last_block_height: None,
+            last_block_hash: None,
+            seed: seed_random_bytes,
+            miner_seed: <Mnemonic>::from_phrase(miner_seed_phrase)
+                .unwrap()
+                .to_seed(""),
+        }
+    }
+
     /// Reset the state to be suitable for rescan from the NU5 activation
     /// height.  This removes all witness and spentness information from the user. The
     /// keystore is unmodified and decrypted note, nullifier, and conflict data are left
