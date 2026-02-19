@@ -205,20 +205,35 @@ cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-scenario
 
 ## Connecting to the Public ZSA Testnet
 
-We’ve made it easy to test Zcash Shielded Assets (ZSA) functionality by connecting directly to our public Zebra node, hosted by QEDIT on AWS.
+We've made it easy to test Zcash Shielded Assets (ZSA) functionality by connecting directly to our public Zebra nodes, hosted by QEDIT on AWS.
 
 ### Public Testnet Details
 
-- **TLS-enabled URL**: [https://dev.zebra.zsa-test.net](https://dev.zebra.zsa-test.net)
+The following endpoints are available:
 
-You can run the `zcash_tx_tool` against our testnet by setting the appropriate environment variables before running your test scenarios.
+| Endpoint | URL |
+|----------|-----|
+| **ZSA Testnet** | [https://dev.zebra.zsa-test.net](https://dev.zebra.zsa-test.net) |
+| **ZSA Swaps Testnet** | [https://dev.zebra-swaps.zsa-test.net](https://dev.zebra-swaps.zsa-test.net) |
+
+You can run the `zcash_tx_tool` against either testnet by setting the appropriate environment variables before running your test scenarios.
 
 ### Usage with Native Rust Commands
 
 Set the following environment variables before running your test scenarios:
 
 ```bash
+# For the ZSA testnet
 export ZCASH_NODE_ADDRESS=dev.zebra.zsa-test.net
+export ZCASH_NODE_PORT=443
+export ZCASH_NODE_PROTOCOL=https
+```
+
+Or, to connect to the ZSA Swaps testnet:
+
+```bash
+# For the ZSA Swaps testnet
+export ZCASH_NODE_ADDRESS=dev.zebra-swaps.zsa-test.net
 export ZCASH_NODE_PORT=443
 export ZCASH_NODE_PROTOCOL=https
 ```
@@ -312,4 +327,3 @@ Feel free to contribute to this project by opening issues or submitting pull req
 [//]: # (```)
 
 [//]: # (The '-it' parameter was added to allow the demo to be interactive.)
-
