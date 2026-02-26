@@ -281,42 +281,7 @@ The `act` tool runs the GitHub Actions workflow locally, which uses Docker to bu
 
 ## Connecting to the Public ZSA Testnet
 
-We’ve made it easy to test Zcash Shielded Assets (ZSA) functionality by connecting directly to our public Zebra node, hosted by QEDIT on AWS.
-
-### Public Testnet Details
-
-- **TLS-enabled URL**: [https://dev.zebra.zsa-test.net](https://dev.zebra.zsa-test.net)
-
-You can run the `zcash_tx_tool` against our testnet by setting the appropriate environment variables before running your test scenarios.
-
-### Usage with Native Rust Commands
-
-Set the following environment variables before running your test scenarios:
-
-```bash
-export ZCASH_NODE_ADDRESS=dev.zebra.zsa-test.net
-export ZCASH_NODE_PORT=443
-export ZCASH_NODE_PROTOCOL=https
-```
-
-Then run your test scenario as usual:
-
-```bash
-cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
-```
-
-Example logs:
-
-```
-Using NetworkConfig: node_address = dev.zebra.zsa-test.net ; node_port = 443 ; protocol = https
-2025-05-08T08:07:23.864492Z  INFO zcash_tx_tool::components::transactions: Starting sync from height 1
-...
-2025-05-08T08:08:58.961625Z  INFO zcash_tx_tool::commands::test_balances: === Balances after burning ===
-2025-05-08T08:08:58.961634Z  INFO zcash_tx_tool::commands::test_balances: Account 0 balance: 990
-2025-05-08T08:08:58.961638Z  INFO zcash_tx_tool::commands::test_balances: Account 1 balance: 1
-```
-
-This demonstrates the full ZSA lifecycle and verifies testnet functionality.
+For instructions on connecting to the public ZSA testnet (including available endpoints, environment variables, and example usage), see the [Running tx‑tool](https://github.com/QED-it/zcash_tx_tool/wiki/Running-tx%E2%80%90tool) wiki page.
 
 ## License
 
@@ -333,59 +298,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ---
 
 Feel free to contribute to this project by opening issues or submitting pull requests.
-
-[//]: # ()
-[//]: # (## Docker-based demo)
-
-[//]: # ()
-[//]: # (You can also run the tests using docker. To do that you'll need first to build the docker image)
-
-[//]: # ()
-[//]: # (```bash)
-
-[//]: # (docker build -t zcash_tx_tool -f Dockerfile .)
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (And after that run the image itself.)
-
-[//]: # (The default connection parameters are set to connect to the zebra-node running on the machine itself &#40;127.0.0.1&#41;)
-
-[//]: # (If you ran the node in a docker container with the command above, you named that container "zebra-node", so you should use that as the ZCASH_NODE_ADDRESS.)
-
-[//]: # (If the node is running on the ECS server, you can connect to it by setting the ZCASH_NODE_ADDRESS=<Domain>.)
-
-[//]: # ()
-[//]: # (First, make sure you created the network:)
-
-[//]: # (```bash)
-
-[//]: # (docker network create zcash-network)
-
-[//]: # (```)
-
-[//]: # (And started the node with the network argument, like this)
-
-[//]: # (```bash)
-
-[//]: # (docker run --name zebra-node --network zcash-network -p 18232:18232 qedit/zebra-regtest-txv6)
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (Here are the 3 options &#40;No parameters will default to the first configuration&#41;)
-
-[//]: # ()
-[//]: # (```bash)
-
-[//]: # (docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=127.0.0.1 -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool)
-
-[//]: # (docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=zebra-node -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool)
-
-[//]: # (docker run -it --network zcash-network -e ZCASH_NODE_ADDRESS=<Domain> -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http zcash_tx_tool)
-
-[//]: # (```)
-
-[//]: # (The '-it' parameter was added to allow the demo to be interactive.)
-
