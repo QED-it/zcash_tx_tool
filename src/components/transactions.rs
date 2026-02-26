@@ -27,6 +27,19 @@ use zcash_transparent::bundle::{OutPoint, TxOut};
 
 const COINBASE_VALUE: u64 = 625_000_000;
 
+/// Mine a block with the given transactions and sync the users
+pub fn mine_and_sync_others(
+    miner_idx: usize,
+    wallets: &mut [&mut User],
+    rpc_client: &mut dyn RpcClient,
+    txs: Vec<Transaction>,
+) {
+    mine(wallets[miner_idx], rpc_client, txs);
+    for wallet in wallets {
+        sync(wallet, rpc_client);
+    }
+}
+
 /// Mine a block with the given transactions and sync the user
 pub fn mine(
     wallet: &mut User,

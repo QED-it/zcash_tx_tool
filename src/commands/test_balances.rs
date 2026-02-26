@@ -27,6 +27,21 @@ impl TestBalances {
 
         TestBalances(balances)
     }
+
+    pub(crate) fn get_asset_balances_multi_user(
+        asset: AssetBase,
+        num_users: usize,
+        wallets: &mut [&mut User],
+    ) -> TestBalances {
+        let balances = (0..num_users)
+            .map(|i| {
+                let address = wallets[i].address_for_account(0, External);
+                wallets[i].balance(address, asset)
+            })
+            .collect();
+
+        TestBalances(balances)
+    }
 }
 
 /// A struct to hold information about a transfer of assets.
@@ -49,6 +64,8 @@ pub(crate) struct BurnInfo {
 /// A trait to create a transaction from the information provided in the struct.
 pub(crate) trait TransactionCreator {
     fn create_tx(&self, wallet: &mut User) -> Transaction;
+
+    fn create_tx_multi_user(&self, wallets: &mut [&mut User]) -> Transaction;
 }
 
 impl TransferInfo {
@@ -83,12 +100,34 @@ impl TransactionCreator for TransferInfo {
         let to_addr = wallet.address_for_account(self.acc_idx_to, External);
         create_transfer_transaction(from_addr, to_addr, self.amount, self.asset, wallet)
     }
+
+    fn create_tx_multi_user(&self, wallets: &mut [&mut User]) -> Transaction {
+        let from_addr = wallets[self.acc_idx_from].address_for_account(0, External);
+        let to_addr = wallets[self.acc_idx_to].address_for_account(0, External);
+        create_transfer_transaction(
+            from_addr,
+            to_addr,
+            self.amount,
+            self.asset,
+            wallets[self.acc_idx_from],
+        )
+    }
 }
 
 impl TransactionCreator for BurnInfo {
     fn create_tx(&self, wallet: &mut User) -> Transaction {
         let address = wallet.address_for_account(self.burner_acc_idx, External);
         create_burn_transaction(address, self.amount, self.asset, wallet)
+    }
+
+    fn create_tx_multi_user(&self, wallets: &mut [&mut User]) -> Transaction {
+        let address = wallets[self.burner_acc_idx].address_for_account(0, External);
+        create_burn_transaction(
+            address,
+            self.amount,
+            self.asset,
+            wallets[self.burner_acc_idx],
+        )
     }
 }
 
@@ -125,6 +164,13 @@ impl<T: Clone + TransactionCreator> TxiBatch<T> {
     /// This function creates a Vec of transactions for each item in the InfoBatch.
     pub(crate) fn to_transactions(&self, wallet: &mut User) -> Vec<Transaction> {
         self.0.iter().map(|item| item.create_tx(wallet)).collect()
+    }
+
+    pub(crate) fn to_transactions_multi_user(&self, wallets: &mut [&mut User]) -> Vec<Transaction> {
+        self.0
+            .iter()
+            .map(|item| item.create_tx_multi_user(wallets))
+            .collect()
     }
 }
 
@@ -173,6 +219,16 @@ pub(crate) fn check_balances(
     num_accounts: usize,
 ) {
     let actual_balances = TestBalances::get_asset_balances(asset, num_accounts, user);
+    assert_eq!(&actual_balances, expected_balances);
+}
+
+pub(crate) fn check_balances_multi_user(
+    asset: AssetBase,
+    expected_balances: &TestBalances,
+    wallets: &mut [&mut User],
+    num_users: usize,
+) {
+    let actual_balances = TestBalances::get_asset_balances_multi_user(asset, num_users, wallets);
     assert_eq!(&actual_balances, expected_balances);
 }
 
