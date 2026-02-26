@@ -3,7 +3,7 @@
 use abscissa_core::{Command, Runnable};
 use serde_json::json;
 
-use crate::components::block_data::BlockData;
+use crate::components::persistence::sqlite::SqliteDataStorage;
 
 /// Get block data from storage
 #[derive(clap::Parser, Command, Debug)]
@@ -15,12 +15,11 @@ pub struct GetBlockDataCmd {
 impl Runnable for GetBlockDataCmd {
     /// Run the `get_block_data` subcommand.
     fn run(&self) {
-        let block_data = BlockData::load();
+        let mut db = SqliteDataStorage::new();
 
         let result = match self.block_height {
             Some(height) => {
-                // Get specific block
-                match block_data.get(height) {
+                match db.get_block(height) {
                     Some(block_info) => json!({
                         "success": true,
                         "block_height": height,
@@ -36,10 +35,9 @@ impl Runnable for GetBlockDataCmd {
                 }
             }
             None => {
-                // Get last block
-                match block_data.last_height() {
+                match db.last_block_height() {
                     Some(height) => {
-                        let block_info = block_data.get(height).unwrap();
+                        let block_info = db.get_block(height).unwrap();
                         json!({
                             "success": true,
                             "block_height": height,
@@ -57,7 +55,6 @@ impl Runnable for GetBlockDataCmd {
             }
         };
 
-        // Print JSON result
         println!("{}", serde_json::to_string_pretty(&result).unwrap());
     }
 }

@@ -201,9 +201,8 @@ impl User {
     /// Use this when you need a completely fresh start (e.g., new wallet seed,
     /// or when the stored chain state is incompatible with current test).
     pub fn reset_full(&mut self) {
-        use crate::components::block_data::BlockData;
         self.reset();
-        BlockData::clear_from_db();
+        self.db.clear_block_data();
     }
 
     /// Handle blockchain reorganization by cleaning up invalidated note data.

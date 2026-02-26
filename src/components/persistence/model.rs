@@ -1,4 +1,7 @@
 use diesel::prelude::*;
+use serde::{Deserialize, Serialize};
+
+// ── Note models ──
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::notes)]
@@ -60,4 +63,36 @@ impl InsertableNoteData {
             spend_block_height: note.spend_block_height,
         }
     }
+}
+
+// ── Block data models ──
+
+/// A single stored block entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockInfo {
+    pub hash: String,
+    pub prev_hash: String,
+    #[serde(default)]
+    pub tx_hex: Vec<String>,
+}
+
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = crate::schema::block_data)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+#[allow(dead_code)]
+pub(crate) struct BlockDataRow {
+    pub(crate) height: i32,
+    pub(crate) hash: String,
+    pub(crate) prev_hash: String,
+    pub(crate) tx_data_json: String,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::block_data)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub(crate) struct NewBlockDataRow {
+    pub(crate) height: i32,
+    pub(crate) hash: String,
+    pub(crate) prev_hash: String,
+    pub(crate) tx_data_json: String,
 }
