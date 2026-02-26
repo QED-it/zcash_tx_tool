@@ -76,13 +76,24 @@ jobs:
           run_tx_tool() {
             docker run --rm $TX_TOOL_DOCKER_ARGS zcash-tx-tool:local "$@"
           }
-          show_block_data() {
+          show_sync_summary() {
+            local label="$1"
+            local logfile="$2"
             echo ""
-            echo "Block 0 (first block):"
+            echo "=========================================="
+            echo "SYNC SUMMARY: $label"
+            echo "=========================================="
+            echo ""
+            echo "--- Block data reuse evidence ---"
+            grep -E "(Starting sync from height|Replayed stored blocks locally|Stored data valid, resuming|No block data found|Wallet has no synced blocks|No common ancestor found|Chain reorganization detected|Determined sync start height|Found stored block at height)" "$logfile" || echo "(no sync log lines found)"
+            echo ""
+            echo "--- Block data storage state ---"
+            echo "First stored block:"
             run_tx_tool get-block-data 0
             echo ""
-            echo "Last block in storage:"
+            echo "Last stored block:"
             run_tx_tool get-block-data
+            echo "=========================================="
           }
           EOF
 
@@ -101,7 +112,7 @@ jobs:
           fi
           echo "First run completed successfully"
 
-          show_block_data
+          show_sync_summary "After Run 1 (fresh start, no cached data)" /tmp/run1.log
 
       - name: "Run 2: Second tx-tool run (block data reuse)"
         run: |
@@ -119,7 +130,7 @@ jobs:
           fi
           echo "Second run completed successfully"
 
-          show_block_data
+          show_sync_summary "After Run 2 (reusing cached block data)" /tmp/run2.log
 
       - name: Restart Zebra Node
         run: |
@@ -154,7 +165,7 @@ jobs:
           fi
           echo "Third run completed successfully"
 
-          show_block_data
+          show_sync_summary "After Run 3 (reusing cached data after Zebra restart)" /tmp/run3.log
 
       - name: Print Zebra logs
         if: always()
