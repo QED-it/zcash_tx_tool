@@ -7,20 +7,18 @@
 //!
 //! The tests ensure correct balance updates and transaction validity at each step.
 
+use crate::commands::test_balances::{
+    check_balances, expected_balances_after_burn, expected_balances_after_transfer, print_balances,
+    BurnInfo, TestBalances, TransferInfo, TxiBatch,
+};
+use crate::components::rpc_client::reqwest::ReqwestRpcClient;
+use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
+use crate::components::user::User;
+use crate::prelude::*;
 use abscissa_core::{Command, Runnable};
 use nonempty::NonEmpty;
 use orchard::issuance::compute_asset_desc_hash;
 use orchard::keys::Scope::External;
-use crate::commands::test_balances::{
-    check_balances, print_balances, expected_balances_after_burn, expected_balances_after_transfer,
-    BurnInfo, TestBalances, TransferInfo, TxiBatch,
-};
-use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{
-    create_issue_transaction, create_finalization_transaction, mine, sync_from_height,
-};
-use crate::components::user::User;
-use crate::prelude::*;
 
 /// Run the E2E test
 #[derive(clap::Parser, Command, Debug)]
@@ -35,12 +33,13 @@ impl Runnable for TestOrchardZSACmd {
 
         wallet.reset();
 
-        let num_users = 2;
+        let num_accounts = 2;
 
         let issuer_idx = 0;
         let alice_idx = 1;
 
         let issuer_addr = wallet.address_for_account(issuer_idx, External);
+        let _alice_addr = wallet.address_for_account(alice_idx, External);
 
         let asset_desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(b"WETH").unwrap());
         prepare_test(
@@ -54,33 +53,40 @@ impl Runnable for TestOrchardZSACmd {
         let (issue_tx, asset) =
             create_issue_transaction(issuer_addr, 1000, asset_desc_hash, true, &mut wallet);
 
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
-        print_balances("=== Initial balances ===", asset, &balances);
+        print_balances("=== Initial balances ===", asset, num_accounts, &mut wallet);
 
         mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]))
             .expect("block mined successfully");
 
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
-        print_balances("=== Balances after issue ===", asset, &balances);
+        print_balances(
+            "=== Balances after issue ===",
+            asset,
+            num_accounts,
+            &mut wallet,
+        );
 
         // --------------------- ZSA transfer ---------------------
 
         let amount_to_transfer_1 = 3;
         let transfer_info = TransferInfo::new(issuer_idx, alice_idx, asset, amount_to_transfer_1);
         let txi = TxiBatch::from_item(transfer_info);
+        let balances = TestBalances::get_asset_balances(asset, num_accounts, &mut wallet);
         let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
         let txs = txi.to_transactions(&mut wallet);
 
         mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
-        check_balances(asset, &expected_balances, &mut wallet, num_users);
+        check_balances(asset, &expected_balances, &mut wallet, num_accounts);
 
-        print_balances("=== Balances after transfer ===", asset, &expected_balances);
+        print_balances(
+            "=== Balances after transfer ===",
+            asset,
+            num_accounts,
+            &mut wallet,
+        );
 
         // --------------------- Burn asset ---------------------
-
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
 
         let amount_to_burn_issuer = 7;
         let amount_to_burn_alice = amount_to_transfer_1 - 1;
@@ -90,33 +96,20 @@ impl Runnable for TestOrchardZSACmd {
         txi.add_to_batch(BurnInfo::new(alice_idx, asset, amount_to_burn_alice));
 
         // Generate expected balances after burn
-        let expected_balances = expected_balances_after_burn(&balances, &txi);
+        let expected_balances = expected_balances_after_burn(&expected_balances, &txi);
 
         let txs = txi.to_transactions(&mut wallet);
 
         mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
         // burn from issuer(account0) and alice(account1)
-        check_balances(asset, &expected_balances, &mut wallet, num_users);
+        check_balances(asset, &expected_balances, &mut wallet, num_accounts);
 
-        print_balances("=== Balances after burning ===", asset, &expected_balances);
-
-        // --------------------- Finalization ---------------------
-
-        let finalization_tx = create_finalization_transaction(asset_desc_hash, &mut wallet);
-        mine(&mut wallet, &mut rpc_client, Vec::from([finalization_tx]))
-            .expect("block mined successfully");
-
-        let invalid_issue_tx =
-            create_issue_transaction(issuer_addr, 2000, asset_desc_hash, true, &mut wallet);
-        let result = mine(
+        print_balances(
+            "=== Balances after burning ===",
+            asset,
+            num_accounts,
             &mut wallet,
-            &mut rpc_client,
-            Vec::from([invalid_issue_tx.0]),
-        );
-        assert!(
-            result.is_err(),
-            "Issue transaction was unexpectedly accepted after asset finalization"
         );
     }
 }

@@ -1,4 +1,8 @@
+use std::convert::TryInto;
 use diesel::prelude::*;
+use orchard::{Address, Note};
+use orchard::note::{AssetBase, RandomSeed, Rho};
+use orchard::value::NoteValue;
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::notes)]
@@ -53,5 +57,21 @@ impl InsertableNoteData {
             spend_tx_id: note.spend_tx_id,
             spend_action_index: note.spend_action_index,
         }
+    }
+}
+
+impl From<NoteData> for Note {
+    fn from(data: NoteData) -> Self {
+        let rho = Rho::from_bytes(data.rho.as_slice().try_into().unwrap()).unwrap();
+
+        Note::from_parts(
+            Address::from_raw_address_bytes(data.recipient_address.as_slice().try_into().unwrap())
+                .unwrap(),
+            NoteValue::from_raw(data.amount as u64),
+            AssetBase::from_bytes(data.asset.as_slice().try_into().unwrap()).unwrap(),
+            rho,
+            RandomSeed::from_bytes(data.rseed.as_slice().try_into().unwrap(), &rho).unwrap(),
+        )
+        .unwrap()
     }
 }

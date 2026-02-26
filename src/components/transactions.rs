@@ -7,12 +7,18 @@ use crate::prelude::{debug, info};
 use orchard::issuance::IssueInfo;
 use orchard::note::AssetBase;
 use orchard::value::NoteValue;
-use orchard::Address;
+use orchard::{Address, Bundle, ReferenceKeys};
 use rand::rngs::OsRng;
 use std::error::Error;
 use std::convert::TryFrom;
 use std::ops::Add;
-use orchard::keys::{IssuanceValidatingKey, SpendAuthorizingKey};
+use orchard::builder::BundleType;
+use orchard::issuance_auth::IssueValidatingKey;
+use orchard::keys::{FullViewingKey, SpendAuthorizingKey};
+use orchard::keys::Scope::External;
+use orchard::orchard_flavor::OrchardZSA;
+use orchard::swap_bundle::ActionGroupAuthorized;
+use orchard::primitives::redpallas::{Binding, SigningKey};
 use secp256k1::Secp256k1;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
 use zcash_protocol::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
@@ -21,7 +27,7 @@ use zcash_primitives::transaction::builder::{BuildConfig, Builder};
 use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
 use zcash_primitives::transaction::{Transaction, TxId};
 use zcash_proofs::prover::LocalTxProver;
-use zcash_protocol::value::Zatoshis;
+use zcash_protocol::value::{ZatBalance, Zatoshis};
 use zcash_transparent::builder::TransparentSigningSet;
 use zcash_transparent::bundle::{OutPoint, TxOut};
 
@@ -77,12 +83,13 @@ pub fn mine_empty_blocks(
 
 /// Create a shielded coinbase transaction
 pub fn create_shield_coinbase_transaction(
-    recipient: Address,
+    recipient_index: u32,
     coinbase_txid: TxId,
     wallet: &mut User,
 ) -> Transaction {
     info!("Shielding coinbase output from tx {}", coinbase_txid);
 
+    let recipient = wallet.address_for_account(recipient_index, External);
     let mut tx = create_tx(wallet);
 
     let coinbase_amount = Zatoshis::from_u64(COINBASE_VALUE).unwrap();
@@ -93,14 +100,11 @@ pub fn create_shield_coinbase_transaction(
     tx.add_transparent_input(
         sk,
         OutPoint::new(coinbase_txid.into(), 0),
-        TxOut {
-            value: coinbase_amount,
-            script_pubkey: miner_taddr.script(),
-        },
+        TxOut::new(coinbase_amount, miner_taddr.script().into()),
     )
     .unwrap();
     tx.add_orchard_output::<FeeError>(
-        Some(wallet.orchard_ovk()),
+        Some(wallet.orchard_ovk(recipient_index)),
         recipient,
         COINBASE_VALUE,
         AssetBase::native(),
@@ -166,15 +170,17 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
 
 /// Create a transfer transaction
 pub fn create_transfer_transaction(
-    sender: Address,
-    recipient: Address,
+    sender_index: u32,
+    recipient_index: u32,
     amount: u64,
     asset: AssetBase,
     wallet: &mut User,
 ) -> Transaction {
     info!("Transfer {} zatoshi", amount);
 
-    let ovk = wallet.orchard_ovk();
+    let sender = wallet.address_for_account(sender_index, External);
+    let recipient = wallet.address_for_account(recipient_index, External);
+    let ovk = wallet.orchard_ovk(sender_index);
 
     // Add inputs
     let inputs = wallet.select_spendable_notes(sender, amount, asset);
@@ -231,12 +237,14 @@ pub fn create_transfer_transaction(
 
 /// Create a burn transaction
 pub fn create_burn_transaction(
-    arsonist: Address,
+    arsonist_index: u32,
     amount: u64,
     asset: AssetBase,
     wallet: &mut User,
 ) -> Transaction {
     info!("Burn {} zatoshi", amount);
+
+    let arsonist = wallet.address_for_account(arsonist_index, External);
 
     // Add inputs
     let inputs = wallet.select_spendable_notes(arsonist, amount, asset);
@@ -266,7 +274,7 @@ pub fn create_burn_transaction(
     // Add change output if needed
     let change_amount = total_inputs_amount - amount;
     if change_amount != 0 {
-        let ovk = wallet.orchard_ovk();
+        let ovk = wallet.orchard_ovk(arsonist_index);
         tx.add_orchard_output::<FeeError>(
             Some(ovk),
             arsonist,
@@ -305,7 +313,7 @@ pub fn create_issue_transaction(
     )
     .unwrap();
     let asset = AssetBase::derive(
-        &IssuanceValidatingKey::from(&wallet.issuance_key()),
+        &IssueValidatingKey::from(&wallet.issuance_key()),
         &asset_desc_hash,
     );
     (build_tx(tx, &wallet.transparent_signing_set(), &[]), asset)
@@ -322,6 +330,249 @@ pub fn create_finalization_transaction(
         .unwrap();
     tx.finalize_asset::<FeeError>(&asset_desc_hash).unwrap();
     build_tx(tx, &wallet.transparent_signing_set(), &[])
+}
+
+/// Create a swap transaction
+pub fn create_swap_transaction(
+    party_a: u32,
+    party_b: u32,
+    amount_asset_a: u64,
+    asset_a: AssetBase,
+    amount_asset_b: u64,
+    asset_b: AssetBase,
+    wallet: &mut User,
+) -> Transaction {
+    info!("Swap {} to {}", amount_asset_a, amount_asset_b);
+
+    let (action_group_1, bsk_1) = create_action_group(
+        party_a,
+        amount_asset_a,
+        asset_a,
+        amount_asset_b,
+        asset_b,
+        wallet,
+    );
+    let (action_group_2, bsk_2) = create_action_group(
+        party_b,
+        amount_asset_b,
+        asset_b,
+        amount_asset_a,
+        asset_a,
+        wallet,
+    );
+
+    let mut tx = create_tx(wallet);
+    tx.add_action_group::<FeeError>(action_group_1, bsk_1)
+        .unwrap();
+    tx.add_action_group::<FeeError>(action_group_2, bsk_2)
+        .unwrap();
+    build_tx(tx, &wallet.transparent_signing_set(), &[])
+}
+
+/// Create a 3-party swap transaction with matcher
+#[allow(clippy::too_many_arguments)]
+pub fn create_swap_transaction_with_matcher(
+    party_a: u32,
+    party_b: u32,
+    matcher: u32,
+    amount_asset_a: u64,
+    asset_a: AssetBase,
+    amount_asset_b: u64,
+    asset_b: AssetBase,
+    spread: u64,
+    wallet: &mut User,
+) -> Transaction {
+    info!(
+        "Swap with matcher: {} of asset_a to {} of asset_b with spread {}",
+        amount_asset_a, amount_asset_b, spread
+    );
+
+    let (action_group_1, bsk_1) = create_action_group(
+        party_a,
+        amount_asset_a,
+        asset_a,
+        amount_asset_b - spread,
+        asset_b,
+        wallet,
+    );
+
+    let (action_group_2, bsk_2) = create_action_group(
+        party_b,
+        amount_asset_b,
+        asset_b,
+        amount_asset_a - spread,
+        asset_a,
+        wallet,
+    );
+
+    // Matcher claims the spread
+    let (matcher_action_group, bsk_matcher) =
+        create_matcher_action_group(matcher, spread, asset_a, spread, asset_b, wallet);
+
+    let mut tx = create_tx(wallet);
+    tx.add_action_group::<FeeError>(action_group_1, bsk_1)
+        .unwrap();
+    tx.add_action_group::<FeeError>(action_group_2, bsk_2)
+        .unwrap();
+    tx.add_action_group::<FeeError>(matcher_action_group, bsk_matcher)
+        .unwrap();
+    build_tx(tx, &wallet.transparent_signing_set(), &[])
+}
+
+fn create_action_group(
+    account_index: u32,
+    amount_to_send: u64,
+    asset_to_send: AssetBase,
+    amount_to_receive: u64,
+    asset_to_receive: AssetBase,
+    wallet: &mut User,
+) -> (
+    Bundle<ActionGroupAuthorized, ZatBalance, OrchardZSA>,
+    SigningKey<Binding>,
+) {
+    let ovk = wallet.orchard_ovk(account_index);
+    let address = wallet.address_for_account(account_index, External);
+
+    // Find input notes for asset A
+    let inputs_a = wallet.select_spendable_notes(address, amount_to_send, asset_to_send);
+    let total_inputs_amount = inputs_a
+        .iter()
+        .fold(0, |acc, input| acc + input.note.value().inner());
+
+    let mut ag_builder =
+        orchard::builder::Builder::new(BundleType::DEFAULT_SWAP, wallet.orchard_anchor().unwrap());
+
+    let mut orchard_saks = Vec::new();
+    inputs_a.into_iter().for_each(|input| {
+        orchard_saks.push(SpendAuthorizingKey::from(&input.sk));
+        ag_builder
+            .add_spend(
+                FullViewingKey::from(&input.sk),
+                input.note,
+                input.merkle_path,
+            )
+            .unwrap();
+    });
+
+    // Add reference input note for asset B
+    let reference_note = wallet
+        .get_randomized_reference_note(asset_to_receive)
+        .unwrap();
+    ag_builder
+        .add_reference_note(
+            ReferenceKeys::fvk(),
+            reference_note.note,
+            reference_note.merkle_path,
+        )
+        .unwrap();
+
+    // Add main desired output
+    ag_builder
+        .add_output(
+            Some(ovk.clone()),
+            address,
+            NoteValue::from_raw(amount_to_receive),
+            asset_to_receive,
+            [0; 512],
+        )
+        .unwrap();
+
+    // Add change output
+    let change_amount = total_inputs_amount - amount_to_send;
+    if change_amount != 0 {
+        ag_builder
+            .add_output(
+                Some(ovk),
+                address,
+                NoteValue::from_raw(change_amount),
+                asset_to_send,
+                [0; 512],
+            )
+            .unwrap();
+    }
+
+    // Build action group
+    let (action_group, _) = ag_builder.build_action_group(OsRng, 10).unwrap();
+    let commitment = action_group.action_group_commitment().into();
+    action_group
+        .create_proof(
+            &orchard::circuit::ProvingKey::build::<OrchardZSA>(),
+            &mut OsRng,
+        )
+        .unwrap()
+        .apply_signatures_for_action_group(OsRng, commitment, &orchard_saks)
+        .unwrap()
+}
+
+fn create_matcher_action_group(
+    matcher_index: u32,
+    amount_asset_a: u64,
+    asset_a: AssetBase,
+    amount_asset_b: u64,
+    asset_b: AssetBase,
+    wallet: &mut User,
+) -> (
+    Bundle<ActionGroupAuthorized, ZatBalance, OrchardZSA>,
+    SigningKey<Binding>,
+) {
+    let ovk = wallet.orchard_ovk(matcher_index);
+    let address = wallet.address_for_account(matcher_index, External);
+
+    let mut ag_builder =
+        orchard::builder::Builder::new(BundleType::DEFAULT_SWAP, wallet.orchard_anchor().unwrap());
+
+    // Add reference input notes for both assets (no real spending, just for balance)
+    let reference_note_a = wallet.get_randomized_reference_note(asset_a).unwrap();
+    ag_builder
+        .add_reference_note(
+            ReferenceKeys::fvk(),
+            reference_note_a.note,
+            reference_note_a.merkle_path,
+        )
+        .unwrap();
+
+    let reference_note_b = wallet.get_randomized_reference_note(asset_b).unwrap();
+    ag_builder
+        .add_reference_note(
+            ReferenceKeys::fvk(),
+            reference_note_b.note,
+            reference_note_b.merkle_path,
+        )
+        .unwrap();
+
+    // Add output for asset A (matcher receives this)
+    ag_builder
+        .add_output(
+            Some(ovk.clone()),
+            address,
+            NoteValue::from_raw(amount_asset_a),
+            asset_a,
+            [0; 512],
+        )
+        .unwrap();
+
+    // Add output for asset B (matcher receives this)
+    ag_builder
+        .add_output(
+            Some(ovk),
+            address,
+            NoteValue::from_raw(amount_asset_b),
+            asset_b,
+            [0; 512],
+        )
+        .unwrap();
+
+    // Build action group (no orchard_saks needed since only reference notes are spent)
+    let (action_group, _) = ag_builder.build_action_group(OsRng, 10).unwrap();
+    let commitment = action_group.action_group_commitment().into();
+    action_group
+        .create_proof(
+            &orchard::circuit::ProvingKey::build::<OrchardZSA>(),
+            &mut OsRng,
+        )
+        .unwrap()
+        .apply_signatures_for_action_group(OsRng, commitment, &[])
+        .unwrap()
 }
 
 /// Convert a block template and a list of transactions into a block proposal
@@ -395,7 +646,7 @@ pub fn template_into_proposal(
 }
 
 fn create_tx(wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
-    let build_config = BuildConfig::TxV6 {
+    let build_config = BuildConfig::Swap {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),
     };
@@ -412,7 +663,7 @@ fn build_tx(
     tss: &TransparentSigningSet,
     orchard_saks: &[SpendAuthorizingKey],
 ) -> Transaction {
-    let fee_rule = &FeeRule::non_standard(Zatoshis::from_u64(0).unwrap(), 20, 150, 34).unwrap();
+    let fee_rule = &FeeRule::non_standard(Zatoshis::from_u64(0).unwrap(), 20, 150, 34, 0).unwrap();
     let prover = LocalTxProver::with_default_location();
     match prover {
         None => {
@@ -420,7 +671,16 @@ fn build_tx(
         }
         Some(prover) => {
             let tx = builder
-                .build(tss, &[], orchard_saks, OsRng, &prover, &prover, fee_rule)
+                .build(
+                    tss,
+                    &[],
+                    orchard_saks,
+                    OsRng,
+                    &prover,
+                    &prover,
+                    fee_rule,
+                    |_| false,
+                )
                 .unwrap()
                 .into_transaction();
             info!("Build tx: {}", tx.txid());

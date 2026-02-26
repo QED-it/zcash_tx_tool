@@ -11,6 +11,7 @@ network = "Regtest"
 NU5 = 1
 NU6 = 1
 NU7 = 1
+SWAP = 1
 
 # This section may be omitted if a persistent Regtest chain state is desired
 [state]

@@ -9,14 +9,12 @@ use std::convert::TryInto;
 use abscissa_core::prelude::info;
 
 use orchard::issuance::{IssueBundle, Signed};
-use orchard::keys::{
-    FullViewingKey, IncomingViewingKey, IssuanceAuthorizingKey, OutgoingViewingKey, Scope,
-    SpendingKey,
-};
-use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
+use orchard::issuance_auth::{IssueAuthKey, ZSASchnorr};
+use orchard::keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey};
+use orchard::note::{AssetBase, ExtractedNoteCommitment};
 use orchard::tree::{MerkleHashOrchard, MerklePath};
-use orchard::value::NoteValue;
-use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
+use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note, ReferenceKeys};
+use orchard::bundle::Authorization;
 use rand::Rng;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
@@ -27,10 +25,10 @@ use crate::components::persistence::sqlite::SqliteDataStorage;
 use crate::components::user::structs::OrderedAddress;
 use zcash_primitives::block::BlockHash;
 use zcash_protocol::consensus::{BlockHeight, REGTEST_NETWORK};
-use zcash_primitives::transaction::components::issuance::write_note;
 use zcash_primitives::transaction::{OrchardBundle, Transaction, TxId};
 use bip0039::Mnemonic;
 use orchard::primitives::OrchardPrimitives;
+use rand::rngs::OsRng;
 use zcash_primitives::zip32::AccountId;
 use zcash_protocol::constants;
 use zcash_protocol::value::ZatBalance;
@@ -204,19 +202,8 @@ impl User {
         let mut total_amount_selected = 0;
 
         for note_data in all_notes {
-            let rho = Rho::from_bytes(note_data.rho.as_slice().try_into().unwrap()).unwrap();
-            let note = Note::from_parts(
-                Address::from_raw_address_bytes(
-                    note_data.recipient_address.as_slice().try_into().unwrap(),
-                )
-                .unwrap(),
-                NoteValue::from_raw(note_data.amount as u64),
-                AssetBase::from_bytes(note_data.asset.as_slice().try_into().unwrap()).unwrap(),
-                rho,
-                RandomSeed::from_bytes(note_data.rseed.as_slice().try_into().unwrap(), &rho)
-                    .unwrap(),
-            )
-            .unwrap();
+            let note_position = note_data.position;
+            let note: Note = note_data.into();
 
             let note_value = note.value().inner();
             let sk = self
@@ -229,9 +216,9 @@ impl User {
                 .expect("SpendingKey not found for IVK");
 
             let merkle_path = MerklePath::from_parts(
-                note_data.position as u32,
+                note_position as u32,
                 self.commitment_tree
-                    .witness(Position::from(note_data.position as u64), 0)
+                    .witness(Position::from(note_position as u64), 0)
                     .unwrap()
                     .try_into()
                     .unwrap(),
@@ -258,9 +245,31 @@ impl User {
         selected_notes
     }
 
-    pub fn address_for_account(&mut self, account: usize, scope: Scope) -> Address {
-        let account = account as u32;
-        match self.key_store.accounts.get(&(account)) {
+    pub(crate) fn get_randomized_reference_note(
+        &mut self,
+        asset: AssetBase,
+    ) -> Option<NoteSpendMetadata> {
+        self.db.find_reference_note(asset).map(|note_data| {
+            let merkle_path = MerklePath::from_parts(
+                note_data.position as u32,
+                self.commitment_tree
+                    .witness(Position::from(note_data.position as u64), 0)
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            );
+
+            let reference_note: Note = note_data.into();
+            NoteSpendMetadata {
+                note: reference_note.create_split_note(&mut OsRng),
+                sk: ReferenceKeys::sk(),
+                merkle_path,
+            }
+        })
+    }
+
+    pub fn address_for_account(&mut self, account: u32, scope: Scope) -> Address {
+        match self.key_store.accounts.get(&account) {
             Some(addr) => *addr,
             None => {
                 let sk = SpendingKey::from_zip32_seed(
@@ -280,11 +289,11 @@ impl User {
         }
     }
 
-    pub(crate) fn orchard_ovk(&self) -> OutgoingViewingKey {
+    pub(crate) fn orchard_ovk(&self, account_index: u32) -> OutgoingViewingKey {
         let sk = SpendingKey::from_zip32_seed(
             self.seed.as_slice(),
             constants::regtest::COIN_TYPE,
-            AccountId::try_from(0).unwrap(),
+            AccountId::try_from(account_index).unwrap(),
         )
         .unwrap();
         FullViewingKey::from(&sk).to_ovk(Scope::External)
@@ -294,13 +303,9 @@ impl User {
         Some(Anchor::from(self.commitment_tree.root(0).unwrap()))
     }
 
-    pub(crate) fn issuance_key(&self) -> IssuanceAuthorizingKey {
-        IssuanceAuthorizingKey::from_zip32_seed(
-            self.seed.as_slice(),
-            constants::testnet::COIN_TYPE,
-            0,
-        )
-        .unwrap()
+    pub(crate) fn issuance_key(&self) -> IssueAuthKey<ZSASchnorr> {
+        IssueAuthKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, 0)
+            .unwrap()
     }
 
     // Hack for claiming coinbase
@@ -376,27 +381,34 @@ impl User {
     /// Add note data to the user, and return a data structure that describes
     /// the actions that are involved with this user.
     pub fn add_notes_from_tx(&mut self, tx: Transaction) -> Result<(), BundleLoadError> {
-        let mut issued_notes_offset = 0;
+        let mut notes_offset = 0;
 
         if let Some(orchard_bundle) = tx.orchard_bundle() {
             // Add notes from Orchard bundle
             match orchard_bundle {
                 OrchardBundle::OrchardVanilla(b) => {
-                    issued_notes_offset = b.actions().len();
-                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
+                    notes_offset = b.actions().len();
+                    self.add_notes_from_orchard_bundle(&tx.txid(), b, 0);
                     self.mark_potential_spends(&tx.txid(), b);
                 }
                 OrchardBundle::OrchardZSA(b) => {
-                    issued_notes_offset = b.actions().len();
-                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
+                    notes_offset = b.actions().len();
+                    self.add_notes_from_orchard_bundle(&tx.txid(), b, 0);
                     self.mark_potential_spends(&tx.txid(), b);
+                }
+                OrchardBundle::OrchardSwap(b) => {
+                    b.action_groups().iter().for_each(|group| {
+                        self.add_notes_from_orchard_bundle(&tx.txid(), group, notes_offset);
+                        self.mark_potential_spends(&tx.txid(), group);
+                        notes_offset += group.actions().len();
+                    });
                 }
             }
         };
 
         // Add notes from Issue bundle
         if let Some(issue_bundle) = tx.issue_bundle() {
-            self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, issued_notes_offset);
+            self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, notes_offset);
         };
 
         self.add_note_commitments(&tx.txid(), tx.orchard_bundle(), tx.issue_bundle())
@@ -409,10 +421,11 @@ impl User {
     /// incoming viewing keys, and return a data structure that describes
     /// the actions that are involved with this user, either spending notes belonging
     /// to this user or creating new notes owned by this user.
-    fn add_notes_from_orchard_bundle<O: OrchardPrimitives>(
+    fn add_notes_from_orchard_bundle<O: OrchardPrimitives, A: Authorization>(
         &mut self,
         txid: &TxId,
-        bundle: &Bundle<Authorized, ZatBalance, O>,
+        bundle: &Bundle<A, ZatBalance, O>,
+        action_index_offset: usize,
     ) {
         let keys = self
             .key_store
@@ -421,10 +434,19 @@ impl User {
             .cloned()
             .collect::<Vec<_>>();
 
-        for (action_idx, ivk, note, recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
+        let decrypted_notes = bundle.decrypt_outputs_with_keys(&keys);
+
+        for (action_idx, ivk, note, recipient, memo) in decrypted_notes {
             info!("Store note");
-            self.store_note(txid, action_idx, ivk.clone(), note, recipient, memo)
-                .unwrap();
+            self.store_note(
+                txid,
+                action_index_offset + action_idx,
+                ivk.clone(),
+                note,
+                recipient,
+                memo,
+            )
+            .unwrap();
         }
     }
 
@@ -437,8 +459,8 @@ impl User {
         note_index_offset: usize,
     ) {
         for (note_index, note) in bundle.actions().iter().flat_map(|a| a.notes()).enumerate() {
+            let note_index = note_index + note_index_offset;
             if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
-                let note_index = note_index + note_index_offset;
                 self.store_note(
                     txid,
                     note_index,
@@ -448,6 +470,8 @@ impl User {
                     [0; 512],
                 )
                 .unwrap();
+            } else if is_reference(note) {
+                self.store_reference_note(txid, note_index, *note).unwrap();
             }
         }
     }
@@ -462,10 +486,7 @@ impl User {
         memo_bytes: [u8; 512],
     ) -> Result<(), BundleLoadError> {
         if let Some(fvk) = self.key_store.viewing_keys.get(&ivk) {
-            info!("Adding decrypted note to the user");
-
-            let mut note_bytes = vec![];
-            write_note(&mut note_bytes, &note).unwrap();
+            info!("Adding decrypted note to the database");
 
             let note_data = NoteData {
                 id: 0,
@@ -494,10 +515,37 @@ impl User {
         }
     }
 
-    fn mark_potential_spends<O: OrchardPrimitives>(
+    fn store_reference_note(
         &mut self,
         txid: &TxId,
-        orchard_bundle: &Bundle<Authorized, ZatBalance, O>,
+        action_index: usize,
+        note: Note,
+    ) -> Result<(), BundleLoadError> {
+        info!("Adding reference note to the database");
+
+        let note_data = NoteData {
+            id: 0,
+            amount: note.value().inner() as i64,
+            asset: note.asset().to_bytes().to_vec(),
+            tx_id: txid.as_ref().to_vec(),
+            action_index: action_index as i32,
+            position: -1,
+            memo: vec![],
+            rho: note.rho().to_bytes().to_vec(),
+            nullifier: note.nullifier(&ReferenceKeys::fvk()).to_bytes().to_vec(),
+            rseed: note.rseed().as_bytes().to_vec(),
+            recipient_address: ReferenceKeys::recipient().to_raw_address_bytes().to_vec(),
+            spend_tx_id: None,
+            spend_action_index: -1,
+        };
+        self.db.insert_note(note_data);
+        Ok(())
+    }
+
+    fn mark_potential_spends<O: OrchardPrimitives, A: Authorization>(
+        &mut self,
+        txid: &TxId,
+        orchard_bundle: &Bundle<A, ZatBalance, O>,
     ) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {
@@ -529,24 +577,26 @@ impl User {
                     OrchardBundle::OrchardZSA(b) => {
                         b.actions().iter().map(|action| *action.cmx()).collect()
                     }
+                    OrchardBundle::OrchardSwap(b) => b
+                        .action_groups()
+                        .iter()
+                        .flat_map(|group| group.actions())
+                        .map(|action| *action.cmx())
+                        .collect(),
                 }
             } else {
                 Vec::new()
             };
 
-        let mut issued_note_commitments: Vec<ExtractedNoteCommitment> =
-            if let Some(issue_bundle) = issue_bundle_opt {
-                issue_bundle
-                    .actions()
-                    .iter()
-                    .flat_map(|a| a.notes())
-                    .map(|note| note.commitment().into())
-                    .collect()
-            } else {
-                Vec::new()
-            };
-
-        note_commitments.append(&mut issued_note_commitments);
+        if let Some(issue_bundle) = issue_bundle_opt {
+            let mut issued_note_commitments: Vec<ExtractedNoteCommitment> = issue_bundle
+                .actions()
+                .iter()
+                .flat_map(|a| a.notes())
+                .map(|note| note.commitment().into())
+                .collect();
+            note_commitments.append(&mut issued_note_commitments);
+        }
 
         for (note_index, commitment) in note_commitments.iter().enumerate() {
             info!("Adding note commitment ({}, {})", txid, note_index);
@@ -575,4 +625,9 @@ impl User {
 
         Ok(())
     }
+}
+
+fn is_reference(note: &Note) -> bool {
+    note.recipient().to_raw_address_bytes() == ReferenceKeys::recipient().to_raw_address_bytes()
+        && note.value().inner() == 0
 }
