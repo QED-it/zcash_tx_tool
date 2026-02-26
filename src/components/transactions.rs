@@ -228,7 +228,7 @@ fn deserialize_txs(tx_hex: &[String]) -> Vec<Transaction> {
         .iter()
         .map(|hex_tx| {
             let bytes = hex::decode(hex_tx).unwrap();
-            Transaction::read(bytes.as_slice(), BranchId::Nu6).unwrap()
+            Transaction::read(bytes.as_slice(), BranchId::Nu7).unwrap()
         })
         .collect()
 }
@@ -634,7 +634,7 @@ pub fn template_into_proposal(
         hex::decode(block_template.coinbase_txn.data)
             .unwrap()
             .as_slice(),
-        BranchId::Nu6,
+        BranchId::Nu7,
     )
     .unwrap();
 
