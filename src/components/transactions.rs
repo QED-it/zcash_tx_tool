@@ -214,7 +214,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                 info!(
                     "No block at height {}. Synced up to height {}",
                     next_height,
-                    next_height - 1
+                    next_height.saturating_sub(1)
                 );
                 debug!("rpc.get_block err: {:?}", err);
                 return;
