@@ -137,13 +137,22 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
     // If this is a fresh wallet, but the storage contains full tx data, rebuild the wallet
     // commitment tree locally by replaying stored blocks. This avoids re-downloading
     // all historical blocks/transactions on subsequent runs.
+    // Only replay if the stored chain still matches the live chain (no reorg).
     #[allow(clippy::collapsible_if)]
     if wallet.last_block_height().is_none()
         && block_data.last_block_height().is_some()
         && block_data.has_complete_block_tx_data()
     {
-        if let Some(replayed) = replay_stored_blocks_to_wallet(from_height, wallet, &mut block_data) {
-            info!("Replayed stored blocks locally up to height {}", replayed);
+        let stored_height = block_data.last_block_height().unwrap();
+        if matches!(
+            validate_stored_chain(stored_height, &mut block_data, rpc),
+            ChainValidationResult::Valid
+        ) {
+            if let Some(replayed) =
+                replay_stored_blocks_to_wallet(from_height, wallet, &mut block_data)
+            {
+                info!("Replayed stored blocks locally up to height {}", replayed);
+            }
         }
     }
 
@@ -168,14 +177,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     if let Some(stored) = block_data.get_block(next_height) {
                         let chain_hash_hex = hex::encode(block.hash.0);
                         if stored.hash == chain_hash_hex && !stored.tx_hex.is_empty() {
-                            let txs = stored
-                                .tx_hex
-                                .iter()
-                                .map(|hex_tx| {
-                                    let bytes = hex::decode(hex_tx).unwrap();
-                                    Transaction::read(bytes.as_slice(), BranchId::Nu6).unwrap()
-                                })
-                                .collect::<Vec<_>>();
+                            let txs = deserialize_txs(&stored.tx_hex);
                             (txs, stored.tx_hex)
                         } else {
                             let txs = fetch_block_txs(&block.tx_ids, rpc);
@@ -221,6 +223,16 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
     }
 }
 
+fn deserialize_txs(tx_hex: &[String]) -> Vec<Transaction> {
+    tx_hex
+        .iter()
+        .map(|hex_tx| {
+            let bytes = hex::decode(hex_tx).unwrap();
+            Transaction::read(bytes.as_slice(), BranchId::Nu6).unwrap()
+        })
+        .collect()
+}
+
 fn serialize_txs(txs: &[Transaction]) -> Vec<String> {
     txs.iter()
         .map(|tx| {
@@ -247,14 +259,7 @@ fn replay_stored_blocks_to_wallet(
             return None;
         }
 
-        let txs = stored
-            .tx_hex
-            .iter()
-            .map(|hex_tx| {
-                let bytes = hex::decode(hex_tx).unwrap();
-                Transaction::read(bytes.as_slice(), BranchId::Nu6).unwrap()
-            })
-            .collect::<Vec<_>>();
+        let txs = deserialize_txs(&stored.tx_hex);
 
         let hash_bytes = hex::decode(&stored.hash).ok()?;
         if hash_bytes.len() != 32 {

@@ -18,41 +18,37 @@ impl Runnable for GetBlockDataCmd {
         let mut db = SqliteDataStorage::new();
 
         let result = match self.block_height {
-            Some(height) => {
-                match db.get_block(height) {
-                    Some(block_info) => json!({
+            Some(height) => match db.get_block(height) {
+                Some(block_info) => json!({
+                    "success": true,
+                    "block_height": height,
+                    "hash": block_info.hash,
+                    "prev_hash": block_info.prev_hash,
+                    "tx_hex": block_info.tx_hex,
+                }),
+                None => json!({
+                    "success": false,
+                    "error": format!("Block at height {} not found", height),
+                    "block_height": height,
+                }),
+            },
+            None => match db.last_block_height() {
+                Some(height) => {
+                    let block_info = db.get_block(height).unwrap();
+                    json!({
                         "success": true,
                         "block_height": height,
                         "hash": block_info.hash,
                         "prev_hash": block_info.prev_hash,
                         "tx_hex": block_info.tx_hex,
-                    }),
-                    None => json!({
-                        "success": false,
-                        "error": format!("Block at height {} not found", height),
-                        "block_height": height,
-                    }),
+                    })
                 }
-            }
-            None => {
-                match db.last_block_height() {
-                    Some(height) => {
-                        let block_info = db.get_block(height).unwrap();
-                        json!({
-                            "success": true,
-                            "block_height": height,
-                            "hash": block_info.hash,
-                            "prev_hash": block_info.prev_hash,
-                            "tx_hex": block_info.tx_hex,
-                        })
-                    }
-                    None => json!({
-                        "success": false,
-                        "error": "No blocks found in storage",
-                        "block_height": null,
-                    }),
-                }
-            }
+                None => json!({
+                    "success": false,
+                    "error": "No blocks found in storage",
+                    "block_height": null,
+                }),
+            },
         };
 
         println!("{}", serde_json::to_string_pretty(&result).unwrap());

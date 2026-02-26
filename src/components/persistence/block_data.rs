@@ -122,9 +122,24 @@ mod tests {
         let (_db, mut data) = test_db();
         assert!(data.last_block_height().is_none());
 
-        data.insert_block(100, "hash100".into(), "prev100".into(), vec!["tx100".into()]);
-        data.insert_block(101, "hash101".into(), "hash100".into(), vec!["tx101".into()]);
-        data.insert_block(102, "hash102".into(), "hash101".into(), vec!["tx102".into()]);
+        data.insert_block(
+            100,
+            "hash100".into(),
+            "prev100".into(),
+            vec!["tx100".into()],
+        );
+        data.insert_block(
+            101,
+            "hash101".into(),
+            "hash100".into(),
+            vec!["tx101".into()],
+        );
+        data.insert_block(
+            102,
+            "hash102".into(),
+            "hash101".into(),
+            vec!["tx102".into()],
+        );
         assert_eq!(data.last_block_height(), Some(102));
 
         let block = data.get_block(101).unwrap();
