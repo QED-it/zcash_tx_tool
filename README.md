@@ -23,6 +23,7 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
     - [Orchard-ZSA Three Party Scenario](#orchard-zsa-three-party-scenario)
     - [Creating your own scenario](#creating-your-own-scenario)
 - [Testing Block Data Storage Locally](#testing-block-data-storage-locally)
+    - [Docker Volume Mount for Block Data Persistence](#docker-volume-mount-for-block-data-persistence)
 - [Connecting to the Public ZSA Testnet](#connecting-to-the-public-ZSA-testnet)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
@@ -256,6 +257,23 @@ Approximate totals for ~3.2M Zcash blocks:
 - Regtest / ZSA testnet runs are usually near the minimal range.
 - Long-running testnet or mainnet syncs trend toward the average case.
 - Disk usage grows over time unless block data is pruned.
+
+### Docker Volume Mount for Block Data Persistence
+
+When running the tx-tool in Docker, you **must** use the `-v` flag to mount a volume for block data persistence. The Docker volume mount cannot be configured from inside the Dockerfile — the host running the command needs to specify it explicitly.
+
+```bash
+docker run --network zcash-net \
+  -e ZCASH_NODE_ADDRESS=zebra-node \
+  -e ZCASH_NODE_PORT=18232 \
+  -e ZCASH_NODE_PROTOCOL=http \
+  -v wallet-data:/app \
+  zcash-tx-tool:local test-orchard-zsa
+```
+
+The `-v wallet-data:/app` flag creates a named Docker volume (`wallet-data`) and mounts it at `/app` inside the container. This is where the tx-tool stores its block data (SQLite database and related files).
+
+**Without `-v wallet-data:/app`**, Docker will start the container with an empty directory at `/app`. The tx-tool will still run, but all block data will be ephemeral and lost when the container exits, so subsequent runs won't benefit from the cached block data.
 
 ### About the Workflow
 
