@@ -16,7 +16,9 @@ use crate::commands::test_balances::{
     BurnInfo, TestBalances, TransferInfo, TxiBatch,
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
-use crate::components::transactions::{create_finalization_transaction, create_issue_transaction, mine, sync_from_height};
+use crate::components::transactions::{
+    create_finalization_transaction, create_issue_transaction, mine, sync_from_height,
+};
 use crate::components::user::User;
 use crate::prelude::*;
 
