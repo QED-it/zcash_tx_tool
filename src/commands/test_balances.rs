@@ -10,7 +10,7 @@ pub(crate) struct TestBalances(Vec<u64>);
 
 impl TestBalances {
     pub(crate) fn get_native_balances(num_accounts: usize, user: &mut User) -> TestBalances {
-        Self::get_asset_balances(AssetBase::native(), num_accounts, user)
+        Self::get_asset_balances(AssetBase::zatoshi(), num_accounts, user)
     }
 
     pub(crate) fn get_asset_balances(
@@ -178,7 +178,7 @@ pub(crate) fn check_balances(
 
 pub(crate) fn print_balances(header: &str, asset: AssetBase, balances: &TestBalances) {
     info!("{}", header);
-    if asset.is_native().into() {
+    if asset.is_zatoshi().into() {
         info!("AssetBase: Native ZEC");
     } else {
         let trimmed_asset_base = hex::encode(asset.to_bytes())

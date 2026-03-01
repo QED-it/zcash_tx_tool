@@ -4,15 +4,14 @@ use crate::components::zebra_merkle::{
     block_commitment_from_parts, AuthDataRoot, Root, AUTH_COMMITMENT_PLACEHOLDER,
 };
 use crate::prelude::{debug, info};
-use orchard::issuance::IssueInfo;
-use orchard::note::AssetBase;
+use orchard::issuance::{IssueInfo, auth::IssueValidatingKey};
+use orchard::note::{AssetId, AssetBase};
 use orchard::value::NoteValue;
 use orchard::Address;
 use rand::rngs::OsRng;
 use std::error::Error;
 use std::convert::TryFrom;
 use std::ops::Add;
-use orchard::issuance_auth::IssueValidatingKey;
 use orchard::keys::SpendAuthorizingKey;
 use secp256k1::Secp256k1;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
@@ -101,7 +100,7 @@ pub fn create_shield_coinbase_transaction(
         Some(wallet.orchard_ovk()),
         recipient,
         COINBASE_VALUE,
-        AssetBase::native(),
+        AssetBase::zatoshi(),
         MemoBytes::empty(),
     )
     .unwrap();
@@ -302,10 +301,10 @@ pub fn create_issue_transaction(
         first_issuance,
     )
     .unwrap();
-    let asset = AssetBase::derive(
+    let asset = AssetBase::custom(&AssetId::new_v0(
         &IssueValidatingKey::from(&wallet.issuance_key()),
         &asset_desc_hash,
-    );
+    ));
     (build_tx(tx, &wallet.transparent_signing_set(), &[]), asset)
 }
 
@@ -410,15 +409,27 @@ fn build_tx(
     tss: &TransparentSigningSet,
     orchard_saks: &[SpendAuthorizingKey],
 ) -> Transaction {
-    let fee_rule = &FeeRule::non_standard(Zatoshis::from_u64(0).unwrap(), 20, 150, 34).unwrap();
+    // FIXME: the last arg of `non_standard` (creation_cost) is set to 0, use proper value instead
+    let fee_rule = &FeeRule::non_standard(Zatoshis::from_u64(0).unwrap(), 20, 150, 34, 0).unwrap();
     let prover = LocalTxProver::with_default_location();
     match prover {
         None => {
             panic!("Zcash parameters not found. Please run `zcutil/fetch-params.sh`")
         }
         Some(prover) => {
+            // FIXME: the last arg of `build` (is_new_asset) is set to a closuer that always returns false,
+            // use proper function instead
             let tx = builder
-                .build(tss, &[], orchard_saks, OsRng, &prover, &prover, fee_rule)
+                .build(
+                    tss,
+                    &[],
+                    orchard_saks,
+                    OsRng,
+                    &prover,
+                    &prover,
+                    fee_rule,
+                    |_asset_base| false,
+                )
                 .unwrap()
                 .into_transaction();
             info!("Build tx: {}", tx.txid());
