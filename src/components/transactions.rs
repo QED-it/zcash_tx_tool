@@ -293,6 +293,7 @@ pub fn create_issue_transaction(
     wallet: &mut User,
 ) -> (Transaction, AssetBase) {
     info!("Issue {} asset", amount);
+    let dummy_recipient = wallet.address_for_account(0, Scope::External);
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(
         wallet.issuance_key(),
@@ -310,13 +311,15 @@ pub fn create_issue_transaction(
         &asset_desc_hash,
     ));
 
-    // New librustzcash requires an Orchard (ZSA) bundle with at least one action so we can
-    // derive rho from the first nullifier. Add a 0-value dummy output to force an action.
+    // New librustzcash requires an OrchardZSA bundle with at least one action so we can
+    // derive rho from the first nullifier.
+    // IMPORTANT: this dummy action must be in zatoshi; Orchard can't pad output-only custom assets
+    // (it needs a real spend of that asset), otherwise it panics with `NoSplitNoteAvailable`.
     tx.add_orchard_output::<FeeError>(
         Some(wallet.orchard_ovk()),
-        recipient,
+        dummy_recipient,
         0,
-        asset.clone(),
+        AssetBase::zatoshi(),
         MemoBytes::empty(),
     )
     .unwrap();
@@ -326,7 +329,7 @@ pub fn create_issue_transaction(
             tx,
             &wallet.transparent_signing_set(),
             &[],
-            Some(asset.clone()),
+            first_issuance.then_some(asset),
         ),
         asset,
     )
@@ -350,11 +353,12 @@ pub fn create_finalization_transaction(
     ));
 
     // Same reason as in create_issue_transaction: force at least one Orchard action.
+    // Use zatoshi to avoid Orchard's custom-asset padding requirement.
     tx.add_orchard_output::<FeeError>(
         Some(wallet.orchard_ovk()),
         dummy_recipient,
         0,
-        asset.clone(),
+        AssetBase::zatoshi(),
         MemoBytes::empty(),
     )
     .unwrap();
@@ -468,7 +472,7 @@ fn build_tx(
                     &prover,
                     &prover,
                     fee_rule,
-                    |asset_base| new_asset.as_ref().map_or(false, |na| asset_base == na),
+                    |asset_base| (new_asset.as_ref() == Some(asset_base)),
                 )
                 .unwrap()
                 .into_transaction();
