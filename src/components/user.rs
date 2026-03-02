@@ -8,7 +8,10 @@ use std::convert::TryInto;
 
 use abscissa_core::prelude::info;
 
-use orchard::issuance::{IssueBundle, Signed};
+use orchard::issuance::{
+    auth::{IssueAuthKey, ZSASchnorr},
+    IssueBundle, Signed,
+};
 use orchard::keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey};
 use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
 use orchard::tree::{MerkleHashOrchard, MerklePath};
@@ -27,7 +30,6 @@ use zcash_protocol::consensus::{BlockHeight, REGTEST_NETWORK};
 use zcash_primitives::transaction::components::issuance::write_note;
 use zcash_primitives::transaction::{OrchardBundle, Transaction, TxId};
 use bip0039::Mnemonic;
-use orchard::issuance_auth::{IssueAuthKey, ZSASchnorr};
 use orchard::primitives::OrchardPrimitives;
 use zcash_primitives::zip32::AccountId;
 use zcash_protocol::constants;
@@ -334,7 +336,7 @@ impl User {
     }
 
     pub fn balance_zec(&mut self, address: Address) -> u64 {
-        self.balance(address, AssetBase::native())
+        self.balance(address, AssetBase::zatoshi())
     }
 
     pub fn balance(&mut self, address: Address, asset: AssetBase) -> u64 {
