@@ -20,7 +20,7 @@ use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
 use rand::Rng;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
-use sha2::Sha256;
+use sha2::{Sha256, Sha512};
 
 use crate::components::persistence::model::NoteData;
 use crate::components::persistence::sqlite::SqliteDataStorage;
@@ -155,10 +155,22 @@ impl User {
         }
     }
 
-    pub fn random(miner_seed_phrase: &String) -> Self {
-        let mut rng = rand::thread_rng();
-        let mut seed_random_bytes = [0u8; 64];
-        rng.fill(&mut seed_random_bytes);
+    /// Create a user with a random or deterministic wallet seed.
+    /// If `random_seed` is provided (e.g. a timestamp), the wallet seed is deterministically
+    /// derived by hashing it, so each test run gets a unique wallet and avoids conflicts
+    /// with cached blocks. If `None`, a fully random seed is used.
+    pub fn random(miner_seed_phrase: &String, random_seed: Option<u64>) -> Self {
+        let seed = match random_seed {
+            Some(val) => {
+                let hash: [u8; 64] = Sha512::digest(val.to_le_bytes()).into();
+                hash
+            }
+            None => {
+                let mut buf = [0u8; 64];
+                rand::thread_rng().fill(&mut buf);
+                buf
+            }
+        };
 
         User {
             db: SqliteDataStorage::new(),
@@ -166,7 +178,7 @@ impl User {
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
             last_block_height: None,
             last_block_hash: None,
-            seed: seed_random_bytes,
+            seed,
             miner_seed: <Mnemonic>::from_phrase(miner_seed_phrase)
                 .unwrap()
                 .to_seed(""),
