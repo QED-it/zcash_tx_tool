@@ -1,6 +1,3 @@
-https://github.com/QED-it/zcash_tx_tool/edit/arseni-update-ecr-workflow/.github/workflows/push-ecr.yaml?pr=/QED-it/zcash_tx_tool/pull/47
-PR comment fixes
-
 # This GitHub Actions workflow automates pushing the Zebra Server Docker image to Amazon ECR.
 # It triggers on any new tag or manual dispatch, builds a Docker image, and pushes it to Amazon Elastic Container Registry (ECR).
 name: Push to Amazon ECR
