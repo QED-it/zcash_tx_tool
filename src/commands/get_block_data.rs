@@ -24,7 +24,6 @@ impl Runnable for GetBlockDataCmd {
                     "block_height": height,
                     "hash": block_info.hash,
                     "prev_hash": block_info.prev_hash,
-                    "tx_hex": block_info.tx_hex,
                 }),
                 None => json!({
                     "success": false,
@@ -40,7 +39,6 @@ impl Runnable for GetBlockDataCmd {
                         "block_height": height,
                         "hash": block_info.hash,
                         "prev_hash": block_info.prev_hash,
-                        "tx_hex": block_info.tx_hex,
                     })
                 }
                 None => json!({

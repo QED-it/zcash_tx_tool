@@ -84,8 +84,8 @@ jobs:
             echo "SYNC SUMMARY: $label"
             echo "=========================================="
             echo ""
-            echo "--- Block data reuse evidence ---"
-            grep -E "(Starting sync from height|Replayed stored blocks locally|Stored data valid, resuming|No block data found|Wallet has no synced blocks|No common ancestor found|Chain reorganization detected|Determined sync start height|Found stored block at height)" "$logfile" || echo "(no sync log lines found)"
+            echo "--- Sync log evidence ---"
+            grep -E "(Starting sync from height|Stored data valid, resuming|No block data found|Wallet has no synced blocks|No common ancestor found|Chain reorganization detected|Determined sync start height|Found stored block at height)" "$logfile" || echo "(no sync log lines found)"
             echo ""
             echo "--- Block data storage state ---"
             echo "First stored block:"
@@ -130,7 +130,7 @@ jobs:
           fi
           echo "Second run completed successfully"
 
-          show_sync_summary "After Run 2 (reusing cached block data)" /tmp/run2.log
+          show_sync_summary "After Run 2 (reusing cached block headers)" /tmp/run2.log
 
       - name: Restart Zebra Node
         run: |
@@ -165,7 +165,7 @@ jobs:
           fi
           echo "Third run completed successfully"
 
-          show_sync_summary "After Run 3 (reusing cached data after Zebra restart)" /tmp/run3.log
+          show_sync_summary "After Run 3 (reusing cached headers after Zebra restart)" /tmp/run3.log
 
       - name: Print Zebra logs
         if: always()

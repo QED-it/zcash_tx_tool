@@ -1,6 +1,6 @@
 //! Block data operations on `SqliteDataStorage`.
 //!
-//! Provides persistent block data storage for tracking previously scanned blocks,
+//! Provides persistent block header storage for tracking previously scanned blocks,
 //! enabling resumable sync and chain reorganization detection.
 
 use crate::components::persistence::model::{BlockDataRow, BlockInfo, NewBlockDataRow};
@@ -28,52 +28,29 @@ impl SqliteDataStorage {
             .select(BlockDataRow::as_select())
             .first(&mut self.connection)
             .ok()?;
-        let tx_hex: Vec<String> = serde_json::from_str(&row.tx_data_json).unwrap_or_default();
         Some(BlockInfo {
             hash: row.hash,
             prev_hash: row.prev_hash,
-            tx_hex,
         })
     }
 
-    /// Insert (or replace) a block in storage.
+    /// Insert (or replace) a block header in storage.
     pub fn insert_block(
         &mut self,
         height: u32,
         hash: String,
         prev_hash: String,
-        tx_hex: Vec<String>,
     ) {
         let height_i32 = i32::try_from(height).expect("block height overflow");
-        let tx_data_json = serde_json::to_string(&tx_hex).expect("failed to serialize tx data");
         use crate::schema::block_data::dsl as bd;
         diesel::replace_into(bd::block_data)
             .values(NewBlockDataRow {
                 height: height_i32,
                 hash,
                 prev_hash,
-                tx_data_json,
             })
             .execute(&mut self.connection)
             .expect("failed to insert block data");
-    }
-
-    /// Returns true if storage is non-empty and every block has tx data.
-    pub fn has_complete_block_tx_data(&mut self) -> bool {
-        use crate::schema::block_data::dsl as bd;
-        let total: i64 = bd::block_data
-            .count()
-            .get_result(&mut self.connection)
-            .unwrap_or(0);
-        if total == 0 {
-            return false;
-        }
-        let empty: i64 = bd::block_data
-            .filter(bd::tx_data_json.eq("[]").or(bd::tx_data_json.eq("")))
-            .count()
-            .get_result(&mut self.connection)
-            .unwrap_or(1);
-        empty == 0
     }
 
     /// Remove all blocks from the given height onwards (for reorg handling).
@@ -108,8 +85,7 @@ mod tests {
             "CREATE TABLE IF NOT EXISTS block_data (
                 height INTEGER PRIMARY KEY NOT NULL,
                 hash TEXT NOT NULL,
-                prev_hash TEXT NOT NULL,
-                tx_data_json TEXT NOT NULL DEFAULT '[]'
+                prev_hash TEXT NOT NULL
             )",
         )
         .execute(&mut storage.connection)
@@ -122,24 +98,9 @@ mod tests {
         let (_db, mut data) = test_db();
         assert!(data.last_block_height().is_none());
 
-        data.insert_block(
-            100,
-            "hash100".into(),
-            "prev100".into(),
-            vec!["tx100".into()],
-        );
-        data.insert_block(
-            101,
-            "hash101".into(),
-            "hash100".into(),
-            vec!["tx101".into()],
-        );
-        data.insert_block(
-            102,
-            "hash102".into(),
-            "hash101".into(),
-            vec!["tx102".into()],
-        );
+        data.insert_block(100, "hash100".into(), "prev100".into());
+        data.insert_block(101, "hash101".into(), "hash100".into());
+        data.insert_block(102, "hash102".into(), "hash101".into());
         assert_eq!(data.last_block_height(), Some(102));
 
         let block = data.get_block(101).unwrap();
@@ -166,7 +127,7 @@ mod tests {
             } else {
                 format!("hash{}", i - 1)
             };
-            data.insert_block(i, hash, prev_hash, vec![format!("tx{}", i)]);
+            data.insert_block(i, hash, prev_hash);
         }
 
         assert_eq!(data.last_block_height(), Some(110));

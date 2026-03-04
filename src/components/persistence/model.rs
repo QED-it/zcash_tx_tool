@@ -67,13 +67,11 @@ impl InsertableNoteData {
 
 // ── Block data models ──
 
-/// A single stored block entry.
+/// A single stored block header.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockInfo {
     pub hash: String,
     pub prev_hash: String,
-    #[serde(default)]
-    pub tx_hex: Vec<String>,
 }
 
 #[derive(Queryable, Selectable)]
@@ -84,7 +82,6 @@ pub(crate) struct BlockDataRow {
     pub(crate) height: i32,
     pub(crate) hash: String,
     pub(crate) prev_hash: String,
-    pub(crate) tx_data_json: String,
 }
 
 #[derive(Insertable)]
@@ -94,5 +91,4 @@ pub(crate) struct NewBlockDataRow {
     pub(crate) height: i32,
     pub(crate) hash: String,
     pub(crate) prev_hash: String,
-    pub(crate) tx_data_json: String,
 }

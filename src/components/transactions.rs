@@ -214,7 +214,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                 info!(
                     "No block at height {}. Synced up to height {}",
                     next_height,
-                    next_height.saturating_sub(1)
+                    next_height - 1
                 );
                 debug!("rpc.get_block err: {:?}", err);
                 return;
@@ -346,15 +346,11 @@ fn determine_sync_start_height(
                 }
                 ChainValidationResult::NoBlockOnChain => {
                     info!(
-                        "No common ancestor found, clearing all stored block data and resetting wallet state"
+                        "No common ancestor found, clearing all stored block data and rescanning"
                     );
                     block_data.truncate_blocks_from(1);
-
-                    // Reset wallet state back to initial state since the blocks it was synced
-                    // from are no longer valid on the current chain
                     wallet.reset();
-
-                    from_height
+                    0
                 }
             }
         }
