@@ -35,12 +35,7 @@ impl SqliteDataStorage {
     }
 
     /// Insert (or replace) a block header in storage.
-    pub fn insert_block(
-        &mut self,
-        height: u32,
-        hash: String,
-        prev_hash: String,
-    ) {
+    pub fn insert_block(&mut self, height: u32, hash: String, prev_hash: String) {
         let height_i32 = i32::try_from(height).expect("block height overflow");
         use crate::schema::block_data::dsl as bd;
         diesel::replace_into(bd::block_data)

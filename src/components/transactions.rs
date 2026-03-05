@@ -134,29 +134,6 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
 
     let mut block_data = SqliteDataStorage::new();
 
-    // If this is a fresh wallet, but the storage contains full tx data, rebuild the wallet
-    // commitment tree locally by replaying stored blocks. This avoids re-downloading
-    // all historical blocks/transactions on subsequent runs.
-    // Only replay if the stored chain still matches the live chain (no reorg).
-    #[allow(clippy::collapsible_if)]
-    if wallet.last_block_height().is_none()
-        && block_data.last_block_height().is_some()
-        && block_data.has_complete_block_tx_data()
-    {
-        let stored_height = block_data.last_block_height().unwrap();
-        if matches!(
-            validate_stored_chain(stored_height, &mut block_data, rpc),
-            ChainValidationResult::Valid
-        ) {
-            if let Some(replayed) =
-                replay_stored_blocks_to_wallet(from_height, wallet, &mut block_data)
-            {
-                info!("Replayed stored blocks locally up to height {}", replayed);
-            }
-        }
-    }
-
-    // Determine the starting height based on stored blocks and chain validation
     let start_height = determine_sync_start_height(from_height, wallet, &mut block_data, rpc);
 
     info!("Determined sync start height: {}", start_height);
@@ -171,24 +148,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     block.hash, block.height
                 );
 
-                // If the storage has tx data for this height and the hash matches, use it.
-                // Otherwise fetch from RPC and write it to the storage for next run.
-                let (transactions, tx_hex): (Vec<Transaction>, Vec<String>) =
-                    if let Some(stored) = block_data.get_block(next_height) {
-                        let chain_hash_hex = hex::encode(block.hash.0);
-                        if stored.hash == chain_hash_hex && !stored.tx_hex.is_empty() {
-                            let txs = deserialize_txs(&stored.tx_hex);
-                            (txs, stored.tx_hex)
-                        } else {
-                            let txs = fetch_block_txs(&block.tx_ids, rpc);
-                            let hexes = serialize_txs(&txs);
-                            (txs, hexes)
-                        }
-                    } else {
-                        let txs = fetch_block_txs(&block.tx_ids, rpc);
-                        let hexes = serialize_txs(&txs);
-                        (txs, hexes)
-                    };
+                let transactions = fetch_block_txs(&block.tx_ids, rpc);
 
                 let prev_hash = if next_height > 0 {
                     if let Some(prev_stored) = block_data.get_block(next_height - 1) {
@@ -203,7 +163,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     hex::encode(block.previous_block_hash.0)
                 };
 
-                block_data.insert_block(next_height, hex::encode(block.hash.0), prev_hash, tx_hex);
+                block_data.insert_block(next_height, hex::encode(block.hash.0), prev_hash);
 
                 wallet
                     .add_notes_from_block(block.height, block.hash, transactions)
@@ -221,59 +181,6 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
             }
         }
     }
-}
-
-fn deserialize_txs(tx_hex: &[String]) -> Vec<Transaction> {
-    tx_hex
-        .iter()
-        .map(|hex_tx| {
-            let bytes = hex::decode(hex_tx).unwrap();
-            Transaction::read(bytes.as_slice(), BranchId::Nu7).unwrap()
-        })
-        .collect()
-}
-
-fn serialize_txs(txs: &[Transaction]) -> Vec<String> {
-    txs.iter()
-        .map(|tx| {
-            let mut bytes = vec![];
-            tx.write(&mut bytes).unwrap();
-            hex::encode(bytes)
-        })
-        .collect()
-}
-
-fn replay_stored_blocks_to_wallet(
-    from_height: u32,
-    wallet: &mut User,
-    block_data: &mut SqliteDataStorage,
-) -> Option<u32> {
-    let last_height = block_data.last_block_height()?;
-    let mut last = None;
-    for height in from_height..=last_height {
-        let stored = match block_data.get_block(height) {
-            Some(s) => s,
-            None => continue,
-        };
-        if stored.tx_hex.is_empty() {
-            return None;
-        }
-
-        let txs = deserialize_txs(&stored.tx_hex);
-
-        let hash_bytes = hex::decode(&stored.hash).ok()?;
-        if hash_bytes.len() != 32 {
-            return None;
-        }
-        let mut hash_arr = [0u8; 32];
-        hash_arr.copy_from_slice(&hash_bytes);
-
-        wallet
-            .add_notes_from_block(BlockHeight::from_u32(height), BlockHash(hash_arr), txs)
-            .ok()?;
-        last = Some(height);
-    }
-    last
 }
 
 /// Determines the height from which to start syncing based on:
