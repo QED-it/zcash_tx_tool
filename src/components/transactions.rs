@@ -15,7 +15,7 @@ use std::ops::Add;
 use orchard::keys::{IssuanceValidatingKey, SpendAuthorizingKey};
 use secp256k1::Secp256k1;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
-use zcash_protocol::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
+use zcash_protocol::consensus::{BranchId, RegtestNetwork, REGTEST_NETWORK};
 use zcash_protocol::memo::MemoBytes;
 use zcash_primitives::transaction::builder::{BuildConfig, Builder};
 use zcash_primitives::transaction::fees::zip317::{FeeError, FeeRule};
@@ -400,7 +400,7 @@ fn create_tx(wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
     };
     Builder::new(
         REGTEST_NETWORK,
-        /*user.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_420),
+        wallet.last_block_height().expect("wallet must be synced before creating transactions"),
         build_config,
     )
 }
