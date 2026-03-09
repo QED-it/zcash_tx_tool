@@ -537,7 +537,7 @@ pub fn template_into_proposal(
         hex::decode(block_template.coinbase_txn.data)
             .unwrap()
             .as_slice(),
-        BranchId::Nu7,
+        BranchId::Nu6,
     )
     .unwrap();
 
