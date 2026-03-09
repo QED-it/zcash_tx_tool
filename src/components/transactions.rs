@@ -244,12 +244,12 @@ fn determine_sync_start_height(
                 }
                 ChainValidationResult::Reorg(reorg_height) => {
                     info!(
-                        "Chain reorganization detected at height {}, clearing stored data from that point",
+                        "Chain reorganization detected at height {}, clearing stored data and rescanning",
                         reorg_height
                     );
-                    wallet.handle_reorg(reorg_height);
                     block_data.truncate_blocks_from(reorg_height);
-                    reorg_height.max(from_height)
+                    wallet.reset();
+                    0
                 }
                 ChainValidationResult::NoBlockOnChain => {
                     info!(
