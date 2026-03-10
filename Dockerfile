@@ -17,12 +17,8 @@ COPY . .
 # Install diesel_cli with specific version
 RUN cargo install diesel_cli@2.1.1 --no-default-features --features sqlite --locked
 
-# Run migrations on a fresh DB (preserve hand-maintained schema.rs from overwrite by diesel CLI)
-RUN rm -f walletdb.sqlite && \
-    cp src/schema.rs src/schema.rs.bak && \
-    diesel migration run && \
-    cp src/schema.rs.bak src/schema.rs && \
-    rm src/schema.rs.bak
+# Run migrations
+RUN diesel migration run
 
 # Build the application in release mode
 RUN cargo build --release

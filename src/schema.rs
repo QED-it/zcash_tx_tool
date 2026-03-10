@@ -21,10 +21,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    /// Stored block headers for syncing and reorg detection.
+    /// Stored block data used for syncing and reorg detection.
+    ///
+    /// Note: `tx_data_json` stores a JSON array of hex-encoded transaction bytes.
     block_data (height) {
         height -> Integer,
         hash -> Text,
         prev_hash -> Text,
+        tx_data_json -> Text,
     }
 }

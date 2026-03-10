@@ -134,13 +134,12 @@ impl RpcClient for ReqwestRpcClient {
     }
 
     fn submit_block(&mut self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>> {
-        let num_txs = block.transactions.len();
         let mut block_bytes = vec![];
         block.write(&mut block_bytes).unwrap();
 
         let result = self.request(&RpcRequest::new_with_params(
             "submitblock",
-            vec![ParamType::String(hex::encode(&block_bytes))],
+            vec![ParamType::String(hex::encode(block_bytes))],
         ))?;
 
         match result {
@@ -148,12 +147,7 @@ impl RpcClient for ReqwestRpcClient {
 
             Some(result) => {
                 if result == "rejected" {
-                    Err(format!(
-                        "Block rejected (block size={} bytes, {} txs)",
-                        block_bytes.len(),
-                        num_txs
-                    )
-                    .into())
+                    Err("Block rejected".into())
                 } else {
                     Ok(Some(result))
                 }
