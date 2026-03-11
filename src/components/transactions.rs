@@ -5,15 +5,16 @@ use crate::components::zebra_merkle::{
     block_commitment_from_parts, AuthDataRoot, Root, AUTH_COMMITMENT_PLACEHOLDER,
 };
 use crate::prelude::{debug, info};
-use orchard::issuance::IssueInfo;
-use orchard::note::AssetBase;
+use orchard::issuance::{IssueInfo, auth::IssueValidatingKey};
+use orchard::note::{AssetId, AssetBase};
 use orchard::value::NoteValue;
 use orchard::Address;
+use orchard::keys::Scope;
 use rand::rngs::OsRng;
 use std::error::Error;
 use std::convert::TryFrom;
 use std::ops::Add;
-use orchard::keys::{IssuanceValidatingKey, SpendAuthorizingKey};
+use orchard::keys::SpendAuthorizingKey;
 use secp256k1::Secp256k1;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
 use zcash_protocol::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
@@ -94,22 +95,19 @@ pub fn create_shield_coinbase_transaction(
     tx.add_transparent_input(
         sk,
         OutPoint::new(coinbase_txid.into(), 0),
-        TxOut {
-            value: coinbase_amount,
-            script_pubkey: miner_taddr.script(),
-        },
+        TxOut::new(coinbase_amount, miner_taddr.script().into()),
     )
     .unwrap();
     tx.add_orchard_output::<FeeError>(
         Some(wallet.orchard_ovk()),
         recipient,
         COINBASE_VALUE,
-        AssetBase::native(),
+        AssetBase::zatoshi(),
         MemoBytes::empty(),
     )
     .unwrap();
 
-    build_tx(tx, &wallet.transparent_signing_set(), &[])
+    build_tx(tx, &wallet.transparent_signing_set(), &[], None)
 }
 
 /// Sync the user with the node
@@ -536,6 +534,7 @@ pub fn create_transfer_transaction(
         tx,
         &wallet.transparent_signing_set(),
         orchard_keys.as_slice(),
+        None,
     )
 }
 
@@ -591,6 +590,7 @@ pub fn create_burn_transaction(
         tx,
         &wallet.transparent_signing_set(),
         orchard_keys.as_slice(),
+        None,
     )
 }
 
@@ -603,6 +603,7 @@ pub fn create_issue_transaction(
     wallet: &mut User,
 ) -> (Transaction, AssetBase) {
     info!("Issue {} asset", amount);
+    let dummy_recipient = wallet.address_for_account(0, Scope::External);
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(
         wallet.issuance_key(),
@@ -614,11 +615,34 @@ pub fn create_issue_transaction(
         first_issuance,
     )
     .unwrap();
-    let asset = AssetBase::derive(
-        &IssuanceValidatingKey::from(&wallet.issuance_key()),
+
+    let asset = AssetBase::custom(&AssetId::new_v0(
+        &IssueValidatingKey::from(&wallet.issuance_key()),
         &asset_desc_hash,
-    );
-    (build_tx(tx, &wallet.transparent_signing_set(), &[]), asset)
+    ));
+
+    // New librustzcash requires an OrchardZSA bundle with at least one action so we can
+    // derive rho from the first nullifier.
+    // IMPORTANT: this dummy action must be in zatoshi; Orchard can't pad output-only custom assets
+    // (it needs a real spend of that asset), otherwise it panics with `NoSplitNoteAvailable`.
+    tx.add_orchard_output::<FeeError>(
+        Some(wallet.orchard_ovk()),
+        dummy_recipient,
+        0,
+        AssetBase::zatoshi(),
+        MemoBytes::empty(),
+    )
+    .unwrap();
+
+    (
+        build_tx(
+            tx,
+            &wallet.transparent_signing_set(),
+            &[],
+            first_issuance.then_some(asset),
+        ),
+        asset,
+    )
 }
 
 /// Create a transaction that issues a new asset
@@ -627,11 +651,29 @@ pub fn create_finalization_transaction(
     wallet: &mut User,
 ) -> Transaction {
     info!("Finalize asset");
+    let dummy_recipient = wallet.address_for_account(0, Scope::External);
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc_hash, None, false)
         .unwrap();
     tx.finalize_asset::<FeeError>(&asset_desc_hash).unwrap();
-    build_tx(tx, &wallet.transparent_signing_set(), &[])
+
+    let asset = AssetBase::custom(&AssetId::new_v0(
+        &IssueValidatingKey::from(&wallet.issuance_key()),
+        &asset_desc_hash,
+    ));
+
+    // Same reason as in create_issue_transaction: force at least one Orchard action.
+    // Use zatoshi to avoid Orchard's custom-asset padding requirement.
+    tx.add_orchard_output::<FeeError>(
+        Some(wallet.orchard_ovk()),
+        dummy_recipient,
+        0,
+        AssetBase::zatoshi(),
+        MemoBytes::empty(),
+    )
+    .unwrap();
+
+    build_tx(tx, &wallet.transparent_signing_set(), &[], Some(asset))
 }
 
 /// Convert a block template and a list of transactions into a block proposal
@@ -721,8 +763,10 @@ fn build_tx(
     builder: Builder<'_, RegtestNetwork, ()>,
     tss: &TransparentSigningSet,
     orchard_saks: &[SpendAuthorizingKey],
+    new_asset: Option<AssetBase>,
 ) -> Transaction {
-    let fee_rule = &FeeRule::non_standard(Zatoshis::from_u64(0).unwrap(), 20, 150, 34).unwrap();
+    // FIXME: the last arg of `non_standard` (creation_cost) is set to 0, use proper value instead
+    let fee_rule = &FeeRule::non_standard(Zatoshis::from_u64(0).unwrap(), 20, 150, 34, 0).unwrap();
     let prover = LocalTxProver::with_default_location();
     match prover {
         None => {
@@ -730,7 +774,16 @@ fn build_tx(
         }
         Some(prover) => {
             let tx = builder
-                .build(tss, &[], orchard_saks, OsRng, &prover, &prover, fee_rule)
+                .build(
+                    tss,
+                    &[],
+                    orchard_saks,
+                    OsRng,
+                    &prover,
+                    &prover,
+                    fee_rule,
+                    |asset_base| (new_asset.as_ref() == Some(asset_base)),
+                )
                 .unwrap()
                 .into_transaction();
             info!("Build tx: {}", tx.txid());
