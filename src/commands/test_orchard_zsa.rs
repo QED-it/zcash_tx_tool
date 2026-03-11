@@ -17,7 +17,7 @@ use crate::commands::test_balances::{
 };
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{
-    create_finalization_transaction, create_issue_transaction, mine, sync_from_height,
+    create_issue_transaction, create_finalization_transaction, mine, sync_from_height,
 };
 use crate::components::user::User;
 use crate::prelude::*;
@@ -31,7 +31,7 @@ impl Runnable for TestOrchardZSACmd {
     fn run(&self) {
         let config = APP.config();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = User::random(&config.wallet.miner_seed_phrase);
+        let mut wallet = User::random(&config.wallet.miner_seed_phrase, None);
 
         wallet.reset();
 
@@ -102,6 +102,7 @@ impl Runnable for TestOrchardZSACmd {
         print_balances("=== Balances after burning ===", asset, &expected_balances);
 
         // --------------------- Finalization ---------------------
+
         let finalization_tx = create_finalization_transaction(asset_desc_hash, &mut wallet);
         mine(&mut wallet, &mut rpc_client, Vec::from([finalization_tx]))
             .expect("block mined successfully");

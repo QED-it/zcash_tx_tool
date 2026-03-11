@@ -14,4 +14,10 @@ CREATE TABLE notes (
     spend_action_index INTEGER NOT NULL,
     origin_block_height INTEGER NOT NULL DEFAULT 0,
     spend_block_height INTEGER
-)
+);
+
+CREATE TABLE IF NOT EXISTS block_data (
+    height INTEGER PRIMARY KEY NOT NULL,
+    hash TEXT NOT NULL,
+    prev_hash TEXT NOT NULL
+);

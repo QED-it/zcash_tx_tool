@@ -10,7 +10,7 @@ pub(crate) struct TestBalances(Vec<u64>);
 
 impl TestBalances {
     pub(crate) fn get_native_balances(num_accounts: usize, user: &mut User) -> TestBalances {
-        Self::get_asset_balances(AssetBase::zatoshi(), num_accounts, user)
+        Self::get_asset_balances(AssetBase::native(), num_accounts, user)
     }
 
     pub(crate) fn get_asset_balances(
@@ -141,29 +141,25 @@ pub(crate) fn expected_balances_after_transfer(
     balances: &TestBalances,
     txi: &TxiBatch<TransferInfo>,
 ) -> TestBalances {
-    let new_balances = txi
-        .to_vec()
+    txi.to_vec()
         .iter()
         .fold(balances.clone(), |mut acc, transfer_info| {
             acc.0[transfer_info.acc_idx_from] -= transfer_info.amount;
             acc.0[transfer_info.acc_idx_to] += transfer_info.amount;
             acc
-        });
-    new_balances
+        })
 }
 
 pub(crate) fn expected_balances_after_burn(
     balances: &TestBalances,
     txi: &TxiBatch<BurnInfo>,
 ) -> TestBalances {
-    let new_balances = txi
-        .to_vec()
+    txi.to_vec()
         .iter()
         .fold(balances.clone(), |mut acc, burn_info| {
             acc.0[burn_info.burner_acc_idx] -= burn_info.amount;
             acc
-        });
-    new_balances
+        })
 }
 
 pub(crate) fn check_balances(
@@ -178,7 +174,7 @@ pub(crate) fn check_balances(
 
 pub(crate) fn print_balances(header: &str, asset: AssetBase, balances: &TestBalances) {
     info!("{}", header);
-    if asset.is_zatoshi().into() {
+    if asset.is_native().into() {
         info!("AssetBase: Native ZEC");
     } else {
         let trimmed_asset_base = hex::encode(asset.to_bytes())

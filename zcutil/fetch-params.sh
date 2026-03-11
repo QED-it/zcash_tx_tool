@@ -27,8 +27,8 @@ SAPLING_SPROUT_GROTH16_NAME='sprout-groth16.params'
 DOWNLOAD_URL="https://download.z.cash/downloads"
 IPFS_HASH="/ipfs/QmXRHVGLQBiKwvNq7c2vPxAKz1zRVmMYbmt7G5TQss7tY7"
 
-SHA256CMD="$(command -v shasum || echo sha256sum)"
-SHA256ARGS="$(command -v shasum >/dev/null && echo '-a 256' || echo '')"
+SHA256CMD="$(command -v sha256sum || echo shasum)"
+SHA256ARGS="$(command -v sha256sum >/dev/null || echo '-a 256')"
 
 WGETCMD="$(command -v wget || echo '')"
 IPFSCMD="$(command -v ipfs || echo '')"

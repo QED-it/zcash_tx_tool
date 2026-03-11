@@ -28,7 +28,7 @@ impl Runnable for TestOrchardCmd {
     fn run(&self) {
         let config = APP.config();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = User::random(&config.wallet.miner_seed_phrase);
+        let mut wallet = User::random(&config.wallet.miner_seed_phrase, None);
 
         wallet.reset();
 
@@ -46,7 +46,7 @@ impl Runnable for TestOrchardCmd {
         );
 
         let balances = TestBalances::get_native_balances(num_users, &mut wallet);
-        print_balances("=== Initial balances ===", AssetBase::zatoshi(), &balances);
+        print_balances("=== Initial balances ===", AssetBase::native(), &balances);
 
         // --------------------- Shield miner's reward ---------------------
 
@@ -57,7 +57,7 @@ impl Runnable for TestOrchardCmd {
 
         let expected_balances = expected_balances_after_mine(&balances, 0);
         check_balances(
-            AssetBase::zatoshi(),
+            AssetBase::native(),
             &expected_balances,
             &mut wallet,
             num_users,
@@ -65,7 +65,7 @@ impl Runnable for TestOrchardCmd {
 
         print_balances(
             "=== Balances after shielding ===",
-            AssetBase::zatoshi(),
+            AssetBase::native(),
             &expected_balances,
         );
 
@@ -76,7 +76,7 @@ impl Runnable for TestOrchardCmd {
         let transfer_info = TransferInfo::new(
             miner_idx,
             alice_idx,
-            AssetBase::zatoshi(),
+            AssetBase::native(),
             amount_to_transfer_1,
         );
         let txi = TxiBatch::from_item(transfer_info);
@@ -88,7 +88,7 @@ impl Runnable for TestOrchardCmd {
         mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
         check_balances(
-            AssetBase::zatoshi(),
+            AssetBase::native(),
             &expected_balances,
             &mut wallet,
             num_users,
@@ -96,7 +96,7 @@ impl Runnable for TestOrchardCmd {
 
         print_balances(
             "=== Balances after transfer ===",
-            AssetBase::zatoshi(),
+            AssetBase::native(),
             &expected_balances,
         );
     }
