@@ -66,13 +66,13 @@ Open a terminal and execute the following commands:
 
 ```bash
 # Clone the zebra repository with the ZSA integration branch
-git clone -b zsa-integration-demo --single-branch https://github.com/QED-it/zebra.git
+git clone -b zsa-integration-demo --single-branch --depth=1 https://github.com/QED-it/zebra.git
 
-# Navigate to the testnet deployment directory
-cd zebra/testnet-single-node-deploy
+# Navigate to the Zebra directory
+cd zebra
 
 # Build the Zebra Docker image
-docker build -t qedit/zebra-regtest-txv6 .
+docker build -t qedit/zebra-regtest-txv6 -f testnet-single-node-deploy/dockerfile .
 
 # Run the Zebra Docker container
 docker run -p 18232:18232 qedit/zebra-regtest-txv6
