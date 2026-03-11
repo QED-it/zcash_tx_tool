@@ -248,7 +248,6 @@ fn replay_stored_blocks_to_wallet(
         if stored.tx_hex.is_empty() {
             return None;
         }
-        
 
         let txs = stored
             .tx_hex
