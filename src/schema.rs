@@ -21,7 +21,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    /// Stored block headers for syncing and reorg detection.
+    /// Stored block data used for syncing and reorg detection.
     block_data (height) {
         height -> Integer,
         hash -> Text,

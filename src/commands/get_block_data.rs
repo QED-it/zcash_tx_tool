@@ -3,7 +3,7 @@
 use abscissa_core::{Command, Runnable};
 use serde_json::json;
 
-use crate::components::persistence::sqlite::SqliteDataStorage;
+use crate::components::block_data::BlockData;
 
 /// Get block data from storage
 #[derive(clap::Parser, Command, Debug)]
@@ -15,40 +15,47 @@ pub struct GetBlockDataCmd {
 impl Runnable for GetBlockDataCmd {
     /// Run the `get_block_data` subcommand.
     fn run(&self) {
-        let mut db = SqliteDataStorage::new();
+        let block_data = BlockData::load();
 
         let result = match self.block_height {
-            Some(height) => match db.get_block(height) {
-                Some(block_info) => json!({
-                    "success": true,
-                    "block_height": height,
-                    "hash": block_info.hash,
-                    "prev_hash": block_info.prev_hash,
-                }),
-                None => json!({
-                    "success": false,
-                    "error": format!("Block at height {} not found", height),
-                    "block_height": height,
-                }),
-            },
-            None => match db.last_block_height() {
-                Some(height) => {
-                    let block_info = db.get_block(height).unwrap();
-                    json!({
+            Some(height) => {
+                // Get specific block
+                match block_data.get(height) {
+                    Some(block_info) => json!({
                         "success": true,
                         "block_height": height,
                         "hash": block_info.hash,
                         "prev_hash": block_info.prev_hash,
-                    })
+                    }),
+                    None => json!({
+                        "success": false,
+                        "error": format!("Block at height {} not found", height),
+                        "block_height": height,
+                    }),
                 }
-                None => json!({
-                    "success": false,
-                    "error": "No blocks found in storage",
-                    "block_height": null,
-                }),
-            },
+            }
+            None => {
+                // Get last block
+                match block_data.last_height() {
+                    Some(height) => {
+                        let block_info = block_data.get(height).unwrap();
+                        json!({
+                            "success": true,
+                            "block_height": height,
+                            "hash": block_info.hash,
+                            "prev_hash": block_info.prev_hash,
+                        })
+                    }
+                    None => json!({
+                        "success": false,
+                        "error": "No blocks found in storage",
+                        "block_height": null,
+                    }),
+                }
+            }
         };
 
+        // Print JSON result
         println!("{}", serde_json::to_string_pretty(&result).unwrap());
     }
 }

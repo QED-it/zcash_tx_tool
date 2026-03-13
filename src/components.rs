@@ -1,3 +1,4 @@
+pub mod block_data;
 pub mod persistence;
 pub mod rpc_client;
 pub mod user;

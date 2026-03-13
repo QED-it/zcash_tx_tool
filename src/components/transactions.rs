@@ -1,19 +1,20 @@
-use crate::components::persistence::sqlite::SqliteDataStorage;
+use crate::components::block_data::BlockData;
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::components::user::User;
 use crate::components::zebra_merkle::{
     block_commitment_from_parts, AuthDataRoot, Root, AUTH_COMMITMENT_PLACEHOLDER,
 };
 use crate::prelude::{debug, info};
-use orchard::issuance::IssueInfo;
-use orchard::note::AssetBase;
+use orchard::issuance::{IssueInfo, auth::IssueValidatingKey};
+use orchard::note::{AssetId, AssetBase};
 use orchard::value::NoteValue;
 use orchard::Address;
+use orchard::keys::Scope;
 use rand::rngs::OsRng;
 use std::error::Error;
 use std::convert::TryFrom;
 use std::ops::Add;
-use orchard::keys::{IssuanceValidatingKey, SpendAuthorizingKey};
+use orchard::keys::SpendAuthorizingKey;
 use secp256k1::Secp256k1;
 use zcash_primitives::block::{BlockHash, BlockHeader, BlockHeaderData};
 use zcash_protocol::consensus::{BlockHeight, BranchId, RegtestNetwork, REGTEST_NETWORK};
@@ -94,22 +95,19 @@ pub fn create_shield_coinbase_transaction(
     tx.add_transparent_input(
         sk,
         OutPoint::new(coinbase_txid.into(), 0),
-        TxOut {
-            value: coinbase_amount,
-            script_pubkey: miner_taddr.script(),
-        },
+        TxOut::new(coinbase_amount, miner_taddr.script().into()),
     )
     .unwrap();
     tx.add_orchard_output::<FeeError>(
         Some(wallet.orchard_ovk()),
         recipient,
         COINBASE_VALUE,
-        AssetBase::native(),
+        AssetBase::zatoshi(),
         MemoBytes::empty(),
     )
     .unwrap();
 
-    build_tx(tx, &wallet.transparent_signing_set(), &[])
+    build_tx(tx, &wallet.transparent_signing_set(), &[], None)
 }
 
 /// Sync the user with the node
@@ -132,8 +130,10 @@ pub fn sync(wallet: &mut User, rpc: &mut dyn RpcClient) {
 pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcClient) {
     info!("Starting sync from height {}", from_height);
 
-    let mut block_data = SqliteDataStorage::new();
+    // Load the block data storage
+    let mut block_data = BlockData::load();
 
+    // Determine the starting height based on stored blocks and chain validation
     let start_height = determine_sync_start_height(from_height, wallet, &mut block_data, rpc);
 
     info!("Determined sync start height: {}", start_height);
@@ -151,7 +151,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                 let transactions = fetch_block_txs(&block.tx_ids, rpc);
 
                 let prev_hash = if next_height > 0 {
-                    if let Some(prev_stored) = block_data.get_block(next_height - 1) {
+                    if let Some(prev_stored) = block_data.get(next_height - 1) {
                         prev_stored.hash.clone()
                     } else {
                         match rpc.get_block(next_height - 1) {
@@ -163,7 +163,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     hex::encode(block.previous_block_hash.0)
                 };
 
-                block_data.insert_block(next_height, hex::encode(block.hash.0), prev_hash);
+                block_data.insert(next_height, hex::encode(block.hash.0), prev_hash);
 
                 wallet
                     .add_notes_from_block(block.height, block.hash, transactions)
@@ -177,6 +177,8 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     next_height - 1
                 );
                 debug!("rpc.get_block err: {:?}", err);
+                // Save the block data before returning
+                block_data.save();
                 return;
             }
         }
@@ -203,7 +205,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
 fn determine_sync_start_height(
     from_height: u32,
     wallet: &mut User,
-    block_data: &mut SqliteDataStorage,
+    block_data: &mut BlockData,
     rpc: &mut dyn RpcClient,
 ) -> u32 {
     let wallet_last_block_height = wallet.last_block_height().map_or(0, u32::from);
@@ -223,18 +225,21 @@ fn determine_sync_start_height(
         return from_height;
     }
 
-    let last_stored_height = block_data.last_block_height();
+    // Get the last stored block height
+    let last_stored_height = block_data.last_height();
 
     match last_stored_height {
         Some(stored_height) => {
-            let stored_block = block_data.get_block(stored_height).unwrap();
+            let stored_block = block_data.get(stored_height).unwrap();
             info!(
                 "Found stored block at height {} with hash {}",
                 stored_height, stored_block.hash
             );
 
+            // Validate the stored chain against the current blockchain
             match validate_stored_chain(stored_height, block_data, rpc) {
                 ChainValidationResult::Valid => {
+                    // Chain is valid, continue from after the last stored block
                     let resume_height = stored_height + 1;
                     info!(
                         "Stored data valid, resuming sync from height {}",
@@ -243,25 +248,37 @@ fn determine_sync_start_height(
                     resume_height.max(from_height)
                 }
                 ChainValidationResult::Reorg(reorg_height) => {
+                    // Chain reorganization detected, need to rescan from reorg point
                     info!(
-                        "Chain reorganization detected at height {}, clearing stored data and rescanning",
+                        "Chain reorganization detected at height {}, clearing stored data from that point",
                         reorg_height
                     );
-                    block_data.truncate_blocks_from(reorg_height);
-                    wallet.reset();
-                    0
+                    // Clean up notes from invalidated blocks before truncating block data
+                    wallet.handle_reorg(reorg_height);
+                    block_data.truncate_from(reorg_height);
+                    block_data.save();
+                    reorg_height.max(from_height)
                 }
                 ChainValidationResult::NoBlockOnChain => {
+                    // Zebra node has been reset or chain data is completely different
+                    // Clear all stored block data AND reset wallet state since it was built from
+                    // blocks that no longer exist on the chain
                     info!(
-                        "No common ancestor found, clearing all stored block data and rescanning"
+                        "No common ancestor found, clearing all stored block data and resetting wallet state"
                     );
-                    block_data.truncate_blocks_from(1);
+                    block_data.truncate_from(1);
+                    block_data.save();
+
+                    // Reset wallet state back to initial state since the blocks it was synced
+                    // from are no longer valid on the current chain
                     wallet.reset();
-                    0
+
+                    from_height
                 }
             }
         }
         None => {
+            // No stored data, use the higher of from_height or wallet's last height
             info!("No block data found, starting fresh");
             from_height.max(wallet_last_block_height)
         }
@@ -289,10 +306,10 @@ enum ChainValidationResult {
 /// Walks backwards from the last stored block to find where the chains diverge.
 fn validate_stored_chain(
     stored_height: u32,
-    block_data: &mut SqliteDataStorage,
+    block_data: &BlockData,
     rpc: &mut dyn RpcClient,
 ) -> ChainValidationResult {
-    let stored_block = match block_data.get_block(stored_height) {
+    let stored_block = match block_data.get(stored_height) {
         Some(b) => b,
         None => return ChainValidationResult::NoBlockOnChain,
     };
@@ -330,14 +347,14 @@ fn validate_stored_chain(
 /// Walk backwards through the stored data to find the fork point / common ancestor
 fn find_common_ancestor(
     from_height: u32,
-    block_data: &mut SqliteDataStorage,
+    block_data: &BlockData,
     rpc: &mut dyn RpcClient,
 ) -> ChainValidationResult {
     let mut check_height = from_height;
     while check_height > 1 {
         check_height -= 1;
 
-        if let Some(check_stored) = block_data.get_block(check_height) {
+        if let Some(check_stored) = block_data.get(check_height) {
             match rpc.get_block(check_height) {
                 Ok(block) => {
                     let block_hash = hex::encode(block.hash.0);
@@ -429,6 +446,7 @@ pub fn create_transfer_transaction(
         tx,
         &wallet.transparent_signing_set(),
         orchard_keys.as_slice(),
+        None,
     )
 }
 
@@ -484,6 +502,7 @@ pub fn create_burn_transaction(
         tx,
         &wallet.transparent_signing_set(),
         orchard_keys.as_slice(),
+        None,
     )
 }
 
@@ -496,6 +515,7 @@ pub fn create_issue_transaction(
     wallet: &mut User,
 ) -> (Transaction, AssetBase) {
     info!("Issue {} asset", amount);
+    let dummy_recipient = wallet.address_for_account(0, Scope::External);
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(
         wallet.issuance_key(),
@@ -507,11 +527,34 @@ pub fn create_issue_transaction(
         first_issuance,
     )
     .unwrap();
-    let asset = AssetBase::derive(
-        &IssuanceValidatingKey::from(&wallet.issuance_key()),
+
+    let asset = AssetBase::custom(&AssetId::new_v0(
+        &IssueValidatingKey::from(&wallet.issuance_key()),
         &asset_desc_hash,
-    );
-    (build_tx(tx, &wallet.transparent_signing_set(), &[]), asset)
+    ));
+
+    // New librustzcash requires an OrchardZSA bundle with at least one action so we can
+    // derive rho from the first nullifier.
+    // IMPORTANT: this dummy action must be in zatoshi; Orchard can't pad output-only custom assets
+    // (it needs a real spend of that asset), otherwise it panics with `NoSplitNoteAvailable`.
+    tx.add_orchard_output::<FeeError>(
+        Some(wallet.orchard_ovk()),
+        dummy_recipient,
+        0,
+        AssetBase::zatoshi(),
+        MemoBytes::empty(),
+    )
+    .unwrap();
+
+    (
+        build_tx(
+            tx,
+            &wallet.transparent_signing_set(),
+            &[],
+            first_issuance.then_some(asset),
+        ),
+        asset,
+    )
 }
 
 /// Create a transaction that issues a new asset
@@ -520,11 +563,29 @@ pub fn create_finalization_transaction(
     wallet: &mut User,
 ) -> Transaction {
     info!("Finalize asset");
+    let dummy_recipient = wallet.address_for_account(0, Scope::External);
     let mut tx = create_tx(wallet);
     tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc_hash, None, false)
         .unwrap();
     tx.finalize_asset::<FeeError>(&asset_desc_hash).unwrap();
-    build_tx(tx, &wallet.transparent_signing_set(), &[])
+
+    let asset = AssetBase::custom(&AssetId::new_v0(
+        &IssueValidatingKey::from(&wallet.issuance_key()),
+        &asset_desc_hash,
+    ));
+
+    // Same reason as in create_issue_transaction: force at least one Orchard action.
+    // Use zatoshi to avoid Orchard's custom-asset padding requirement.
+    tx.add_orchard_output::<FeeError>(
+        Some(wallet.orchard_ovk()),
+        dummy_recipient,
+        0,
+        AssetBase::zatoshi(),
+        MemoBytes::empty(),
+    )
+    .unwrap();
+
+    build_tx(tx, &wallet.transparent_signing_set(), &[], Some(asset))
 }
 
 /// Convert a block template and a list of transactions into a block proposal
@@ -537,7 +598,7 @@ pub fn template_into_proposal(
         hex::decode(block_template.coinbase_txn.data)
             .unwrap()
             .as_slice(),
-        BranchId::Nu7,
+        BranchId::Nu6,
     )
     .unwrap();
 
@@ -559,7 +620,8 @@ pub fn template_into_proposal(
         .iter()
         .map(|tx| {
             if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
-                <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap()
+                let bytes = <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
+                bytes
             } else {
                 AUTH_COMMITMENT_PLACEHOLDER
             }
@@ -601,19 +663,22 @@ fn create_tx(wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),
     };
-    Builder::new(
+    let tx = Builder::new(
         REGTEST_NETWORK,
         /*user.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_420),
         build_config,
-    )
+    );
+    tx
 }
 
 fn build_tx(
     builder: Builder<'_, RegtestNetwork, ()>,
     tss: &TransparentSigningSet,
     orchard_saks: &[SpendAuthorizingKey],
+    new_asset: Option<AssetBase>,
 ) -> Transaction {
-    let fee_rule = &FeeRule::non_standard(Zatoshis::from_u64(0).unwrap(), 20, 150, 34).unwrap();
+    // FIXME: the last arg of `non_standard` (creation_cost) is set to 0, use proper value instead
+    let fee_rule = &FeeRule::non_standard(Zatoshis::from_u64(0).unwrap(), 20, 150, 34, 0).unwrap();
     let prover = LocalTxProver::with_default_location();
     match prover {
         None => {
@@ -621,7 +686,16 @@ fn build_tx(
         }
         Some(prover) => {
             let tx = builder
-                .build(tss, &[], orchard_saks, OsRng, &prover, &prover, fee_rule)
+                .build(
+                    tss,
+                    &[],
+                    orchard_saks,
+                    OsRng,
+                    &prover,
+                    &prover,
+                    fee_rule,
+                    |asset_base| (new_asset.as_ref() == Some(asset_base)),
+                )
                 .unwrap()
                 .into_transaction();
             info!("Build tx: {}", tx.txid());
