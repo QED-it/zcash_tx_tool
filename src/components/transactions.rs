@@ -210,14 +210,16 @@ fn determine_sync_start_height(
 ) -> u32 {
     let wallet_last_block_height = wallet.last_block_height().map_or(0, u32::from);
 
-    // IMPORTANT:
-    // If the wallet has no local state, we must rebuild the note commitment tree from
-    // `from_height`. The block data storage only tracks hashes for chain progression / reorg
-    // detection; resuming from the stored tip would skip processing historical txs and
-    // yield an invalid Orchard anchor, causing mined blocks to be rejected.
-    //
-    // To enable full persistence (skip rescan entirely), keep wallet state between runs.
+    // If the wallet has no local state we must rebuild the note commitment tree from
+    // `from_height`. Any previously stored block data is stale (it was accumulated
+    // against a chain the wallet no longer knows about), so clear it to prevent
+    // false reorg detection on subsequent syncs within the same run.
     if wallet_last_block_height == 0 {
+        if block_data.last_height().is_some() {
+            info!("Wallet has no synced blocks; clearing stale block data");
+            block_data.clear();
+            block_data.save();
+        }
         info!(
             "Wallet has no synced blocks; rescanning from height {}",
             from_height

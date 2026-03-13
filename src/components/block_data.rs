@@ -129,13 +129,7 @@ impl BlockData {
 
     /// Insert a block into the storage
     pub fn insert(&mut self, height: u32, hash: String, prev_hash: String) {
-        self.blocks.insert(
-            height,
-            BlockInfo {
-                hash,
-                prev_hash,
-            },
-        );
+        self.blocks.insert(height, BlockInfo { hash, prev_hash });
         self.unsaved = true;
     }
 
