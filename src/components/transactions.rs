@@ -211,13 +211,17 @@ fn determine_sync_start_height(
     let wallet_last_block_height = wallet.last_block_height().map_or(0, u32::from);
 
     // If the wallet has no local state we must rebuild the note commitment tree from
-    // `from_height`. Any previously stored block data is stale (it was accumulated
-    // against a chain the wallet no longer knows about), so clear it to prevent
+    // `from_height`. Block data at or above `from_height` is stale (the wallet no
+    // longer has the commitment tree to match it), so truncate from there to prevent
     // false reorg detection on subsequent syncs within the same run.
+    // Pre-activation blocks (below `from_height`) are preserved.
     if wallet_last_block_height == 0 {
-        if block_data.last_height().is_some() {
-            info!("Wallet has no synced blocks; clearing stale block data");
-            block_data.clear();
+        if block_data.last_height().map_or(false, |h| h >= from_height) {
+            info!(
+                "Wallet has no synced blocks; clearing stale block data from height {}",
+                from_height
+            );
+            block_data.truncate_from(from_height);
             block_data.save();
         }
         info!(
