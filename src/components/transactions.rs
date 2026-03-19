@@ -1,3 +1,4 @@
+use crate::components::block_data::BlockData;
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::components::user::User;
 use crate::components::zebra_merkle::{
@@ -118,32 +119,52 @@ pub fn sync(wallet: &mut User, rpc: &mut dyn RpcClient) {
     sync_from_height(current_height, wallet, rpc);
 }
 
-/// Sync the user with the node from the given height
+/// Sync the user with the node from the given height.
+/// Uses SQLite-backed block data storage to:
+/// 1. Track chain progression with block hashes
+/// 2. Detect chain reorganizations by verifying block hashes match
+/// 3. Handle reorgs by finding the common ancestor and rescanning from there
+///
+/// Note: Each wallet run must process all transactions to build its own commitment tree.
+/// The storage only keeps hashes for chain validation, not transaction data.
 pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcClient) {
     info!("Starting sync from height {}", from_height);
 
-    let wallet_last_block_height = wallet.last_block_height().map_or(0, |h| h.into());
-    let mut next_height = if from_height < wallet_last_block_height {
-        wallet_last_block_height
-    } else {
-        from_height
-    };
+    // Load the block data storage
+    let mut block_data = BlockData::load();
+
+    // Determine the starting height based on stored blocks and chain validation
+    let start_height = determine_sync_start_height(from_height, wallet, &mut block_data, rpc);
+
+    info!("Determined sync start height: {}", start_height);
+
+    let mut next_height = start_height;
 
     loop {
         match rpc.get_block(next_height) {
             Ok(block) => {
-                // if block.prev_hash != user.last_block_hash
-                // Fork management is not implemented
-
                 info!(
                     "Adding transactions from block {} at height {}",
                     block.hash, block.height
                 );
-                let transactions = block
-                    .tx_ids
-                    .into_iter()
-                    .map(|tx_id| rpc.get_transaction(&tx_id).unwrap())
-                    .collect();
+
+                let transactions = fetch_block_txs(&block.tx_ids, rpc);
+
+                let prev_hash = if next_height > 0 {
+                    if let Some(prev_stored) = block_data.get(next_height - 1) {
+                        prev_stored.hash.clone()
+                    } else {
+                        match rpc.get_block(next_height - 1) {
+                            Ok(prev_block) => hex::encode(prev_block.hash.0),
+                            Err(_) => hex::encode(block.previous_block_hash.0),
+                        }
+                    }
+                } else {
+                    hex::encode(block.previous_block_hash.0)
+                };
+
+                block_data.insert(next_height, hex::encode(block.hash.0), prev_hash);
+
                 wallet
                     .add_notes_from_block(block.height, block.hash, transactions)
                     .unwrap();
@@ -156,10 +177,217 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     next_height - 1
                 );
                 debug!("rpc.get_block err: {:?}", err);
+                // Save the block data before returning
+                block_data.save();
                 return;
             }
         }
     }
+}
+
+/// Determines the height from which to start syncing based on:
+/// 1. The requested from_height
+/// 2. The wallet's last processed block
+/// 3. The stored block data with chain validation
+///
+/// ## Storage Behavior
+///
+/// This function handles persistence by checking both wallet state and stored block data:
+///
+/// - If wallet has no synced blocks (`wallet_last_block_height == 0`):
+///   → Must start from `from_height` to rebuild note commitment tree
+///
+/// - If wallet has synced blocks AND stored block data exists:
+///   → Validates chain continuity and resumes from last valid block
+///   → Handles reorgs by rolling back to the reorg point
+///   → Clears invalid data if chain has diverged completely
+///
+fn determine_sync_start_height(
+    from_height: u32,
+    wallet: &mut User,
+    block_data: &mut BlockData,
+    rpc: &mut dyn RpcClient,
+) -> u32 {
+    let wallet_last_block_height = wallet.last_block_height().map_or(0, u32::from);
+
+    // If the wallet has no local state we must rebuild the note commitment tree from
+    // `from_height`. Block data at or above `from_height` is stale (the wallet no
+    // longer has the commitment tree to match it), so truncate from there to prevent
+    // false reorg detection on subsequent syncs within the same run.
+    // Pre-activation blocks (below `from_height`) are preserved.
+    if wallet_last_block_height == 0 {
+        if block_data.last_height().is_some_and(|h| h >= from_height) {
+            info!(
+                "Wallet has no synced blocks; clearing stale block data from height {}",
+                from_height
+            );
+            block_data.truncate_from(from_height);
+            block_data.save();
+        }
+        info!(
+            "Wallet has no synced blocks; rescanning from height {}",
+            from_height
+        );
+        return from_height;
+    }
+
+    // Get the last stored block height
+    let last_stored_height = block_data.last_height();
+
+    match last_stored_height {
+        Some(stored_height) => {
+            let stored_block = block_data.get(stored_height).unwrap();
+            info!(
+                "Found stored block at height {} with hash {}",
+                stored_height, stored_block.hash
+            );
+
+            // Validate the stored chain against the current blockchain
+            match validate_stored_chain(stored_height, block_data, rpc) {
+                ChainValidationResult::Valid => {
+                    // Chain is valid, continue from after the last stored block
+                    let resume_height = stored_height + 1;
+                    info!(
+                        "Stored data valid, resuming sync from height {}",
+                        resume_height
+                    );
+                    resume_height.max(from_height)
+                }
+                ChainValidationResult::Reorg(reorg_height) => {
+                    // Chain reorganization detected, need to rescan from reorg point
+                    info!(
+                        "Chain reorganization detected at height {}, clearing stored data from that point",
+                        reorg_height
+                    );
+                    // Clean up notes from invalidated blocks before truncating block data
+                    wallet.handle_reorg(reorg_height);
+                    block_data.truncate_from(reorg_height);
+                    block_data.save();
+                    reorg_height.max(from_height)
+                }
+                ChainValidationResult::NoBlockOnChain => {
+                    // Zebra node has been reset or chain data is completely different
+                    // Clear all stored block data AND reset wallet state since it was built from
+                    // blocks that no longer exist on the chain
+                    info!(
+                        "No common ancestor found, clearing all stored block data and resetting wallet state"
+                    );
+                    block_data.truncate_from(1);
+                    block_data.save();
+
+                    // Reset wallet state back to initial state since the blocks it was synced
+                    // from are no longer valid on the current chain
+                    wallet.reset();
+
+                    from_height
+                }
+            }
+        }
+        None => {
+            // No stored data, use the higher of from_height or wallet's last height
+            info!("No block data found, starting fresh");
+            from_height.max(wallet_last_block_height)
+        }
+    }
+}
+
+fn fetch_block_txs(tx_ids: &[TxId], rpc: &mut dyn RpcClient) -> Vec<Transaction> {
+    tx_ids
+        .iter()
+        .map(|tx_id| rpc.get_transaction(tx_id).unwrap())
+        .collect()
+}
+
+/// Result of validating the stored chain against the current blockchain
+enum ChainValidationResult {
+    /// The stored chain matches the current blockchain
+    Valid,
+    /// A reorganization was detected at the specified height
+    Reorg(u32),
+    /// The stored block doesn't exist on the chain
+    NoBlockOnChain,
+}
+
+/// Validates that the stored chain matches the current blockchain.
+/// Walks backwards from the last stored block to find where the chains diverge.
+fn validate_stored_chain(
+    stored_height: u32,
+    block_data: &BlockData,
+    rpc: &mut dyn RpcClient,
+) -> ChainValidationResult {
+    let stored_block = match block_data.get(stored_height) {
+        Some(b) => b,
+        None => return ChainValidationResult::NoBlockOnChain,
+    };
+
+    // First, check if the last stored block matches
+    match rpc.get_block(stored_height) {
+        Ok(chain_block) => {
+            let chain_hash = hex::encode(chain_block.hash.0);
+            if chain_hash == stored_block.hash {
+                // Perfect match, chain is valid
+                return ChainValidationResult::Valid;
+            }
+
+            // Hash mismatch - walk backwards to find where chains diverge
+            info!(
+                "Block hash mismatch at height {}: stored {} vs chain {}",
+                stored_height, stored_block.hash, chain_hash
+            );
+
+            find_common_ancestor(stored_height, block_data, rpc)
+        }
+        Err(_) => {
+            // Block at stored height doesn't exist on chain yet
+            // Walk backwards to find the highest block that does exist and matches
+            info!(
+                "Block at height {} not found on chain, walking back to find valid stored point",
+                stored_height
+            );
+
+            find_common_ancestor(stored_height, block_data, rpc)
+        }
+    }
+}
+
+/// Walk backwards through the stored data to find the fork point / common ancestor
+fn find_common_ancestor(
+    from_height: u32,
+    block_data: &BlockData,
+    rpc: &mut dyn RpcClient,
+) -> ChainValidationResult {
+    let mut check_height = from_height;
+    while check_height > 1 {
+        check_height -= 1;
+
+        if let Some(check_stored) = block_data.get(check_height) {
+            match rpc.get_block(check_height) {
+                Ok(block) => {
+                    let block_hash = hex::encode(block.hash.0);
+                    if block_hash == check_stored.hash {
+                        // Found the common ancestor, reorg starts at check_height + 1
+                        info!(
+                            "Found common ancestor at height {}, will resume from {}",
+                            check_height,
+                            check_height + 1
+                        );
+                        return ChainValidationResult::Reorg(check_height + 1);
+                    }
+                }
+                Err(_) => {
+                    // Block not found, continue walking back
+                    continue;
+                }
+            }
+        } else {
+            // No stored block at this height, reorg starts here
+            return ChainValidationResult::Reorg(check_height + 1);
+        }
+    }
+
+    // Couldn't find common ancestor, treat stored data as invalid but preserve it
+    info!("No common ancestor found, ignoring stored data and starting fresh");
+    ChainValidationResult::NoBlockOnChain
 }
 
 /// Create a transfer transaction
@@ -398,7 +626,8 @@ pub fn template_into_proposal(
         .iter()
         .map(|tx| {
             if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
-                <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap()
+                let bytes = <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
+                bytes
             } else {
                 AUTH_COMMITMENT_PLACEHOLDER
             }
@@ -440,11 +669,12 @@ fn create_tx(wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),
     };
-    Builder::new(
+    let tx = Builder::new(
         REGTEST_NETWORK,
         /*user.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_420),
         build_config,
-    )
+    );
+    tx
 }
 
 fn build_tx(

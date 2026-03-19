@@ -22,7 +22,9 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
     - [Orchard-ZSA Two Party Scenario](#orchard-zsa-two-party-scenario)
     - [Orchard-ZSA Three Party Scenario](#orchard-zsa-three-party-scenario)
     - [Creating your own scenario](#creating-your-own-scenario)
-- [Connecting to the Public ZSA Testnet](#connecting-to-the-public-zsa-testnet)
+- [Testing Block Data Storage Locally](#testing-block-data-storage-locally)
+    - [Docker Volume Mount for Block Data Persistence](#docker-volume-mount-for-block-data-persistence)
+- [Connecting to the Public ZSA Testnet](#connecting-to-the-public-ZSA-testnet)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
 
@@ -104,7 +106,6 @@ There are multiple test scenarios provided in the repository, viz.
 * `test-orchard-zsa` (The detailed script for the flow is at [test_orchard_zsa.rs](src/commands/test_orchard_zsa.rs).)
 * `test-three-party` (The detailed script for the flow is at [test_three_party.rs](src/commands/test_three_party.rs).)
 * `test-orchard` (The detailed script for the flow is at [test_orchard.rs](src/commands/test_orchard.rs).)
-* `test-issue-one` (The detailed script for the flow is at [test_issue_one.rs](src/commands/test_issue_one.rs).)
 
 Build and run the test case of your choice using the Zcash Transaction Tool, by replacing `<test-case>` in the command below with either of the test scenarios listed above:
 
@@ -191,20 +192,6 @@ To run the test scenario:
 cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-three-party
 ```
 
-### Issue One Asset Scenario
-
-This test scenario ([src/commands/test_issue_one.rs](src/commands/test_issue_one.rs)) is a minimal test that performs only the asset issuance step:
-
-1. **Issue an Asset**: Create and issue a single ZSA asset (1 unit).
-
-This simplified scenario is useful for quick testing of the asset issuance functionality without the complexity of transfers and burns.
-
-To run the test scenario:
-
-```bash
-cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-issue-one
-```
-
 ### Creating your own scenario
 It is also possible to construct your own scenario in a manner similar to these. 
 To do so, copy one of the test scenario files to a new file in the same location and make the changes to fit your setting.
@@ -217,6 +204,80 @@ You should then be able to run your scenario via (assuming `test-scenario` is th
 ```bash
 cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-scenario
 ```
+
+## Testing Block Data Storage Locally
+
+The `tx-tool` includes a block data storage feature that speeds up wallet synchronization and enables chain reorganization detection. You can test this feature locally by running the GitHub Actions workflow with `act`.
+
+### Using `act` to Run GitHub Actions Locally
+
+[`act`](https://github.com/nektos/act) allows you to run GitHub Actions workflows on your local machine:
+
+```bash
+# Install act (macOS)
+brew install act
+
+# Install act (Linux)
+curl https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
+
+# Run the block data demo workflow
+act workflow_dispatch -W .github/workflows/block-data-test-ci.yaml
+
+# Or run on push event (simulating a push to main)
+act push -W .github/workflows/block-data-test-ci.yaml
+```
+
+**Note**: The workflow requires significant disk space (~20GB) and may take 15-30 minutes to complete due to Docker image builds. Subsequent runs will be faster, as Docker caches images locally.
+
+### Understanding Block Data Storage Behavior
+
+The block data storage stores:
+- **Block hashes**: For chain validation and reorg detection  
+- **Transaction data**: To avoid re-downloading blocks
+
+On subsequent runs, the tool:
+1. Validates the stored chain matches the node's chain
+2. Resumes sync from the last stored block (if valid)
+3. Detects and handles chain reorganizations
+
+**Note**: Test commands call `reset()` which clears wallet state but preserves the block data. For full persistence (skipping wallet rescan entirely), ensure wallet state persists between runs.
+
+## Block Data Storage Considerations
+
+When block data storage is enabled, disk usage depends on average block size and the amount of blocks.
+
+There are currently (January 2026) ~3.2M blocks on Zcash mainnet (i.e., the total number of blocks mined since genesis at the time of writing).
+Approximate totals for ~3.2M Zcash blocks:
+
+- **Minimal blocks (0.5–1 KB):** ~1.6–3.2 GB
+- **Average blocks (50–100 KB):** ~160–322 GB
+- **Heavy blocks (300–500 KB):** ~1.0–1.6 TB
+
+**Notes:**
+- Regtest / ZSA testnet runs are usually near the minimal range.
+- Long-running testnet or mainnet syncs trend toward the average case.
+- Disk usage grows over time unless block data is pruned.
+
+### Docker Volume Mount for Block Data Persistence
+
+When running the tx-tool in Docker, you **must** use the `-v` flag to mount a volume for block data persistence. The Docker volume mount cannot be configured from inside the Dockerfile — the host running the command needs to specify it explicitly.
+
+```bash
+docker run --network zcash-net \
+  -e ZCASH_NODE_ADDRESS=zebra-node \
+  -e ZCASH_NODE_PORT=18232 \
+  -e ZCASH_NODE_PROTOCOL=http \
+  -v wallet-data:/app \
+  zcash-tx-tool:local test-orchard-zsa
+```
+
+The `-v wallet-data:/app` flag creates a named Docker volume (`wallet-data`) and mounts it at `/app` inside the container. This is where the tx-tool stores its block data (SQLite database and related files).
+
+**Without `-v wallet-data:/app`**, Docker will start the container with an empty directory at `/app`. The tx-tool will still run, but all block data will be ephemeral and lost when the container exits, so subsequent runs won't benefit from the cached block data.
+
+### About the Workflow
+
+The `act` tool runs the GitHub Actions workflow locally, which uses Docker to build and run both the Zebra node and the tx-tool in containers. This approach is similar to the manual Docker setup described in the [Getting Started](#getting-started) section above, where we build Docker images and run them with environment variables and volume mounts. The workflow automates this process and demonstrates block data persistence between multiple runs of the tx-tool.
 
 ## Connecting to the Public ZSA Testnet
 

@@ -1,0 +1,181 @@
+name: Demo Block Data Feature
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  block-data-demo:
+    runs-on: ubuntu-latest
+    env:
+      TX_TOOL_DOCKER_ARGS: >-
+        --network zcash-net
+        -e ZCASH_NODE_ADDRESS=zebra-node
+        -e ZCASH_NODE_PORT=18232
+        -e ZCASH_NODE_PROTOCOL=http
+        -v wallet-data:/app
+
+    steps:
+      - name: Checkout tx-tool code
+        uses: actions/checkout@v3
+        with:
+          path: tx-tool
+
+      - name: Checkout Zebra code
+        uses: actions/checkout@v3
+        with:
+          repository: QED-it/zebra
+          ref: ${{ vars.ZEBRA_BRANCH_TO_TEST || '751c0eca33d33e26c558e8bcf2aa468e0b528c68' }}
+          path: zebra
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Set up Docker cache
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: zebra-cache-${{ runner.os }}-${{ hashFiles('zebra/testnet-single-node-deploy/dockerfile') }}
+          restore-keys: |
+            zebra-cache-${{ runner.os }}-
+            zebra-cache-
+
+      - name: Build Zebra Node
+        uses: docker/build-push-action@v4
+        with:
+          context: zebra
+          file: zebra/testnet-single-node-deploy/dockerfile
+          tags: zebra-node:local
+          push: false
+          load: true
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+
+      - name: Build tx-tool
+        uses: docker/build-push-action@v4
+        with:
+          context: tx-tool
+          file: tx-tool/Dockerfile
+          tags: zcash-tx-tool:local
+          push: false
+          load: true
+
+      - name: Set up Docker infrastructure
+        run: |
+          docker network create zcash-net
+          docker volume create wallet-data
+          docker run -d --name zebra-node --network zcash-net -p 18232:18232 zebra-node:local
+          echo "Waiting for Zebra node to initialize..."
+          sleep 15
+
+      - name: Create helper script
+        run: |
+          cat > /tmp/helpers.sh << 'EOF'
+          run_tx_tool() {
+            docker run --rm $TX_TOOL_DOCKER_ARGS zcash-tx-tool:local "$@"
+          }
+          show_sync_summary() {
+            local label="$1"
+            local logfile="$2"
+            echo ""
+            echo "=========================================="
+            echo "SYNC SUMMARY: $label"
+            echo "=========================================="
+            echo ""
+            echo "--- Block data reuse evidence ---"
+            grep -E "(Starting sync from height|Replayed stored blocks locally|Stored data valid, resuming|No block data found|Wallet has no synced blocks|No common ancestor found|Chain reorganization detected|Determined sync start height|Found stored block at height)" "$logfile" || echo "(no sync log lines found)"
+            echo ""
+            echo "--- Block data storage state ---"
+            echo "First stored block:"
+            run_tx_tool get-block-data 0
+            echo ""
+            echo "Last stored block:"
+            run_tx_tool get-block-data
+            echo "=========================================="
+          }
+          EOF
+
+      - name: "Run 1: First tx-tool run"
+        run: |
+          source /tmp/helpers.sh
+
+          docker run $TX_TOOL_DOCKER_ARGS \
+            --name zcash-tx-tool-run1 \
+            zcash-tx-tool:local test-orchard-zsa 2>&1 | tee /tmp/run1.log
+
+          EXIT_CODE=$(docker inspect zcash-tx-tool-run1 --format='{{.State.ExitCode}}')
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "First run failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+          echo "First run completed successfully"
+
+          show_sync_summary "After Run 1 (fresh start, no cached data)" /tmp/run1.log
+
+      - name: "Run 2: Second tx-tool run (block data reuse)"
+        run: |
+          source /tmp/helpers.sh
+          docker rm zcash-tx-tool-run1
+
+          docker run $TX_TOOL_DOCKER_ARGS \
+            --name zcash-tx-tool-run2 \
+            zcash-tx-tool:local test-orchard-zsa 2>&1 | tee /tmp/run2.log
+
+          EXIT_CODE=$(docker inspect zcash-tx-tool-run2 --format='{{.State.ExitCode}}')
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "Second run failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+          echo "Second run completed successfully"
+
+          show_sync_summary "After Run 2 (reusing cached block data)" /tmp/run2.log
+
+      - name: Restart Zebra Node
+        run: |
+          source /tmp/helpers.sh
+          docker stop zebra-node
+          docker rm zebra-node
+          docker run -d --name zebra-node --network zcash-net -p 18232:18232 zebra-node:local
+          echo "Waiting for Zebra node to reinitialize..."
+          sleep 30
+          for i in {1..10}; do
+            if run_tx_tool get-block-data 0 2>/dev/null | grep -q "Block 0"; then
+              echo "Zebra node is ready!"
+              break
+            fi
+            echo "Waiting for Zebra node... (attempt $i/10)"
+            sleep 10
+          done
+
+      - name: "Run 3: Third tx-tool run (after Zebra restart)"
+        run: |
+          source /tmp/helpers.sh
+          docker rm zcash-tx-tool-run2
+
+          docker run $TX_TOOL_DOCKER_ARGS \
+            --name zcash-tx-tool-run3 \
+            zcash-tx-tool:local test-orchard-zsa 2>&1 | tee /tmp/run3.log
+
+          EXIT_CODE=$(docker inspect zcash-tx-tool-run3 --format='{{.State.ExitCode}}')
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "Third run failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+          echo "Third run completed successfully"
+
+          show_sync_summary "After Run 3 (reusing cached data after Zebra restart)" /tmp/run3.log
+
+      - name: Print Zebra logs
+        if: always()
+        run: docker logs zebra-node || echo "Could not retrieve Zebra logs"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm zcash-tx-tool-run1 zcash-tx-tool-run2 zcash-tx-tool-run3 || true
+          docker stop zebra-node || true
+          docker rm zebra-node || true
+          docker network rm zcash-net || true
+          docker volume rm wallet-data || true

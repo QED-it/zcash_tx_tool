@@ -11,14 +11,14 @@
 //! application's configuration file.
 
 mod clean;
+mod get_block_data;
 mod test_balances;
-mod test_issue_one;
 mod test_orchard;
 mod test_orchard_zsa;
 mod test_three_party;
 
 use crate::commands::clean::CleanCmd;
-use crate::commands::test_issue_one::TestIssueOneCmd;
+use crate::commands::get_block_data::GetBlockDataCmd;
 use crate::commands::test_orchard::TestOrchardCmd;
 use crate::commands::test_orchard_zsa::TestOrchardZSACmd;
 use crate::commands::test_three_party::TestThreePartyCmd;
@@ -35,8 +35,8 @@ pub enum AppCmd {
     TestOrchard(TestOrchardCmd),
     TestOrchardZSA(TestOrchardZSACmd),
     TestThreeParty(TestThreePartyCmd),
-    TestIssueOne(TestIssueOneCmd),
     Clean(CleanCmd),
+    GetBlockData(GetBlockDataCmd),
 }
 
 /// Entry point for the application. It needs to be a struct to allow using subcommands!

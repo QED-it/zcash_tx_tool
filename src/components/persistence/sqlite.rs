@@ -1,3 +1,4 @@
+use abscissa_core::prelude::info;
 use crate::components::persistence::model::{InsertableNoteData, NoteData};
 use crate::schema::notes::dsl::notes;
 use crate::schema::notes::*;
@@ -75,12 +76,14 @@ impl SqliteDataStorage {
         note_id: i32,
         spend_tx_id_value: &TxId,
         spend_action_index_value: i32,
+        spend_block_height_value: i32,
     ) {
         diesel::update(notes)
             .filter(id.eq(note_id))
             .set((
                 spend_tx_id.eq(spend_tx_id_value.as_ref().to_vec()),
                 spend_action_index.eq(spend_action_index_value),
+                spend_block_height.eq(spend_block_height_value),
             ))
             .execute(&mut self.connection)
             .unwrap();
@@ -106,6 +109,47 @@ impl SqliteDataStorage {
         diesel::delete(notes)
             .execute(&mut self.connection)
             .expect("Error deleting notes");
+    }
+
+    /// Handle blockchain reorganization by cleaning up invalidated note data.
+    /// - Deletes notes that were created in blocks at or after `reorg_height`
+    /// - Clears spend info for notes that were spent in blocks at or after `reorg_height`
+    ///   (but keeps the note itself if it was created before the reorg point)
+    pub fn handle_reorg(&mut self, reorg_height: i32) {
+        // Delete notes created in invalidated blocks
+        let deleted = diesel::delete(notes.filter(origin_block_height.ge(reorg_height)))
+            .execute(&mut self.connection)
+            .expect("Error deleting notes from reorged blocks");
+
+        if deleted > 0 {
+            info!(
+                "Reorg: deleted {} notes created at or after height {}",
+                deleted, reorg_height
+            );
+        }
+
+        // Clear spend info for notes that were spent in invalidated blocks
+        // but were created before the reorg point (so they're still valid, just unspent now)
+        let updated = diesel::update(
+            notes.filter(
+                spend_block_height
+                    .ge(reorg_height)
+                    .and(origin_block_height.lt(reorg_height)),
+            ),
+        )
+        .set((
+            spend_tx_id.eq(None::<Vec<u8>>),
+            spend_block_height.eq(None::<i32>),
+        ))
+        .execute(&mut self.connection)
+        .expect("Error clearing spend info from reorged blocks");
+
+        if updated > 0 {
+            info!(
+                "Reorg: cleared spend info for {} notes spent at or after height {}",
+                updated, reorg_height
+            );
+        }
     }
 }
 

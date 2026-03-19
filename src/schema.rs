@@ -15,5 +15,16 @@ diesel::table! {
         recipient_address -> Binary,
         spend_tx_id -> Nullable<Binary>,
         spend_action_index -> Integer,
+        origin_block_height -> Integer,
+        spend_block_height -> Nullable<Integer>,
+    }
+}
+
+diesel::table! {
+    /// Stored block data used for syncing and reorg detection.
+    block_data (height) {
+        height -> Integer,
+        hash -> Text,
+        prev_hash -> Text,
     }
 }
