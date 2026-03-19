@@ -216,7 +216,7 @@ fn determine_sync_start_height(
     // false reorg detection on subsequent syncs within the same run.
     // Pre-activation blocks (below `from_height`) are preserved.
     if wallet_last_block_height == 0 {
-        if block_data.last_height().map_or(false, |h| h >= from_height) {
+        if block_data.last_height().is_some_and(|h| h >= from_height) {
             info!(
                 "Wallet has no synced blocks; clearing stale block data from height {}",
                 from_height
