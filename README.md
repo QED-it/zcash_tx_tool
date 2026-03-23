@@ -91,12 +91,16 @@ Install Diesel CLI and set up the database and get Zcash Params for Sapling:
 # Install Diesel CLI with SQLite support
 cargo install diesel_cli --no-default-features --features sqlite
 
-# Set up the database
+# Set up the database (Diesel CLI requires DATABASE_URL)
+export DATABASE_URL=walletdb.sqlite
+# or: DATABASE_URL=walletdb.sqlite diesel setup
 diesel setup
 
 # Get Zcash Params for Sapling (if needed)
 ./zcutil/fetch-params.sh
 ```
+
+The application uses the same default as above: if `DATABASE_URL` is not set at runtime, it connects to `walletdb.sqlite`.
 
 #### Build and Run a Test Scenario
 
