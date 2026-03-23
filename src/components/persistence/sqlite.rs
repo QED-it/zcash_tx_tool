@@ -5,6 +5,7 @@ use diesel::associations::HasTable;
 use diesel::prelude::*;
 use orchard::note::{AssetBase, Nullifier};
 use orchard::Address;
+
 use std::env;
 use zcash_primitives::transaction::TxId;
 
