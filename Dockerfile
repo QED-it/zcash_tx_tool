@@ -18,7 +18,7 @@ COPY . .
 RUN cargo install diesel_cli@2.1.1 --no-default-features --features sqlite --locked
 
 # Run migrations
-RUN diesel migration run
+RUN DATABASE_URL=walletdb.sqlite diesel migration run
 
 # Build the application in release mode
 RUN cargo build --release
