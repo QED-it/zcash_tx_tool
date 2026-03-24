@@ -3,7 +3,6 @@ use crate::schema::notes::dsl::notes;
 use crate::schema::notes::*;
 use diesel::associations::HasTable;
 use diesel::prelude::*;
-use dotenvy::dotenv;
 use orchard::note::{AssetBase, Nullifier};
 use orchard::Address;
 use std::env;
@@ -109,10 +108,11 @@ impl SqliteDataStorage {
     }
 }
 
-fn establish_connection() -> SqliteConnection {
-    dotenv().ok();
+const DEFAULT_DATABASE_URL: &str = "walletdb.sqlite";
 
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+fn establish_connection() -> SqliteConnection {
+    let database_url =
+        env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string());
     SqliteConnection::establish(&database_url)
         .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
 }

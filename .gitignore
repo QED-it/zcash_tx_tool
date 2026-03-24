@@ -3,6 +3,7 @@
 /target
 **/*.rs.bk
 /*.sqlite
+.env
 
 # Terraform git
 # Local .terraform directories
