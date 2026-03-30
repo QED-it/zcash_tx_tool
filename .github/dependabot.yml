@@ -8,7 +8,7 @@ updates:
     schedule:
       interval: "cron"
       cronjob: "0 9 1,15 * *"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     rebase-strategy: "disabled"
     groups:
       cargo-minor-patch:
@@ -23,7 +23,7 @@ updates:
     schedule:
       interval: "cron"
       cronjob: "0 9 1,15 * *"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 1
     rebase-strategy: "disabled"
     groups:
       actions-minor-patch:
