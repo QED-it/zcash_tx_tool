@@ -240,9 +240,13 @@ pub struct LoadedTreeState {
 }
 
 /// Load the saved wallet tree state from SQLite.
-/// Returns `None` if no state is stored or the stored data is corrupt.
+/// Returns `None` if no state is stored, the stored data is corrupt, or the
+/// database is not reachable (e.g. `DATABASE_URL` not set).
 pub fn load_tree_state() -> Option<LoadedTreeState> {
-    let database_url = database_url();
+    let database_url = match try_database_url() {
+        Some(url) => url,
+        None => return None,
+    };
     let mut conn = establish_connection(&database_url);
     ensure_table(&mut conn);
 
@@ -312,8 +316,12 @@ pub fn save_tree_state(
 }
 
 /// Delete the persisted tree state from SQLite.
+/// Silently does nothing if the database is not reachable.
 pub fn delete_tree_state() {
-    let database_url = database_url();
+    let database_url = match try_database_url() {
+        Some(url) => url,
+        None => return,
+    };
     let mut conn = establish_connection(&database_url);
     ensure_table(&mut conn);
 
@@ -359,8 +367,25 @@ fn establish_connection(database_url: &str) -> SqliteConnection {
         .unwrap_or_else(|_| panic!("Error connecting to database for tree state"))
 }
 
+const DEFAULT_DATABASE_URL: &str = "walletdb.sqlite";
+
+/// Returns the DATABASE_URL, or None if it is not set and the default DB file
+/// does not exist. Used by load/delete which must not panic during init or reorg.
+fn try_database_url() -> Option<String> {
+    match std::env::var("DATABASE_URL") {
+        Ok(url) => Some(url),
+        Err(_) => {
+            if std::path::Path::new(DEFAULT_DATABASE_URL).exists() {
+                Some(DEFAULT_DATABASE_URL.to_string())
+            } else {
+                None
+            }
+        }
+    }
+}
+
 fn database_url() -> String {
-    std::env::var("DATABASE_URL").expect("DATABASE_URL must be set")
+    std::env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string())
 }
 
 #[cfg(test)]
