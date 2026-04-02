@@ -164,8 +164,14 @@ fn deserialize_tree(
         .map(deserialize_checkpoint)
         .collect();
 
-    BridgeTree::from_parts(prior_bridges, current_bridge, saved, checkpoints, ser.max_checkpoints)
-        .map_err(|e| format!("BridgeTree::from_parts failed: {:?}", e))
+    BridgeTree::from_parts(
+        prior_bridges,
+        current_bridge,
+        saved,
+        checkpoints,
+        ser.max_checkpoints,
+    )
+    .map_err(|e| format!("BridgeTree::from_parts failed: {:?}", e))
 }
 
 fn deserialize_bridge(ser: SerBridge) -> Result<MerkleBridge<MerkleHashOrchard>, String> {

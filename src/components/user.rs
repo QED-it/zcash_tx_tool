@@ -194,8 +194,7 @@ impl User {
                 state.last_block_height
             );
             self.commitment_tree = state.commitment_tree;
-            self.last_block_height =
-                Some(BlockHeight::from_u32(state.last_block_height));
+            self.last_block_height = Some(BlockHeight::from_u32(state.last_block_height));
             let hash_bytes: [u8; 32] = hex::decode(&state.last_block_hash)
                 .expect("invalid hex in saved block hash")
                 .try_into()
