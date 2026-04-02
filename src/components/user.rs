@@ -150,7 +150,7 @@ pub struct User {
 
 impl User {
     pub fn new(seed_phrase: &String, miner_seed_phrase: &String) -> Self {
-        User {
+        let mut user = User {
             db: SqliteDataStorage::new(),
             key_store: KeyStore::empty(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
@@ -160,7 +160,9 @@ impl User {
             miner_seed: <Mnemonic>::from_phrase(miner_seed_phrase)
                 .unwrap()
                 .to_seed(""),
-        }
+        };
+        user.try_load_tree_state();
+        user
     }
 
     pub fn random(miner_seed_phrase: &String) -> Self {
@@ -168,7 +170,7 @@ impl User {
         let mut seed_random_bytes = [0u8; 64];
         rng.fill(&mut seed_random_bytes);
 
-        User {
+        let mut user = User {
             db: SqliteDataStorage::new(),
             key_store: KeyStore::empty(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
@@ -178,7 +180,51 @@ impl User {
             miner_seed: <Mnemonic>::from_phrase(miner_seed_phrase)
                 .unwrap()
                 .to_seed(""),
+        };
+        user.try_load_tree_state();
+        user
+    }
+
+    /// Attempt to restore the commitment tree and sync position from SQLite.
+    fn try_load_tree_state(&mut self) {
+        use crate::components::tree_state;
+        if let Some(state) = tree_state::load_tree_state() {
+            info!(
+                "Loaded saved tree state at height {}",
+                state.last_block_height
+            );
+            self.commitment_tree = state.commitment_tree;
+            self.last_block_height =
+                Some(BlockHeight::from_u32(state.last_block_height));
+            let hash_bytes: [u8; 32] = hex::decode(&state.last_block_hash)
+                .expect("invalid hex in saved block hash")
+                .try_into()
+                .expect("saved block hash is not 32 bytes");
+            self.last_block_hash = Some(BlockHash(hash_bytes));
         }
+    }
+
+    /// Persist the current commitment tree and sync position to SQLite.
+    pub fn save_tree_state(&self) {
+        use crate::components::tree_state;
+        if let (Some(height), Some(hash)) = (self.last_block_height, self.last_block_hash) {
+            tree_state::save_tree_state(
+                &self.commitment_tree,
+                u32::from(height),
+                &hex::encode(hash.0),
+            );
+        }
+    }
+
+    /// Discard in-memory tree state and delete persisted state from SQLite.
+    /// Used when the persisted state is detected to be inconsistent with block_data.
+    pub fn discard_tree_state(&mut self) {
+        use crate::components::tree_state;
+        info!("Discarding persisted tree state");
+        self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
+        self.last_block_height = None;
+        self.last_block_hash = None;
+        tree_state::delete_tree_state();
     }
 
     /// Reset the state to be suitable for rescan from the NU5 activation
@@ -191,10 +237,12 @@ impl User {
     /// by resuming from the last valid stored block. Use `reset_full()` to also
     /// clear the block data for a completely fresh start.
     pub fn reset(&mut self) {
+        use crate::components::tree_state;
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
         self.db.delete_all_notes();
+        tree_state::delete_tree_state();
     }
 
     /// Full reset including the block data storage.
@@ -210,13 +258,15 @@ impl User {
     /// This should be called when a reorg is detected, before truncating block data.
     /// - Deletes notes that were created in blocks at or after `reorg_height`
     /// - Clears spend info for notes that were spent in blocks at or after `reorg_height`
+    /// - Deletes the persisted tree state entirely (simplest recovery: rebuild from scratch)
     pub fn handle_reorg(&mut self, reorg_height: u32) {
+        use crate::components::tree_state;
         info!("Handling reorg from height {}", reorg_height);
         self.db.handle_reorg(reorg_height as i32);
-        // Reset the commitment tree since it may contain commitments from invalidated blocks
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
+        tree_state::delete_tree_state();
     }
 
     pub fn last_block_hash(&self) -> Option<BlockHash> {

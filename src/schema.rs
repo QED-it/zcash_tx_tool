@@ -28,3 +28,13 @@ diesel::table! {
         prev_hash -> Text,
     }
 }
+
+diesel::table! {
+    /// Persisted wallet state: commitment tree, last synced block height/hash.
+    wallet_state (id) {
+        id -> Integer,
+        commitment_tree_json -> Text,
+        last_block_height -> Integer,
+        last_block_hash -> Text,
+    }
+}

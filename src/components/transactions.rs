@@ -120,18 +120,30 @@ pub fn sync(wallet: &mut User, rpc: &mut dyn RpcClient) {
 }
 
 /// Sync the user with the node from the given height.
-/// Uses SQLite-backed block data storage to:
-/// 1. Track chain progression with block hashes
-/// 2. Detect chain reorganizations by verifying block hashes match
-/// 3. Handle reorgs by finding the common ancestor and rescanning from there
-///
-/// Note: Each wallet run must process all transactions to build its own commitment tree.
-/// The storage only keeps hashes for chain validation, not transaction data.
+/// Uses SQLite-backed storage to:
+/// 1. Track chain progression with block hashes (block_data table)
+/// 2. Persist the commitment tree across process restarts (wallet_state table)
+/// 3. Detect chain reorganizations by verifying block hashes match
+/// 4. Handle reorgs by deleting the tree state and rescanning
 pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcClient) {
     info!("Starting sync from height {}", from_height);
 
     // Load the block data storage
     let mut block_data = BlockData::load();
+
+    // If wallet state was restored from DB, verify it is consistent with block_data.
+    // A mismatch (e.g. crash between saves) means the tree cannot be trusted.
+    let wallet_height = wallet.last_block_height().map_or(0, u32::from);
+    if wallet_height > 0 {
+        let bd_height = block_data.last_height();
+        if bd_height != Some(wallet_height) {
+            info!(
+                "Wallet tree state (height {}) inconsistent with block data ({:?}), discarding tree state",
+                wallet_height, bd_height
+            );
+            wallet.discard_tree_state();
+        }
+    }
 
     // Determine the starting height based on stored blocks and chain validation
     let start_height = determine_sync_start_height(from_height, wallet, &mut block_data, rpc);
@@ -177,8 +189,9 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     next_height - 1
                 );
                 debug!("rpc.get_block err: {:?}", err);
-                // Save the block data before returning
+                // Persist block data and commitment tree together so they stay in sync
                 block_data.save();
+                wallet.save_tree_state();
                 return;
             }
         }

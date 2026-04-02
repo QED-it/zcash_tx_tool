@@ -196,7 +196,6 @@ impl fmt::Display for Redacted<'_> {
 }
 
 fn database_url() -> String {
-    dotenvy::dotenv().ok();
     env::var("DATABASE_URL").expect("DATABASE_URL must be set")
 }
 
