@@ -195,8 +195,10 @@ impl fmt::Display for Redacted<'_> {
     }
 }
 
+const DEFAULT_DATABASE_URL: &str = "walletdb.sqlite";
+
 fn database_url() -> String {
-    env::var("DATABASE_URL").expect("DATABASE_URL must be set")
+    env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string())
 }
 
 #[cfg(test)]
