@@ -1,0 +1,16 @@
+{
+  "editor.defaultFormatter": "rust-lang.rust-analyzer",
+  "editor.formatOnSave": true,
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+    "editor.formatOnSave": true
+  },
+  "rust-analyzer.rustfmt.enable": true,
+
+  "rust-analyzer.checkOnSave": true,
+  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.cargo.extraEnv": {
+    "RUSTFLAGS": "--cfg zcash_unstable=\"nu7\""
+  }
+}
+
