@@ -639,8 +639,7 @@ pub fn template_into_proposal(
         .iter()
         .map(|tx| {
             if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
-                let bytes = <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap();
-                bytes
+                <[u8; 32]>::try_from(tx.auth_commitment().as_bytes()).unwrap()
             } else {
                 AUTH_COMMITMENT_PLACEHOLDER
             }
@@ -682,12 +681,11 @@ fn create_tx(wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),
     };
-    let tx = Builder::new(
+    Builder::new(
         REGTEST_NETWORK,
         /*user.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_420),
         build_config,
-    );
-    tx
+    )
 }
 
 fn build_tx(
@@ -713,7 +711,7 @@ fn build_tx(
                     &prover,
                     &prover,
                     fee_rule,
-                    |asset_base| (new_asset.as_ref() == Some(asset_base)),
+                    |asset_base| new_asset.as_ref() == Some(asset_base),
                 )
                 .unwrap()
                 .into_transaction();

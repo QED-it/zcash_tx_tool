@@ -243,10 +243,7 @@ pub struct LoadedTreeState {
 /// Returns `None` if no state is stored, the stored data is corrupt, or the
 /// database is not reachable (e.g. `DATABASE_URL` not set).
 pub fn load_tree_state() -> Option<LoadedTreeState> {
-    let database_url = match try_database_url() {
-        Some(url) => url,
-        None => return None,
-    };
+    let database_url = try_database_url()?;
     let mut conn = establish_connection(&database_url);
     ensure_table(&mut conn);
 
