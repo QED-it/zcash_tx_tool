@@ -470,7 +470,7 @@ fn build_tx(
                     &prover,
                     &prover,
                     fee_rule,
-                    |asset_base| (new_asset.as_ref() == Some(asset_base)),
+                    |asset_base| new_asset.as_ref() == Some(asset_base),
                 )
                 .unwrap()
                 .into_transaction();
