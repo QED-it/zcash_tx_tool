@@ -189,16 +189,22 @@ impl User {
     fn try_load_tree_state(&mut self) {
         use crate::components::tree_state;
         if let Some(state) = tree_state::load_tree_state() {
+            let hash_bytes: Option<[u8; 32]> = hex::decode(&state.last_block_hash)
+                .ok()
+                .and_then(|v| v.try_into().ok());
+            let Some(hash_bytes) = hash_bytes else {
+                info!(
+                    "Invalid last_block_hash in saved tree state; discarding persisted state"
+                );
+                tree_state::delete_tree_state();
+                return;
+            };
             info!(
                 "Loaded saved tree state at height {}",
                 state.last_block_height
             );
             self.commitment_tree = state.commitment_tree;
             self.last_block_height = Some(BlockHeight::from_u32(state.last_block_height));
-            let hash_bytes: [u8; 32] = hex::decode(&state.last_block_hash)
-                .expect("invalid hex in saved block hash")
-                .try_into()
-                .expect("saved block hash is not 32 bytes");
             self.last_block_hash = Some(BlockHash(hash_bytes));
         }
     }
