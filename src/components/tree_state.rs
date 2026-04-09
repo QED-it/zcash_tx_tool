@@ -230,15 +230,13 @@ pub fn load_tree_state() -> Option<LoadedTreeState> {
     let mut conn = establish_connection(&database_url);
     ensure_table(&mut conn);
 
-    let row: Option<WalletStateRow> = {
-        use crate::schema::wallet_state::dsl as ws;
-        ws::wallet_state
-            .select(WalletStateRow::as_select())
-            .load(&mut conn)
-            .unwrap_or_default()
-            .into_iter()
-            .next()
-    };
+    use crate::schema::wallet_state::dsl as ws;
+    let r: WalletStateRow = ws::wallet_state
+        .select(WalletStateRow::as_select())
+        .load(&mut conn)
+        .unwrap_or_default()
+        .into_iter()
+        .next()?;
 
     let ser_tree: SerTree = serde_json::from_str(&r.commitment_tree_json)
         .map_err(|e| info!("Failed to deserialize saved tree state: {e}"))

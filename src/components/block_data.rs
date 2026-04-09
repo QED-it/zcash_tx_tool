@@ -4,7 +4,7 @@ use diesel::prelude::*;
 use diesel::sql_query;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::{env, fmt};
+use std::env;
 
 const CREATE_TABLE_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS block_data (
