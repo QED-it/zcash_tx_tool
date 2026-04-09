@@ -193,9 +193,7 @@ impl User {
                 .ok()
                 .and_then(|v| v.try_into().ok());
             let Some(hash_bytes) = hash_bytes else {
-                info!(
-                    "Invalid last_block_hash in saved tree state; discarding persisted state"
-                );
+                info!("Invalid last_block_hash in saved tree state; discarding persisted state");
                 tree_state::delete_tree_state();
                 return;
             };
