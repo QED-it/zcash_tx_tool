@@ -243,15 +243,7 @@ impl User {
         tree_state::delete_tree_state();
     }
 
-    /// Reset the state to be suitable for rescan from the NU5 activation
-    /// height.  This removes all witness and spentness information from the user. The
-    /// keystore is unmodified and decrypted note, nullifier, and conflict data are left
-    /// in place with the expectation that they will be overwritten and/or updated in
-    /// the rescan process.
-    ///
-    /// Note: The block data storage is intentionally preserved to allow faster re-sync
-    /// by resuming from the last valid stored block. Use `reset_full()` to also
-    /// clear the block data for a completely fresh start.
+    /// Reset wallet state for rescan. Block data is preserved for faster re-sync.
     pub fn reset(&mut self) {
         use crate::components::tree_state;
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
@@ -261,9 +253,7 @@ impl User {
         tree_state::delete_tree_state();
     }
 
-    /// Full reset including the block data storage.
-    /// Use this when you need a completely fresh start (e.g., new wallet seed,
-    /// or when the stored chain state is incompatible with current test).
+    /// Full reset including block data storage.
     pub fn reset_full(&mut self) {
         use crate::components::block_data::BlockData;
         self.reset();

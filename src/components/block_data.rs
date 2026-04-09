@@ -1,9 +1,4 @@
-//! SQLite-backed block data storage for tracking previously scanned blocks.
-//!
-//! This module provides persistent block data storage in the same SQLite
-//! database as the wallet state (via `DATABASE_URL`), enabling:
-//! - Resumable sync from the last stored block
-//! - Chain reorganization detection by verifying block hash continuity
+//! SQLite-backed block data storage for resumable sync and reorg detection.
 
 use diesel::prelude::*;
 use diesel::sql_query;
@@ -19,7 +14,6 @@ CREATE TABLE IF NOT EXISTS block_data (
 );
 "#;
 
-/// A single stored block entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockInfo {
     pub hash: String,
@@ -58,17 +52,9 @@ impl BlockData {
             .unwrap_or_default();
 
         for row in rows {
-            let height_u32 = match u32::try_from(row.height) {
-                Ok(h) => h,
-                Err(_) => continue,
-            };
-            block_data.blocks.insert(
-                height_u32,
-                BlockInfo {
-                    hash: row.hash,
-                    prev_hash: row.prev_hash,
-                },
-            );
+            if let Ok(h) = u32::try_from(row.height) {
+                block_data.blocks.insert(h, BlockInfo { hash: row.hash, prev_hash: row.prev_hash });
+            }
         }
 
         block_data
@@ -182,17 +168,7 @@ fn ensure_table(conn: &mut SqliteConnection) {
 }
 
 fn establish_connection_with_url(database_url: &str) -> SqliteConnection {
-    SqliteConnection::establish(database_url)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", Redacted(database_url)))
-}
-
-/// Avoid printing full database URLs/paths in panics.
-struct Redacted<'a>(&'a str);
-impl fmt::Display for Redacted<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let _ = self.0;
-        write!(f, "<redacted DATABASE_URL>")
-    }
+    SqliteConnection::establish(database_url).expect("Error connecting to block_data database")
 }
 
 const DEFAULT_DATABASE_URL: &str = "walletdb.sqlite";

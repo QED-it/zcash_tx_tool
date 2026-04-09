@@ -8,7 +8,7 @@ use crate::components::block_data::BlockData;
 /// Get block data from storage
 #[derive(clap::Parser, Command, Debug)]
 pub struct GetBlockDataCmd {
-    /// Block height to retrieve. If not provided, returns the last block.
+    /// Block height to retrieve (default: last block).
     pub block_height: Option<u32>,
 }
 

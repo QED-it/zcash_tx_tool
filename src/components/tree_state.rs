@@ -1,9 +1,4 @@
-//! SQLite-backed wallet state persistence for the note commitment tree,
-//! last_block_height, and last_block_hash.
-//!
-//! Enables resumable sync across process restarts by persisting the
-//! Merkle commitment tree state. On chain reorganization the persisted
-//! state is deleted entirely and rebuilt from scratch.
+//! SQLite-backed persistence for the note commitment tree and sync position.
 
 use bridgetree::{BridgeTree, Checkpoint, MerkleBridge};
 use diesel::prelude::*;
@@ -25,10 +20,6 @@ CREATE TABLE IF NOT EXISTS wallet_state (
     last_block_hash TEXT NOT NULL
 );
 "#;
-
-// ---------------------------------------------------------------------------
-// Serializable mirror types (bridgetree types lack serde support)
-// ---------------------------------------------------------------------------
 
 #[derive(Serialize, Deserialize)]
 struct SerAddress {
@@ -67,10 +58,6 @@ struct SerTree {
     checkpoints: Vec<SerCheckpoint>,
     max_checkpoints: usize,
 }
-
-// ---------------------------------------------------------------------------
-// BridgeTree → SerTree
-// ---------------------------------------------------------------------------
 
 fn serialize_tree(
     tree: &BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH>,
@@ -136,10 +123,6 @@ fn serialize_checkpoint(cp: &Checkpoint<u32>) -> SerCheckpoint {
         forgotten: cp.forgotten().iter().map(|p| u64::from(*p)).collect(),
     }
 }
-
-// ---------------------------------------------------------------------------
-// SerTree → BridgeTree
-// ---------------------------------------------------------------------------
 
 fn deserialize_tree(
     ser: SerTree,
@@ -257,29 +240,17 @@ pub fn load_tree_state() -> Option<LoadedTreeState> {
             .next()
     };
 
-    match row {
-        Some(r) => {
-            let ser_tree: SerTree = match serde_json::from_str(&r.commitment_tree_json) {
-                Ok(t) => t,
-                Err(e) => {
-                    info!("Failed to deserialize saved tree state: {}", e);
-                    return None;
-                }
-            };
-            match deserialize_tree(ser_tree) {
-                Ok(tree) => Some(LoadedTreeState {
-                    commitment_tree: tree,
-                    last_block_height: r.last_block_height as u32,
-                    last_block_hash: r.last_block_hash,
-                }),
-                Err(e) => {
-                    info!("Failed to reconstruct tree from saved state: {}", e);
-                    None
-                }
-            }
-        }
-        None => None,
-    }
+    let ser_tree: SerTree = serde_json::from_str(&r.commitment_tree_json)
+        .map_err(|e| info!("Failed to deserialize saved tree state: {e}"))
+        .ok()?;
+    let tree = deserialize_tree(ser_tree)
+        .map_err(|e| info!("Failed to reconstruct tree: {e}"))
+        .ok()?;
+    Some(LoadedTreeState {
+        commitment_tree: tree,
+        last_block_height: r.last_block_height as u32,
+        last_block_hash: r.last_block_hash,
+    })
 }
 
 /// Persist the commitment tree, block height, and block hash to SQLite.
@@ -315,10 +286,7 @@ pub fn save_tree_state(
 /// Delete the persisted tree state from SQLite.
 /// Silently does nothing if the database is not reachable.
 pub fn delete_tree_state() {
-    let database_url = match try_database_url() {
-        Some(url) => url,
-        None => return,
-    };
+    let Some(database_url) = try_database_url() else { return };
     let mut conn = establish_connection(&database_url);
     ensure_table(&mut conn);
 
@@ -360,8 +328,7 @@ fn ensure_table(conn: &mut SqliteConnection) {
 }
 
 fn establish_connection(database_url: &str) -> SqliteConnection {
-    SqliteConnection::establish(database_url)
-        .unwrap_or_else(|_| panic!("Error connecting to database for tree state"))
+    SqliteConnection::establish(database_url).expect("Error connecting to wallet_state database")
 }
 
 const DEFAULT_DATABASE_URL: &str = "walletdb.sqlite";
