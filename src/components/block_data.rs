@@ -53,7 +53,13 @@ impl BlockData {
 
         for row in rows {
             if let Ok(h) = u32::try_from(row.height) {
-                block_data.blocks.insert(h, BlockInfo { hash: row.hash, prev_hash: row.prev_hash });
+                block_data.blocks.insert(
+                    h,
+                    BlockInfo {
+                        hash: row.hash,
+                        prev_hash: row.prev_hash,
+                    },
+                );
             }
         }
 

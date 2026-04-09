@@ -137,7 +137,8 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
     if wallet_height > 0 && block_data.last_height() != Some(wallet_height) {
         info!(
             "Wallet tree state (height {}) inconsistent with block data ({:?}), discarding",
-            wallet_height, block_data.last_height()
+            wallet_height,
+            block_data.last_height()
         );
         wallet.discard_tree_state();
     }
@@ -171,7 +172,11 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                 next_height += 1;
             }
             Err(err) => {
-                info!("No block at height {}. Synced up to {}", next_height, next_height - 1);
+                info!(
+                    "No block at height {}. Synced up to {}",
+                    next_height,
+                    next_height - 1
+                );
                 debug!("rpc.get_block err: {:?}", err);
                 // Persist block data and commitment tree together so they stay in sync
                 block_data.save();
@@ -198,11 +203,17 @@ fn determine_sync_start_height(
     // Pre-activation blocks (below `from_height`) are preserved.
     if wallet_last_block_height == 0 {
         if block_data.last_height().is_some_and(|h| h >= from_height) {
-            info!("Wallet has no synced blocks; clearing stale block data from height {}", from_height);
+            info!(
+                "Wallet has no synced blocks; clearing stale block data from height {}",
+                from_height
+            );
             block_data.truncate_from(from_height);
             block_data.save();
         }
-        info!("Wallet has no synced blocks; rescanning from height {}", from_height);
+        info!(
+            "Wallet has no synced blocks; rescanning from height {}",
+            from_height
+        );
         return from_height;
     }
 

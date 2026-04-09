@@ -286,7 +286,9 @@ pub fn save_tree_state(
 /// Delete the persisted tree state from SQLite.
 /// Silently does nothing if the database is not reachable.
 pub fn delete_tree_state() {
-    let Some(database_url) = try_database_url() else { return };
+    let Some(database_url) = try_database_url() else {
+        return;
+    };
     let mut conn = establish_connection(&database_url);
     ensure_table(&mut conn);
 
