@@ -31,7 +31,7 @@ impl Runnable for TestOrchardZSACmd {
     fn run(&self) {
         let config = APP.config();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = User::random(&config.wallet.miner_seed_phrase);
+        let mut wallet = User::random(&config.wallet.miner_seed_phrase, None);
 
         wallet.reset();
 

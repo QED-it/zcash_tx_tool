@@ -22,7 +22,12 @@ impl Runnable for TestIssueOneCmd {
     fn run(&self) {
         let config = APP.config();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = User::random(&config.wallet.miner_seed_phrase);
+        // Use a unique wallet for each test run to avoid conflicts with cached blocks
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let mut wallet = User::random(&config.wallet.miner_seed_phrase, Some(timestamp));
 
         wallet.reset();
         let num_users = 1;
