@@ -153,6 +153,9 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
     loop {
         match rpc.get_block(next_height) {
             Ok(block) => {
+                // if block.prev_hash != user.last_block_hash
+                // Fork management is not implemented
+
                 info!(
                     "Adding transactions from block {} at height {}",
                     block.hash, block.height
@@ -173,7 +176,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
             }
             Err(err) => {
                 info!(
-                    "No block at height {}. Synced up to {}",
+                    "No block at height {}. Synced up to height {}",
                     next_height,
                     next_height - 1
                 );
