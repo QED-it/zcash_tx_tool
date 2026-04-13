@@ -1,7 +1,7 @@
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::components::user::User;
-use crate::components::zebra_merkle::{
-    block_commitment_from_parts, AuthDataRoot, Root, AUTH_COMMITMENT_PLACEHOLDER,
+use crate::components::block_commitment::{
+    block_commitment_from_parts, AuthDataRoot, TxMerkleRoot, AUTH_COMMITMENT_PLACEHOLDER,
 };
 use crate::prelude::{debug, info};
 use orchard::issuance::{IssueInfo, auth::IssueValidatingKey};
@@ -390,7 +390,7 @@ pub fn template_into_proposal(
         txs_with_coinbase
             .iter()
             .map(|tx| *tx.txid().clone().as_ref())
-            .collect::<Root>()
+            .collect::<TxMerkleRoot>()
             .0
     };
 
