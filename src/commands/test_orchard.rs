@@ -51,7 +51,7 @@ impl Runnable for TestOrchardCmd {
         // --------------------- Shield miner's reward ---------------------
 
         let shielding_tx =
-            create_shield_coinbase_transaction(miner_addr, coinbase_txid, &mut wallet);
+            create_shield_coinbase_transaction(miner_addr, coinbase_txid, &rpc_client, &mut wallet);
         mine(&mut wallet, &mut rpc_client, Vec::from([shielding_tx]))
             .expect("block mined successfully");
 
@@ -83,7 +83,7 @@ impl Runnable for TestOrchardCmd {
 
         let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
-        let txs = txi.to_transactions(&mut wallet);
+        let txs = txi.to_transactions(&rpc_client, &mut wallet);
 
         mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 

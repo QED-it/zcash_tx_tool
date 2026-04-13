@@ -51,8 +51,14 @@ impl Runnable for TestThreePartyCmd {
 
         let asset_desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(b"MED").unwrap());
 
-        let (issue_tx, asset) =
-            create_issue_transaction(manufacturer_addr, 1000, asset_desc_hash, true, &mut wallet);
+        let (issue_tx, asset) = create_issue_transaction(
+            manufacturer_addr,
+            1000,
+            asset_desc_hash,
+            true,
+            &rpc_client,
+            &mut wallet,
+        );
 
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
@@ -71,7 +77,7 @@ impl Runnable for TestThreePartyCmd {
 
         let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
-        let txs = txi.to_transactions(&mut wallet);
+        let txs = txi.to_transactions(&rpc_client, &mut wallet);
 
         mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
@@ -95,7 +101,7 @@ impl Runnable for TestThreePartyCmd {
         // Generate expected balances after transfer
         let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
-        let txs = txi.to_transactions(&mut wallet);
+        let txs = txi.to_transactions(&rpc_client, &mut wallet);
 
         mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
@@ -117,7 +123,7 @@ impl Runnable for TestThreePartyCmd {
         // Generate expected balances after burn
         let expected_balances = expected_balances_after_burn(&balances, &txi);
 
-        let txs = txi.to_transactions(&mut wallet);
+        let txs = txi.to_transactions(&rpc_client, &mut wallet);
 
         mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
