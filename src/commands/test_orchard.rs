@@ -30,7 +30,7 @@ impl Runnable for TestOrchardCmd {
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
         let mut wallet = User::random(&config.wallet.miner_seed_phrase, None);
 
-        wallet.reset();
+        wallet.reset().unwrap();
 
         let num_users = 2;
 
@@ -103,7 +103,7 @@ impl Runnable for TestOrchardCmd {
 }
 
 fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) -> TxId {
-    sync_from_height(target_height, wallet, rpc_client);
+    sync_from_height(target_height, wallet, rpc_client).unwrap();
     let activate = wallet.last_block_height().is_none();
     let (_, coinbase_txid) =
         mine_empty_blocks(100, rpc_client, activate).expect("block mined successfully"); // coinbase maturity = 100

@@ -1,4 +1,4 @@
-use abscissa_core::prelude::info;
+use crate::components::db;
 use crate::components::persistence::model::{InsertableNoteData, NoteData};
 use crate::schema::notes::dsl::notes;
 use crate::schema::notes::*;
@@ -6,7 +6,6 @@ use diesel::associations::HasTable;
 use diesel::prelude::*;
 use orchard::note::{AssetBase, Nullifier};
 use orchard::Address;
-use std::env;
 use zcash_primitives::transaction::TxId;
 
 pub struct SqliteDataStorage {
@@ -16,7 +15,7 @@ pub struct SqliteDataStorage {
 impl SqliteDataStorage {
     pub fn new() -> Self {
         Self {
-            connection: establish_connection(),
+            connection: db::establish_connection(&db::database_url()),
         }
     }
 }
@@ -110,53 +109,4 @@ impl SqliteDataStorage {
             .expect("Error deleting notes");
     }
 
-    /// Handle blockchain reorganization by cleaning up invalidated note data.
-    /// - Deletes notes that were created in blocks at or after `reorg_height`
-    /// - Clears spend info for notes that were spent in blocks at or after `reorg_height`
-    ///   (but keeps the note itself if it was created before the reorg point)
-    pub fn handle_reorg(&mut self, reorg_height: i32) {
-        // Delete notes created in invalidated blocks
-        let deleted = diesel::delete(notes.filter(origin_block_height.ge(reorg_height)))
-            .execute(&mut self.connection)
-            .expect("Error deleting notes from reorged blocks");
-
-        if deleted > 0 {
-            info!(
-                "Reorg: deleted {} notes created at or after height {}",
-                deleted, reorg_height
-            );
-        }
-
-        // Clear spend info for notes that were spent in invalidated blocks
-        // but were created before the reorg point (so they're still valid, just unspent now)
-        let updated = diesel::update(
-            notes.filter(
-                spend_block_height
-                    .ge(reorg_height)
-                    .and(origin_block_height.lt(reorg_height)),
-            ),
-        )
-        .set((
-            spend_tx_id.eq(None::<Vec<u8>>),
-            spend_block_height.eq(None::<i32>),
-        ))
-        .execute(&mut self.connection)
-        .expect("Error clearing spend info from reorged blocks");
-
-        if updated > 0 {
-            info!(
-                "Reorg: cleared spend info for {} notes spent at or after height {}",
-                updated, reorg_height
-            );
-        }
-    }
-}
-
-const DEFAULT_DATABASE_URL: &str = "walletdb.sqlite";
-
-fn establish_connection() -> SqliteConnection {
-    let database_url =
-        env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string());
-    SqliteConnection::establish(&database_url)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
 }

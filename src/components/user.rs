@@ -161,7 +161,12 @@ impl User {
                 .unwrap()
                 .to_seed(""),
         };
-        user.try_load_tree_state();
+        if let Err(e) = user.try_load_tree_state() {
+            info!("Corrupt tree state, discarding: {}", e);
+            if let Err(e) = crate::components::tree_state::delete_tree_state() {
+                info!("Failed to delete corrupt tree state: {}", e);
+            }
+        }
         user
     }
 
@@ -194,22 +199,29 @@ impl User {
                 .unwrap()
                 .to_seed(""),
         };
-        user.try_load_tree_state();
+        if let Err(e) = user.try_load_tree_state() {
+            info!("Corrupt tree state, discarding: {}", e);
+            if let Err(e) = crate::components::tree_state::delete_tree_state() {
+                info!("Failed to delete corrupt tree state: {}", e);
+            }
+        }
         user
     }
 
     /// Attempt to restore the commitment tree and sync position from SQLite.
-    fn try_load_tree_state(&mut self) {
+    /// Returns `Err` if persisted state exists but is corrupt.
+    fn try_load_tree_state(&mut self) -> Result<(), String> {
         use crate::components::tree_state;
-        if let Some(state) = tree_state::load_tree_state() {
-            let hash_bytes: Option<[u8; 32]> = hex::decode(&state.last_block_hash)
+        if let Some(state) = tree_state::load_tree_state()? {
+            let hash_bytes: [u8; 32] = hex::decode(&state.last_block_hash)
                 .ok()
-                .and_then(|v| v.try_into().ok());
-            let Some(hash_bytes) = hash_bytes else {
-                info!("Invalid last_block_hash in saved tree state; discarding persisted state");
-                tree_state::delete_tree_state();
-                return;
-            };
+                .and_then(|v| v.try_into().ok())
+                .ok_or_else(|| {
+                    format!(
+                        "Invalid last_block_hash in saved tree state: {}",
+                        state.last_block_hash
+                    )
+                })?;
             info!(
                 "Loaded saved tree state at height {}",
                 state.last_block_height
@@ -218,61 +230,41 @@ impl User {
             self.last_block_height = Some(BlockHeight::from_u32(state.last_block_height));
             self.last_block_hash = Some(BlockHash(hash_bytes));
         }
+        Ok(())
     }
 
     /// Persist the current commitment tree and sync position to SQLite.
-    pub fn save_tree_state(&self) {
+    pub fn save_tree_state(&self) -> Result<(), String> {
         use crate::components::tree_state;
         if let (Some(height), Some(hash)) = (self.last_block_height, self.last_block_hash) {
             tree_state::save_tree_state(
                 &self.commitment_tree,
                 u32::from(height),
                 &hex::encode(hash.0),
-            );
+            )?;
         }
+        Ok(())
     }
 
     /// Discard in-memory tree state and delete persisted state from SQLite.
     /// Used when the persisted state is detected to be inconsistent with block_data.
-    pub fn discard_tree_state(&mut self) {
+    pub fn discard_tree_state(&mut self) -> Result<(), String> {
         use crate::components::tree_state;
         info!("Discarding persisted tree state");
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
-        tree_state::delete_tree_state();
+        tree_state::delete_tree_state()
     }
 
-    /// Reset wallet state for rescan. Block data is preserved for faster re-sync.
-    pub fn reset(&mut self) {
+    /// Reset wallet state for rescan.
+    pub fn reset(&mut self) -> Result<(), String> {
         use crate::components::tree_state;
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
         self.db.delete_all_notes();
-        tree_state::delete_tree_state();
-    }
-
-    /// Full reset including block data storage.
-    pub fn reset_full(&mut self) {
-        use crate::components::block_data::BlockData;
-        self.reset();
-        BlockData::clear_from_db();
-    }
-
-    /// Handle blockchain reorganization by cleaning up invalidated note data.
-    /// This should be called when a reorg is detected, before truncating block data.
-    /// - Deletes notes that were created in blocks at or after `reorg_height`
-    /// - Clears spend info for notes that were spent in blocks at or after `reorg_height`
-    /// - Deletes the persisted tree state entirely (simplest recovery: rebuild from scratch)
-    pub fn handle_reorg(&mut self, reorg_height: u32) {
-        use crate::components::tree_state;
-        info!("Handling reorg from height {}", reorg_height);
-        self.db.handle_reorg(reorg_height as i32);
-        self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
-        self.last_block_height = None;
-        self.last_block_hash = None;
-        tree_state::delete_tree_state();
+        tree_state::delete_tree_state()
     }
 
     pub fn last_block_hash(&self) -> Option<BlockHash> {

@@ -29,7 +29,7 @@ impl Runnable for TestIssueOneCmd {
             .as_secs();
         let mut wallet = User::random(&config.wallet.miner_seed_phrase, Some(timestamp));
 
-        wallet.reset();
+        wallet.reset().unwrap();
         let num_users = 1;
         let issuer_idx = 0;
         let issuer_addr = wallet.address_for_account(issuer_idx, External);
@@ -56,5 +56,5 @@ impl Runnable for TestIssueOneCmd {
 }
 
 fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) {
-    sync_from_height(target_height, wallet, rpc_client);
+    sync_from_height(target_height, wallet, rpc_client).unwrap();
 }

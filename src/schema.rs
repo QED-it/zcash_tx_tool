@@ -21,11 +21,10 @@ diesel::table! {
 }
 
 diesel::table! {
-    /// Stored block data used for syncing and reorg detection.
+    /// Stored block data used for resumable sync.
     block_data (height) {
         height -> Integer,
         hash -> Text,
-        prev_hash -> Text,
     }
 }
 

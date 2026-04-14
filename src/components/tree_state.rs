@@ -9,8 +9,8 @@ use orchard::tree::MerkleHashOrchard;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+use crate::components::db;
 use crate::components::user::NOTE_COMMITMENT_TREE_DEPTH;
-use crate::prelude::info;
 
 const CREATE_TABLE_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS wallet_state (
@@ -223,32 +223,33 @@ pub struct LoadedTreeState {
 }
 
 /// Load the saved wallet tree state from SQLite.
-/// Returns `None` if no state is stored, the stored data is corrupt, or the
-/// database is not reachable (e.g. `DATABASE_URL` not set).
-pub fn load_tree_state() -> Option<LoadedTreeState> {
-    let database_url = try_database_url()?;
-    let mut conn = establish_connection(&database_url);
+/// Returns `Ok(None)` if no state is stored or the database does not exist.
+pub fn load_tree_state() -> Result<Option<LoadedTreeState>, String> {
+    let Some(database_url) = db::try_database_url() else {
+        return Ok(None);
+    };
+    let mut conn = db::establish_connection(&database_url);
     ensure_table(&mut conn);
 
     use crate::schema::wallet_state::dsl as ws;
-    let r: WalletStateRow = ws::wallet_state
+    let row = ws::wallet_state
         .select(WalletStateRow::as_select())
-        .load(&mut conn)
-        .unwrap_or_default()
-        .into_iter()
-        .next()?;
+        .first(&mut conn)
+        .optional()
+        .map_err(|e| format!("Failed to query wallet_state: {e}"))?;
+
+    let Some(r) = row else {
+        return Ok(None);
+    };
 
     let ser_tree: SerTree = serde_json::from_str(&r.commitment_tree_json)
-        .map_err(|e| info!("Failed to deserialize saved tree state: {e}"))
-        .ok()?;
-    let tree = deserialize_tree(ser_tree)
-        .map_err(|e| info!("Failed to reconstruct tree: {e}"))
-        .ok()?;
-    Some(LoadedTreeState {
+        .map_err(|e| format!("Failed to deserialize saved tree state: {e}"))?;
+    let tree = deserialize_tree(ser_tree)?;
+    Ok(Some(LoadedTreeState {
         commitment_tree: tree,
         last_block_height: r.last_block_height as u32,
         last_block_hash: r.last_block_hash,
-    })
+    }))
 }
 
 /// Persist the commitment tree, block height, and block hash to SQLite.
@@ -256,63 +257,56 @@ pub fn save_tree_state(
     tree: &BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH>,
     last_block_height: u32,
     last_block_hash: &str,
-) {
-    let database_url = database_url();
-    let mut conn = establish_connection(&database_url);
+) -> Result<(), String> {
+    let database_url = db::database_url();
+    let mut conn = db::establish_connection(&database_url);
     ensure_table(&mut conn);
 
-    let json =
-        serde_json::to_string(&serialize_tree(tree)).expect("failed to serialize commitment tree");
+    let json = serde_json::to_string(&serialize_tree(tree))
+        .map_err(|e| format!("Failed to serialize commitment tree: {e}"))?;
 
-    let new_row = NewWalletStateRow {
+    let new_row = WalletStateRow {
         id: 1,
         commitment_tree_json: json,
         last_block_height: last_block_height as i32,
         last_block_hash: last_block_hash.to_string(),
     };
 
-    let _ = conn.transaction(|conn| {
+    conn.transaction(|conn| {
         use crate::schema::wallet_state::dsl as ws;
         diesel::delete(ws::wallet_state).execute(conn)?;
         diesel::insert_into(ws::wallet_state)
             .values(&new_row)
             .execute(conn)?;
         Ok::<_, diesel::result::Error>(())
-    });
+    })
+    .map_err(|e| format!("Failed to save tree state: {e}"))
 }
 
 /// Delete the persisted tree state from SQLite.
-/// Silently does nothing if the database is not reachable.
-pub fn delete_tree_state() {
-    let Some(database_url) = try_database_url() else {
-        return;
+/// Does nothing if the database does not exist.
+pub fn delete_tree_state() -> Result<(), String> {
+    let Some(database_url) = db::try_database_url() else {
+        return Ok(());
     };
-    let mut conn = establish_connection(&database_url);
+    let mut conn = db::establish_connection(&database_url);
     ensure_table(&mut conn);
 
     use crate::schema::wallet_state::dsl as ws;
-    let _ = diesel::delete(ws::wallet_state).execute(&mut conn);
+    diesel::delete(ws::wallet_state)
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to delete tree state: {e}"))?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
 // Diesel row types
 // ---------------------------------------------------------------------------
 
-#[derive(Queryable, Selectable)]
+#[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = crate::schema::wallet_state)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 struct WalletStateRow {
-    #[allow(dead_code)]
-    id: i32,
-    commitment_tree_json: String,
-    last_block_height: i32,
-    last_block_hash: String,
-}
-
-#[derive(Insertable)]
-#[diesel(table_name = crate::schema::wallet_state)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-struct NewWalletStateRow {
     id: i32,
     commitment_tree_json: String,
     last_block_height: i32,
@@ -325,31 +319,6 @@ struct NewWalletStateRow {
 
 fn ensure_table(conn: &mut SqliteConnection) {
     let _ = sql_query(CREATE_TABLE_SQL).execute(conn);
-}
-
-fn establish_connection(database_url: &str) -> SqliteConnection {
-    SqliteConnection::establish(database_url).expect("Error connecting to wallet_state database")
-}
-
-const DEFAULT_DATABASE_URL: &str = "walletdb.sqlite";
-
-/// Returns the DATABASE_URL, or None if it is not set and the default DB file
-/// does not exist. Used by load/delete which must not panic during init or reorg.
-fn try_database_url() -> Option<String> {
-    match std::env::var("DATABASE_URL") {
-        Ok(url) => Some(url),
-        Err(_) => {
-            if std::path::Path::new(DEFAULT_DATABASE_URL).exists() {
-                Some(DEFAULT_DATABASE_URL.to_string())
-            } else {
-                None
-            }
-        }
-    }
-}
-
-fn database_url() -> String {
-    std::env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string())
 }
 
 #[cfg(test)]
@@ -402,7 +371,7 @@ mod tests {
     #[test]
     fn test_db_save_load_delete() {
         let (_db, url) = test_db_url();
-        let mut conn = establish_connection(&url);
+        let mut conn = db::establish_connection(&url);
         ensure_table(&mut conn);
 
         // No state initially
@@ -419,7 +388,7 @@ mod tests {
         let tree: BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH> =
             BridgeTree::new(MAX_CHECKPOINTS);
         let json = serde_json::to_string(&serialize_tree(&tree)).unwrap();
-        let new_row = NewWalletStateRow {
+        let new_row = WalletStateRow {
             id: 1,
             commitment_tree_json: json,
             last_block_height: 42,

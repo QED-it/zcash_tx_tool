@@ -15,6 +15,6 @@ impl Runnable for CleanCmd {
         let config = APP.config();
         let mut wallet = User::new(&config.wallet.seed_phrase, &config.wallet.miner_seed_phrase);
 
-        wallet.reset();
+        wallet.reset().unwrap();
     }
 }
