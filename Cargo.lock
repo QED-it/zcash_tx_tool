@@ -3508,7 +3508,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "zcash_encoding",
  "zcash_primitives",
  "zcash_proofs",
