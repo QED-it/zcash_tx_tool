@@ -248,11 +248,13 @@ impl User {
 
     /// Reset wallet state for rescan.
     pub fn reset(&mut self) -> Result<(), String> {
+        use crate::components::block_data::BlockData;
         use crate::components::tree_state;
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
         self.db.delete_all_notes();
+        BlockData::new().clear();
         tree_state::delete_tree_state()
     }
 
