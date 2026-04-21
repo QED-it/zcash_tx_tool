@@ -59,11 +59,7 @@ impl From<&BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH>> for S
                 .iter()
                 .map(|(pos, idx)| (u64::from(*pos), *idx))
                 .collect(),
-            checkpoints: tree
-                .checkpoints()
-                .iter()
-                .map(SerCheckpoint::from)
-                .collect(),
+            checkpoints: tree.checkpoints().iter().map(SerCheckpoint::from).collect(),
             max_checkpoints: tree.max_checkpoints(),
         }
     }
@@ -130,10 +126,7 @@ impl TryFrom<SerTree> for BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TRE
             .map(MerkleBridge::try_from)
             .collect::<Result<_, _>>()?;
 
-        let current_bridge = ser
-            .current_bridge
-            .map(MerkleBridge::try_from)
-            .transpose()?;
+        let current_bridge = ser.current_bridge.map(MerkleBridge::try_from).transpose()?;
 
         let saved: BTreeMap<Position, usize> = ser
             .saved

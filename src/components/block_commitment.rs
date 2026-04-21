@@ -1,36 +1,39 @@
+//! Block header commitment hashes per ZIP-244.
+
 use std::convert::TryInto;
 use std::iter::FromIterator;
-/// Partially copied from `zebra/zebra-chain/src/block/merkle.rs`
 use std::{fmt, iter};
 
 use hex::{FromHex, ToHex};
 use sha2::{Digest, Sha256};
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-pub struct Root(pub [u8; 32]);
+pub struct TxMerkleRoot(pub [u8; 32]);
 
-impl fmt::Debug for Root {
+impl fmt::Debug for TxMerkleRoot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Root").field(&hex::encode(self.0)).finish()
+        f.debug_tuple("TxMerkleRoot")
+            .field(&hex::encode(self.0))
+            .finish()
     }
 }
 
-impl From<[u8; 32]> for Root {
+impl From<[u8; 32]> for TxMerkleRoot {
     fn from(hash: [u8; 32]) -> Self {
-        Root(hash)
+        TxMerkleRoot(hash)
     }
 }
 
-impl From<Root> for [u8; 32] {
-    fn from(hash: Root) -> Self {
+impl From<TxMerkleRoot> for [u8; 32] {
+    fn from(hash: TxMerkleRoot) -> Self {
         hash.0
     }
 }
 
-impl Root {
+impl TxMerkleRoot {
     /// Return the hash bytes in big-endian byte-order suitable for printing out byte by byte.
     ///
-    /// Zebra displays transaction and block hashes in big-endian byte-order,
+    /// Zcash displays transaction and block hashes in big-endian byte-order,
     /// following the u256 convention set by Bitcoin and zcashd.
     pub fn bytes_in_display_order(&self) -> [u8; 32] {
         let mut reversed_bytes = self.0;
@@ -38,19 +41,19 @@ impl Root {
         reversed_bytes
     }
 
-    /// Convert bytes in big-endian byte-order into a [`merkle::Root`](crate::block::merkle::Root).
+    /// Convert bytes in big-endian byte-order into a [`TxMerkleRoot`].
     ///
-    /// Zebra displays transaction and block hashes in big-endian byte-order,
+    /// Zcash displays transaction and block hashes in big-endian byte-order,
     /// following the u256 convention set by Bitcoin and zcashd.
-    pub fn from_bytes_in_display_order(bytes_in_display_order: &[u8; 32]) -> Root {
+    pub fn from_bytes_in_display_order(bytes_in_display_order: &[u8; 32]) -> TxMerkleRoot {
         let mut internal_byte_order = *bytes_in_display_order;
         internal_byte_order.reverse();
 
-        Root(internal_byte_order)
+        TxMerkleRoot(internal_byte_order)
     }
 }
 
-impl ToHex for &Root {
+impl ToHex for &TxMerkleRoot {
     fn encode_hex<T: FromIterator<char>>(&self) -> T {
         self.bytes_in_display_order().encode_hex()
     }
@@ -60,7 +63,7 @@ impl ToHex for &Root {
     }
 }
 
-impl ToHex for Root {
+impl ToHex for TxMerkleRoot {
     fn encode_hex<T: FromIterator<char>>(&self) -> T {
         (&self).encode_hex()
     }
@@ -70,7 +73,7 @@ impl ToHex for Root {
     }
 }
 
-impl FromHex for Root {
+impl FromHex for TxMerkleRoot {
     type Error = <[u8; 32] as FromHex>::Error;
 
     fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, Self::Error> {
@@ -81,7 +84,7 @@ impl FromHex for Root {
     }
 }
 
-impl FromIterator<[u8; 32]> for Root {
+impl FromIterator<[u8; 32]> for TxMerkleRoot {
     /// # Panics
     ///
     /// When there are no transactions in the iterator.
@@ -95,8 +98,8 @@ impl FromIterator<[u8; 32]> for Root {
             hashes = hashes
                 .chunks(2)
                 .map(|chunk| match chunk {
-                    [h1, h2] => hash(h1, h2),
-                    [h1] => hash(h1, h1),
+                    [h1, h2] => tx_merkle_hash(h1, h2),
+                    [h1] => tx_merkle_hash(h1, h1),
                     _ => unreachable!("chunks(2)"),
                 })
                 .collect();
@@ -105,7 +108,7 @@ impl FromIterator<[u8; 32]> for Root {
     }
 }
 
-fn hash(h1: &[u8; 32], h2: &[u8; 32]) -> [u8; 32] {
+fn tx_merkle_hash(h1: &[u8; 32], h2: &[u8; 32]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(h1);
     hasher.update(h2);
@@ -136,7 +139,7 @@ fn auth_data_hash(h1: &[u8; 32], h2: &[u8; 32]) -> [u8; 32] {
 /// block header to the authorizing data of the block (signatures, proofs)
 /// as defined in [ZIP-244].
 ///
-/// See [`Root`] for an important disclaimer.
+/// See [`TxMerkleRoot`] for an important disclaimer.
 ///
 /// [ZIP-244]: https://zips.z.cash/zip-0244
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -165,7 +168,7 @@ impl From<AuthDataRoot> for [u8; 32] {
 impl AuthDataRoot {
     /// Return the hash bytes in big-endian byte-order suitable for printing out byte by byte.
     ///
-    /// Zebra displays transaction and block hashes in big-endian byte-order,
+    /// Zcash displays transaction and block hashes in big-endian byte-order,
     /// following the u256 convention set by Bitcoin and zcashd.
     pub fn bytes_in_display_order(&self) -> [u8; 32] {
         let mut reversed_bytes = self.0;
@@ -173,9 +176,9 @@ impl AuthDataRoot {
         reversed_bytes
     }
 
-    /// Convert bytes in big-endian byte-order into a [`merkle::AuthDataRoot`](crate::block::merkle::AuthDataRoot).
+    /// Convert bytes in big-endian byte-order into an [`AuthDataRoot`].
     ///
-    /// Zebra displays transaction and block hashes in big-endian byte-order,
+    /// Zcash displays transaction and block hashes in big-endian byte-order,
     /// following the u256 convention set by Bitcoin and zcashd.
     pub fn from_bytes_in_display_order(bytes_in_display_order: &[u8; 32]) -> AuthDataRoot {
         let mut internal_byte_order = *bytes_in_display_order;

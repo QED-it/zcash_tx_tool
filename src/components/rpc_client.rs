@@ -9,6 +9,8 @@ use zcash_encoding::{CompactSize, Vector};
 use zcash_primitives::block::{BlockHash, BlockHeader};
 use zcash_primitives::transaction::{Transaction, TxId};
 
+use zcash_protocol::consensus::BlockHeight;
+
 use crate::model::Block;
 
 pub trait RpcClient {
@@ -18,6 +20,10 @@ pub trait RpcClient {
     fn get_transaction(&self, txid: &TxId) -> Result<Transaction, Box<dyn Error>>;
     fn get_block_template(&self) -> Result<BlockTemplate, Box<dyn Error>>;
     fn submit_block(&mut self, block: BlockProposal) -> Result<Option<String>, Box<dyn Error>>;
+
+    fn get_target_height(&self) -> Result<BlockHeight, Box<dyn Error>> {
+        Ok(BlockHeight::from_u32(self.get_block_template()?.height))
+    }
 }
 
 /// =========================== Messages (copied fom Zebra RPC) ===========================

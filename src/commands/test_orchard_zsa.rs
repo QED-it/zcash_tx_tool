@@ -51,8 +51,14 @@ impl Runnable for TestOrchardZSACmd {
 
         // --------------------- Issue asset ---------------------
 
-        let (issue_tx, asset) =
-            create_issue_transaction(issuer_addr, 1000, asset_desc_hash, true, &mut wallet);
+        let (issue_tx, asset) = create_issue_transaction(
+            issuer_addr,
+            1000,
+            asset_desc_hash,
+            true,
+            &rpc_client,
+            &mut wallet,
+        );
 
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
@@ -70,7 +76,7 @@ impl Runnable for TestOrchardZSACmd {
         let txi = TxiBatch::from_item(transfer_info);
         let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
-        let txs = txi.to_transactions(&mut wallet);
+        let txs = txi.to_transactions(&rpc_client, &mut wallet);
 
         mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
@@ -92,7 +98,7 @@ impl Runnable for TestOrchardZSACmd {
         // Generate expected balances after burn
         let expected_balances = expected_balances_after_burn(&balances, &txi);
 
-        let txs = txi.to_transactions(&mut wallet);
+        let txs = txi.to_transactions(&rpc_client, &mut wallet);
 
         mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
@@ -102,12 +108,19 @@ impl Runnable for TestOrchardZSACmd {
         print_balances("=== Balances after burning ===", asset, &expected_balances);
 
         // --------------------- Finalization ---------------------
-        let finalization_tx = create_finalization_transaction(asset_desc_hash, &mut wallet);
+        let finalization_tx =
+            create_finalization_transaction(asset_desc_hash, &rpc_client, &mut wallet);
         mine(&mut wallet, &mut rpc_client, Vec::from([finalization_tx]))
             .expect("block mined successfully");
 
-        let invalid_issue_tx =
-            create_issue_transaction(issuer_addr, 2000, asset_desc_hash, true, &mut wallet);
+        let invalid_issue_tx = create_issue_transaction(
+            issuer_addr,
+            2000,
+            asset_desc_hash,
+            true,
+            &rpc_client,
+            &mut wallet,
+        );
         let result = mine(
             &mut wallet,
             &mut rpc_client,

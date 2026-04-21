@@ -108,5 +108,4 @@ impl SqliteDataStorage {
             .execute(&mut self.connection)
             .expect("Error deleting notes");
     }
-
 }

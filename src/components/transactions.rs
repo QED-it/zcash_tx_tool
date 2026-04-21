@@ -1,8 +1,8 @@
 use crate::components::block_data::BlockData;
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::components::user::User;
-use crate::components::zebra_merkle::{
-    block_commitment_from_parts, AuthDataRoot, Root, AUTH_COMMITMENT_PLACEHOLDER,
+use crate::components::block_commitment::{
+    block_commitment_from_parts, AuthDataRoot, TxMerkleRoot, AUTH_COMMITMENT_PLACEHOLDER,
 };
 use crate::prelude::{debug, info};
 use orchard::issuance::{IssueInfo, auth::IssueValidatingKey};
@@ -81,11 +81,14 @@ pub fn mine_empty_blocks(
 pub fn create_shield_coinbase_transaction(
     recipient: Address,
     coinbase_txid: TxId,
+    rpc_client: &dyn RpcClient,
     wallet: &mut User,
 ) -> Transaction {
     info!("Shielding coinbase output from tx {}", coinbase_txid);
-
-    let mut tx = create_tx(wallet);
+    let target_height = rpc_client
+        .get_target_height()
+        .expect("failed to get target height");
+    let mut tx = create_tx(target_height, wallet);
 
     let coinbase_amount = Zatoshis::from_u64(COINBASE_VALUE).unwrap();
     let miner_taddr = wallet.miner_address();
@@ -125,7 +128,11 @@ pub fn sync(wallet: &mut User, rpc: &mut dyn RpcClient) -> Result<(), String> {
 /// If it matches we resume from where we left off; if it does not
 /// (reorg, corruption, first run) we wipe everything and start from
 /// `from_height`.
-pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcClient) -> Result<(), String> {
+pub fn sync_from_height(
+    from_height: u32,
+    wallet: &mut User,
+    rpc: &mut dyn RpcClient,
+) -> Result<(), String> {
     info!("Starting sync from height {}", from_height);
 
     let mut block_data = BlockData::new();
@@ -137,7 +144,10 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
             resume.max(from_height)
         }
         _ => {
-            info!("No valid stored state, resetting and starting from {}", from_height);
+            info!(
+                "No valid stored state, resetting and starting from {}",
+                from_height
+            );
             block_data.clear();
             wallet.reset()?;
             from_height
@@ -214,6 +224,7 @@ pub fn create_transfer_transaction(
     recipient: Address,
     amount: u64,
     asset: AssetBase,
+    rpc_client: &dyn RpcClient,
     wallet: &mut User,
 ) -> Transaction {
     info!("Transfer {} zatoshi", amount);
@@ -231,7 +242,10 @@ pub fn create_transfer_transaction(
         total_inputs_amount, amount
     );
 
-    let mut tx = create_tx(wallet);
+    let target_height = rpc_client
+        .get_target_height()
+        .expect("failed to get target height");
+    let mut tx = create_tx(target_height, wallet);
 
     let orchard_keys: Vec<SpendAuthorizingKey> = inputs
         .into_iter()
@@ -279,6 +293,7 @@ pub fn create_burn_transaction(
     arsonist: Address,
     amount: u64,
     asset: AssetBase,
+    rpc_client: &dyn RpcClient,
     wallet: &mut User,
 ) -> Transaction {
     info!("Burn {} zatoshi", amount);
@@ -294,7 +309,10 @@ pub fn create_burn_transaction(
         total_inputs_amount, amount
     );
 
-    let mut tx = create_tx(wallet);
+    let target_height = rpc_client
+        .get_target_height()
+        .expect("failed to get target height");
+    let mut tx = create_tx(target_height, wallet);
 
     let orchard_keys: Vec<SpendAuthorizingKey> = inputs
         .into_iter()
@@ -336,11 +354,15 @@ pub fn create_issue_transaction(
     amount: u64,
     asset_desc_hash: [u8; 32],
     first_issuance: bool,
+    rpc_client: &dyn RpcClient,
     wallet: &mut User,
 ) -> (Transaction, AssetBase) {
     info!("Issue {} asset", amount);
+    let target_height = rpc_client
+        .get_target_height()
+        .expect("failed to get target height");
     let dummy_recipient = wallet.address_for_account(0, Scope::External);
-    let mut tx = create_tx(wallet);
+    let mut tx = create_tx(target_height, wallet);
     tx.init_issuance_bundle::<FeeError>(
         wallet.issuance_key(),
         asset_desc_hash,
@@ -384,11 +406,15 @@ pub fn create_issue_transaction(
 /// Create a transaction that issues a new asset
 pub fn create_finalization_transaction(
     asset_desc_hash: [u8; 32],
+    rpc_client: &dyn RpcClient,
     wallet: &mut User,
 ) -> Transaction {
     info!("Finalize asset");
+    let target_height = rpc_client
+        .get_target_height()
+        .expect("failed to get target height");
     let dummy_recipient = wallet.address_for_account(0, Scope::External);
-    let mut tx = create_tx(wallet);
+    let mut tx = create_tx(target_height, wallet);
     tx.init_issuance_bundle::<FeeError>(wallet.issuance_key(), asset_desc_hash, None, false)
         .unwrap();
     tx.finalize_asset::<FeeError>(&asset_desc_hash).unwrap();
@@ -436,7 +462,7 @@ pub fn template_into_proposal(
         txs_with_coinbase
             .iter()
             .map(|tx| *tx.txid().clone().as_ref())
-            .collect::<Root>()
+            .collect::<TxMerkleRoot>()
             .0
     };
 
@@ -481,16 +507,12 @@ pub fn template_into_proposal(
     }
 }
 
-fn create_tx(wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
+fn create_tx(target_height: BlockHeight, wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
     let build_config = BuildConfig::TxV6 {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),
     };
-    Builder::new(
-        REGTEST_NETWORK,
-        /*user.last_block_height().unwrap()*/ BlockHeight::from_u32(1_842_420),
-        build_config,
-    )
+    Builder::new(REGTEST_NETWORK, target_height, build_config)
 }
 
 fn build_tx(

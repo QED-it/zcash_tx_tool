@@ -8,6 +8,12 @@ pub struct BlockData {
     conn: SqliteConnection,
 }
 
+impl Default for BlockData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BlockData {
     pub fn new() -> Self {
         Self::new_with_url(&db::database_url())

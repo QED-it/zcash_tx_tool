@@ -1,3 +1,4 @@
+use crate::components::rpc_client::RpcClient;
 use crate::components::transactions::{create_burn_transaction, create_transfer_transaction};
 use crate::components::user::User;
 use crate::prelude::info;
@@ -48,7 +49,7 @@ pub(crate) struct BurnInfo {
 
 /// A trait to create a transaction from the information provided in the struct.
 pub(crate) trait TransactionCreator {
-    fn create_tx(&self, wallet: &mut User) -> Transaction;
+    fn create_tx(&self, rpc_client: &dyn RpcClient, wallet: &mut User) -> Transaction;
 }
 
 impl TransferInfo {
@@ -78,17 +79,24 @@ impl BurnInfo {
 }
 
 impl TransactionCreator for TransferInfo {
-    fn create_tx(&self, wallet: &mut User) -> Transaction {
+    fn create_tx(&self, rpc_client: &dyn RpcClient, wallet: &mut User) -> Transaction {
         let from_addr = wallet.address_for_account(self.acc_idx_from, External);
         let to_addr = wallet.address_for_account(self.acc_idx_to, External);
-        create_transfer_transaction(from_addr, to_addr, self.amount, self.asset, wallet)
+        create_transfer_transaction(
+            from_addr,
+            to_addr,
+            self.amount,
+            self.asset,
+            rpc_client,
+            wallet,
+        )
     }
 }
 
 impl TransactionCreator for BurnInfo {
-    fn create_tx(&self, wallet: &mut User) -> Transaction {
+    fn create_tx(&self, rpc_client: &dyn RpcClient, wallet: &mut User) -> Transaction {
         let address = wallet.address_for_account(self.burner_acc_idx, External);
-        create_burn_transaction(address, self.amount, self.asset, wallet)
+        create_burn_transaction(address, self.amount, self.asset, rpc_client, wallet)
     }
 }
 
@@ -123,8 +131,15 @@ impl<T: Clone + TransactionCreator> TxiBatch<T> {
     }
 
     /// This function creates a Vec of transactions for each item in the InfoBatch.
-    pub(crate) fn to_transactions(&self, wallet: &mut User) -> Vec<Transaction> {
-        self.0.iter().map(|item| item.create_tx(wallet)).collect()
+    pub(crate) fn to_transactions(
+        &self,
+        rpc_client: &dyn RpcClient,
+        wallet: &mut User,
+    ) -> Vec<Transaction> {
+        self.0
+            .iter()
+            .map(|item| item.create_tx(rpc_client, wallet))
+            .collect()
     }
 }
 

@@ -42,8 +42,14 @@ impl Runnable for TestIssueOneCmd {
 
         // --------------------- Issue asset ---------------------
 
-        let (issue_tx, asset) =
-            create_issue_transaction(issuer_addr, 1, asset_desc_hash, true, &mut wallet);
+        let (issue_tx, asset) = create_issue_transaction(
+            issuer_addr,
+            1,
+            asset_desc_hash,
+            true,
+            &rpc_client,
+            &mut wallet,
+        );
         let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
 

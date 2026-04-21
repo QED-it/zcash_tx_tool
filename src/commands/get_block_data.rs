@@ -38,9 +38,7 @@ impl Runnable for GetBlockDataCmd {
         let result = match height {
             Some(height) => match block_data.get_hash(height) {
                 Some(hash) => {
-                    let prev_hash = height
-                        .checked_sub(1)
-                        .and_then(|h| block_data.get_hash(h));
+                    let prev_hash = height.checked_sub(1).and_then(|h| block_data.get_hash(h));
                     BlockDataResult {
                         block_height: Some(height),
                         hash: Some(hash),
