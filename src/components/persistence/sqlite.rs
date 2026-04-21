@@ -1,5 +1,5 @@
 use crate::components::db;
-use crate::components::persistence::model::{InsertableNoteData, NoteData};
+use crate::components::persistence::model::NoteData;
 use crate::schema::notes::dsl::notes;
 use crate::schema::notes::*;
 use diesel::associations::HasTable;
@@ -74,14 +74,14 @@ impl SqliteDataStorage {
         note_id: i32,
         spend_tx_id_value: &TxId,
         spend_action_index_value: i32,
-        spend_block_height_value: i32,
+        spend_block_height_value: u32,
     ) {
         diesel::update(notes)
             .filter(id.eq(note_id))
             .set((
                 spend_tx_id.eq(spend_tx_id_value.as_ref().to_vec()),
                 spend_action_index.eq(spend_action_index_value),
-                spend_block_height.eq(spend_block_height_value),
+                spend_block_height.eq(spend_block_height_value as i32),
             ))
             .execute(&mut self.connection)
             .unwrap();
@@ -97,7 +97,7 @@ impl SqliteDataStorage {
 
     pub fn insert_note(&mut self, note: NoteData) -> NoteData {
         diesel::insert_into(notes::table())
-            .values(&InsertableNoteData::from_note_data(note))
+            .values(&note)
             .returning(NoteData::as_returning())
             .get_result(&mut self.connection)
             .expect("Error saving new note")

@@ -246,17 +246,6 @@ impl User {
         Ok(())
     }
 
-    /// Discard in-memory tree state and delete persisted state from SQLite.
-    /// Used when the persisted state is detected to be inconsistent with block_data.
-    pub fn discard_tree_state(&mut self) -> Result<(), String> {
-        use crate::components::tree_state;
-        info!("Discarding persisted tree state");
-        self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
-        self.last_block_height = None;
-        self.last_block_hash = None;
-        tree_state::delete_tree_state()
-    }
-
     /// Reset wallet state for rescan.
     pub fn reset(&mut self) -> Result<(), String> {
         use crate::components::tree_state;
@@ -439,10 +428,10 @@ impl User {
         block_hash: BlockHash,
         transactions: Vec<Transaction>,
     ) -> Result<(), BundleLoadError> {
-        let height_i32 = u32::from(block_height) as i32;
+        let height = u32::from(block_height);
         transactions.into_iter().try_for_each(|tx| {
             if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
-                self.add_notes_from_tx(tx, height_i32)?;
+                self.add_notes_from_tx(tx, height)?;
             };
             Ok(())
         })?;
@@ -457,7 +446,7 @@ impl User {
     fn add_notes_from_tx(
         &mut self,
         tx: Transaction,
-        block_height: i32,
+        block_height: u32,
     ) -> Result<(), BundleLoadError> {
         let mut issued_notes_offset = 0;
 
@@ -501,7 +490,7 @@ impl User {
         &mut self,
         txid: &TxId,
         bundle: &Bundle<Authorized, ZatBalance, O>,
-        block_height: i32,
+        block_height: u32,
     ) {
         let keys = self
             .key_store
@@ -534,7 +523,7 @@ impl User {
         txid: &TxId,
         bundle: &IssueBundle<Signed>,
         note_index_offset: usize,
-        block_height: i32,
+        block_height: u32,
     ) {
         for (note_index, note) in bundle.actions().iter().flat_map(|a| a.notes()).enumerate() {
             if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
@@ -560,7 +549,7 @@ impl User {
         txid: &TxId,
         action_index: usize,
         note_data: DecryptedNoteData,
-        block_height: i32,
+        block_height: u32,
     ) -> Result<(), BundleLoadError> {
         if let Some(fvk) = self.key_store.viewing_keys.get(&note_data.ivk) {
             info!("Adding decrypted note to the user");
@@ -582,7 +571,7 @@ impl User {
                 recipient_address: note_data.recipient.to_raw_address_bytes().to_vec(),
                 spend_tx_id: None,
                 spend_action_index: -1,
-                origin_block_height: block_height,
+                origin_block_height: block_height as i32,
                 spend_block_height: None,
             };
             self.db.insert_note(db_note_data);
@@ -602,7 +591,7 @@ impl User {
         &mut self,
         txid: &TxId,
         orchard_bundle: &Bundle<Authorized, ZatBalance, O>,
-        block_height: i32,
+        block_height: u32,
     ) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {

@@ -16,12 +16,12 @@ CREATE TABLE notes (
     spend_block_height INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS block_data (
+CREATE TABLE block_data (
     height INTEGER PRIMARY KEY NOT NULL,
     hash TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS wallet_state (
+CREATE TABLE wallet_state (
     id INTEGER PRIMARY KEY NOT NULL DEFAULT 1,
     commitment_tree_json TEXT NOT NULL,
     last_block_height INTEGER NOT NULL,

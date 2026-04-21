@@ -3,14 +3,6 @@
 use crate::components::db;
 use diesel::dsl::max;
 use diesel::prelude::*;
-use diesel::sql_query;
-
-const CREATE_TABLE_SQL: &str = r#"
-CREATE TABLE IF NOT EXISTS block_data (
-    height INTEGER PRIMARY KEY NOT NULL,
-    hash TEXT NOT NULL
-);
-"#;
 
 pub struct BlockData {
     conn: SqliteConnection,
@@ -22,8 +14,7 @@ impl BlockData {
     }
 
     fn new_with_url(database_url: &str) -> Self {
-        let mut conn = db::establish_connection(database_url);
-        let _ = sql_query(CREATE_TABLE_SQL).execute(&mut conn);
+        let conn = db::establish_connection(database_url);
         Self { conn }
     }
 

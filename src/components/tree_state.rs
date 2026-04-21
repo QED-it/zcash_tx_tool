@@ -2,7 +2,6 @@
 
 use bridgetree::{BridgeTree, Checkpoint, MerkleBridge};
 use diesel::prelude::*;
-use diesel::sql_query;
 use incrementalmerkletree::frontier::NonEmptyFrontier;
 use incrementalmerkletree::{Address, Level, Position};
 use orchard::tree::MerkleHashOrchard;
@@ -11,15 +10,6 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use crate::components::db;
 use crate::components::user::NOTE_COMMITMENT_TREE_DEPTH;
-
-const CREATE_TABLE_SQL: &str = r#"
-CREATE TABLE IF NOT EXISTS wallet_state (
-    id INTEGER PRIMARY KEY NOT NULL DEFAULT 1,
-    commitment_tree_json TEXT NOT NULL,
-    last_block_height INTEGER NOT NULL,
-    last_block_hash TEXT NOT NULL
-);
-"#;
 
 #[derive(Serialize, Deserialize)]
 struct SerAddress {
@@ -59,157 +49,181 @@ struct SerTree {
     max_checkpoints: usize,
 }
 
-fn serialize_tree(
-    tree: &BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH>,
-) -> SerTree {
-    SerTree {
-        prior_bridges: tree.prior_bridges().iter().map(serialize_bridge).collect(),
-        current_bridge: tree.current_bridge().as_ref().map(serialize_bridge),
-        saved: tree
-            .marked_indices()
-            .iter()
-            .map(|(pos, idx)| (u64::from(*pos), *idx))
-            .collect(),
-        checkpoints: tree
-            .checkpoints()
-            .iter()
-            .map(serialize_checkpoint)
-            .collect(),
-        max_checkpoints: tree.max_checkpoints(),
+impl From<&BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH>> for SerTree {
+    fn from(tree: &BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH>) -> Self {
+        Self {
+            prior_bridges: tree.prior_bridges().iter().map(SerBridge::from).collect(),
+            current_bridge: tree.current_bridge().as_ref().map(SerBridge::from),
+            saved: tree
+                .marked_indices()
+                .iter()
+                .map(|(pos, idx)| (u64::from(*pos), *idx))
+                .collect(),
+            checkpoints: tree
+                .checkpoints()
+                .iter()
+                .map(SerCheckpoint::from)
+                .collect(),
+            max_checkpoints: tree.max_checkpoints(),
+        }
     }
 }
 
-fn serialize_bridge(bridge: &MerkleBridge<MerkleHashOrchard>) -> SerBridge {
-    SerBridge {
-        prior_position: bridge.prior_position().map(u64::from),
-        tracking: bridge
-            .tracking()
-            .iter()
-            .map(|addr| SerAddress {
-                level: u8::from(addr.level()),
-                index: addr.index(),
+impl From<&MerkleBridge<MerkleHashOrchard>> for SerBridge {
+    fn from(bridge: &MerkleBridge<MerkleHashOrchard>) -> Self {
+        Self {
+            prior_position: bridge.prior_position().map(u64::from),
+            tracking: bridge
+                .tracking()
+                .iter()
+                .map(|addr| SerAddress {
+                    level: u8::from(addr.level()),
+                    index: addr.index(),
+                })
+                .collect(),
+            ommers: bridge
+                .ommers()
+                .iter()
+                .map(|(addr, hash)| {
+                    (
+                        SerAddress {
+                            level: u8::from(addr.level()),
+                            index: addr.index(),
+                        },
+                        hash.to_bytes(),
+                    )
+                })
+                .collect(),
+            frontier: SerFrontier::from(bridge.frontier()),
+        }
+    }
+}
+
+impl From<&NonEmptyFrontier<MerkleHashOrchard>> for SerFrontier {
+    fn from(frontier: &NonEmptyFrontier<MerkleHashOrchard>) -> Self {
+        Self {
+            position: u64::from(frontier.position()),
+            leaf: frontier.leaf().to_bytes(),
+            ommers: frontier.ommers().iter().map(|h| h.to_bytes()).collect(),
+        }
+    }
+}
+
+impl From<&Checkpoint<u32>> for SerCheckpoint {
+    fn from(cp: &Checkpoint<u32>) -> Self {
+        Self {
+            id: *cp.id(),
+            bridges_len: cp.bridges_len(),
+            marked: cp.marked().iter().map(|p| u64::from(*p)).collect(),
+            forgotten: cp.forgotten().iter().map(|p| u64::from(*p)).collect(),
+        }
+    }
+}
+
+impl TryFrom<SerTree> for BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH> {
+    type Error = String;
+
+    fn try_from(ser: SerTree) -> Result<Self, Self::Error> {
+        let prior_bridges: Vec<MerkleBridge<MerkleHashOrchard>> = ser
+            .prior_bridges
+            .into_iter()
+            .map(MerkleBridge::try_from)
+            .collect::<Result<_, _>>()?;
+
+        let current_bridge = ser
+            .current_bridge
+            .map(MerkleBridge::try_from)
+            .transpose()?;
+
+        let saved: BTreeMap<Position, usize> = ser
+            .saved
+            .into_iter()
+            .map(|(pos, idx)| (Position::from(pos), idx))
+            .collect();
+
+        let checkpoints: VecDeque<Checkpoint<u32>> = ser
+            .checkpoints
+            .into_iter()
+            .map(Checkpoint::try_from)
+            .collect::<Result<_, _>>()?;
+
+        BridgeTree::from_parts(
+            prior_bridges,
+            current_bridge,
+            saved,
+            checkpoints,
+            ser.max_checkpoints,
+        )
+        .map_err(|e| format!("BridgeTree::from_parts failed: {:?}", e))
+    }
+}
+
+impl TryFrom<SerBridge> for MerkleBridge<MerkleHashOrchard> {
+    type Error = String;
+
+    fn try_from(ser: SerBridge) -> Result<Self, Self::Error> {
+        let prior_position = ser.prior_position.map(Position::from);
+
+        let tracking: BTreeSet<Address> = ser
+            .tracking
+            .into_iter()
+            .map(|a| Address::from_parts(Level::from(a.level), a.index))
+            .collect();
+
+        let ommers: BTreeMap<Address, MerkleHashOrchard> = ser
+            .ommers
+            .into_iter()
+            .map(|(a, bytes)| {
+                let addr = Address::from_parts(Level::from(a.level), a.index);
+                let hash = Option::from(MerkleHashOrchard::from_bytes(&bytes))
+                    .ok_or("invalid ommer hash bytes")?;
+                Ok((addr, hash))
             })
-            .collect(),
-        ommers: bridge
-            .ommers()
-            .iter()
-            .map(|(addr, hash)| {
-                (
-                    SerAddress {
-                        level: u8::from(addr.level()),
-                        index: addr.index(),
-                    },
-                    hash.to_bytes(),
-                )
+            .collect::<Result<_, String>>()?;
+
+        let frontier = NonEmptyFrontier::try_from(ser.frontier)?;
+
+        Ok(MerkleBridge::from_parts(
+            prior_position,
+            tracking,
+            ommers,
+            frontier,
+        ))
+    }
+}
+
+impl TryFrom<SerFrontier> for NonEmptyFrontier<MerkleHashOrchard> {
+    type Error = String;
+
+    fn try_from(ser: SerFrontier) -> Result<Self, Self::Error> {
+        let position = Position::from(ser.position);
+        let leaf = Option::from(MerkleHashOrchard::from_bytes(&ser.leaf))
+            .ok_or("invalid frontier leaf hash")?;
+        let ommers: Vec<MerkleHashOrchard> = ser
+            .ommers
+            .into_iter()
+            .map(|bytes| {
+                Option::from(MerkleHashOrchard::from_bytes(&bytes))
+                    .ok_or("invalid frontier ommer hash")
             })
-            .collect(),
-        frontier: serialize_frontier(bridge.frontier()),
+            .collect::<Result<_, _>>()?;
+
+        NonEmptyFrontier::from_parts(position, leaf, ommers)
+            .map_err(|e| format!("NonEmptyFrontier::from_parts failed: {:?}", e))
     }
 }
 
-fn serialize_frontier(frontier: &NonEmptyFrontier<MerkleHashOrchard>) -> SerFrontier {
-    SerFrontier {
-        position: u64::from(frontier.position()),
-        leaf: frontier.leaf().to_bytes(),
-        ommers: frontier.ommers().iter().map(|h| h.to_bytes()).collect(),
+impl TryFrom<SerCheckpoint> for Checkpoint<u32> {
+    type Error = String;
+
+    fn try_from(ser: SerCheckpoint) -> Result<Self, Self::Error> {
+        Ok(Checkpoint::from_parts(
+            ser.id,
+            ser.bridges_len,
+            ser.marked.into_iter().map(Position::from).collect(),
+            ser.forgotten.into_iter().map(Position::from).collect(),
+        ))
     }
-}
-
-fn serialize_checkpoint(cp: &Checkpoint<u32>) -> SerCheckpoint {
-    SerCheckpoint {
-        id: *cp.id(),
-        bridges_len: cp.bridges_len(),
-        marked: cp.marked().iter().map(|p| u64::from(*p)).collect(),
-        forgotten: cp.forgotten().iter().map(|p| u64::from(*p)).collect(),
-    }
-}
-
-fn deserialize_tree(
-    ser: SerTree,
-) -> Result<BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH>, String> {
-    let prior_bridges: Vec<MerkleBridge<MerkleHashOrchard>> = ser
-        .prior_bridges
-        .into_iter()
-        .map(deserialize_bridge)
-        .collect::<Result<_, _>>()?;
-
-    let current_bridge = ser.current_bridge.map(deserialize_bridge).transpose()?;
-
-    let saved: BTreeMap<Position, usize> = ser
-        .saved
-        .into_iter()
-        .map(|(pos, idx)| (Position::from(pos), idx))
-        .collect();
-
-    let checkpoints: VecDeque<Checkpoint<u32>> = ser
-        .checkpoints
-        .into_iter()
-        .map(deserialize_checkpoint)
-        .collect();
-
-    BridgeTree::from_parts(
-        prior_bridges,
-        current_bridge,
-        saved,
-        checkpoints,
-        ser.max_checkpoints,
-    )
-    .map_err(|e| format!("BridgeTree::from_parts failed: {:?}", e))
-}
-
-fn deserialize_bridge(ser: SerBridge) -> Result<MerkleBridge<MerkleHashOrchard>, String> {
-    let prior_position = ser.prior_position.map(Position::from);
-
-    let tracking: BTreeSet<Address> = ser
-        .tracking
-        .into_iter()
-        .map(|a| Address::from_parts(Level::from(a.level), a.index))
-        .collect();
-
-    let ommers: BTreeMap<Address, MerkleHashOrchard> = ser
-        .ommers
-        .into_iter()
-        .map(|(a, bytes)| {
-            let addr = Address::from_parts(Level::from(a.level), a.index);
-            let hash = Option::from(MerkleHashOrchard::from_bytes(&bytes))
-                .ok_or("invalid ommer hash bytes")?;
-            Ok((addr, hash))
-        })
-        .collect::<Result<_, String>>()?;
-
-    let frontier = deserialize_frontier(ser.frontier)?;
-
-    Ok(MerkleBridge::from_parts(
-        prior_position,
-        tracking,
-        ommers,
-        frontier,
-    ))
-}
-
-fn deserialize_frontier(ser: SerFrontier) -> Result<NonEmptyFrontier<MerkleHashOrchard>, String> {
-    let position = Position::from(ser.position);
-    let leaf = Option::from(MerkleHashOrchard::from_bytes(&ser.leaf))
-        .ok_or("invalid frontier leaf hash")?;
-    let ommers: Vec<MerkleHashOrchard> = ser
-        .ommers
-        .into_iter()
-        .map(|bytes| {
-            Option::from(MerkleHashOrchard::from_bytes(&bytes)).ok_or("invalid frontier ommer hash")
-        })
-        .collect::<Result<_, _>>()?;
-
-    NonEmptyFrontier::from_parts(position, leaf, ommers)
-        .map_err(|e| format!("NonEmptyFrontier::from_parts failed: {:?}", e))
-}
-
-fn deserialize_checkpoint(ser: SerCheckpoint) -> Checkpoint<u32> {
-    Checkpoint::from_parts(
-        ser.id,
-        ser.bridges_len,
-        ser.marked.into_iter().map(Position::from).collect(),
-        ser.forgotten.into_iter().map(Position::from).collect(),
-    )
 }
 
 // ---------------------------------------------------------------------------
@@ -229,7 +243,6 @@ pub fn load_tree_state() -> Result<Option<LoadedTreeState>, String> {
         return Ok(None);
     };
     let mut conn = db::establish_connection(&database_url);
-    ensure_table(&mut conn);
 
     use crate::schema::wallet_state::dsl as ws;
     let row = ws::wallet_state
@@ -244,7 +257,7 @@ pub fn load_tree_state() -> Result<Option<LoadedTreeState>, String> {
 
     let ser_tree: SerTree = serde_json::from_str(&r.commitment_tree_json)
         .map_err(|e| format!("Failed to deserialize saved tree state: {e}"))?;
-    let tree = deserialize_tree(ser_tree)?;
+    let tree = BridgeTree::try_from(ser_tree)?;
     Ok(Some(LoadedTreeState {
         commitment_tree: tree,
         last_block_height: r.last_block_height as u32,
@@ -260,9 +273,9 @@ pub fn save_tree_state(
 ) -> Result<(), String> {
     let database_url = db::database_url();
     let mut conn = db::establish_connection(&database_url);
-    ensure_table(&mut conn);
 
-    let json = serde_json::to_string(&serialize_tree(tree))
+    let ser_tree = SerTree::from(tree);
+    let json = serde_json::to_string(&ser_tree)
         .map_err(|e| format!("Failed to serialize commitment tree: {e}"))?;
 
     let new_row = WalletStateRow {
@@ -290,7 +303,6 @@ pub fn delete_tree_state() -> Result<(), String> {
         return Ok(());
     };
     let mut conn = db::establish_connection(&database_url);
-    ensure_table(&mut conn);
 
     use crate::schema::wallet_state::dsl as ws;
     diesel::delete(ws::wallet_state)
@@ -313,14 +325,6 @@ struct WalletStateRow {
     last_block_hash: String,
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn ensure_table(conn: &mut SqliteConnection) {
-    let _ = sql_query(CREATE_TABLE_SQL).execute(conn);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,10 +342,10 @@ mod tests {
         let tree: BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH> =
             BridgeTree::new(MAX_CHECKPOINTS);
 
-        let ser = serialize_tree(&tree);
+        let ser = SerTree::from(&tree);
         let json = serde_json::to_string(&ser).unwrap();
         let deser: SerTree = serde_json::from_str(&json).unwrap();
-        let restored = deserialize_tree(deser).unwrap();
+        let restored = BridgeTree::try_from(deser).unwrap();
 
         assert_eq!(tree, restored);
     }
@@ -360,10 +364,10 @@ mod tests {
         tree.append(leaf2);
         tree.checkpoint(1);
 
-        let ser = serialize_tree(&tree);
+        let ser = SerTree::from(&tree);
         let json = serde_json::to_string(&ser).unwrap();
         let deser: SerTree = serde_json::from_str(&json).unwrap();
-        let restored = deserialize_tree(deser).unwrap();
+        let restored = BridgeTree::try_from(deser).unwrap();
 
         assert_eq!(tree, restored);
     }
@@ -372,7 +376,6 @@ mod tests {
     fn test_db_save_load_delete() {
         let (_db, url) = test_db_url();
         let mut conn = db::establish_connection(&url);
-        ensure_table(&mut conn);
 
         // No state initially
         {
@@ -387,7 +390,7 @@ mod tests {
         // Save
         let tree: BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH> =
             BridgeTree::new(MAX_CHECKPOINTS);
-        let json = serde_json::to_string(&serialize_tree(&tree)).unwrap();
+        let json = serde_json::to_string(&SerTree::from(&tree)).unwrap();
         let new_row = WalletStateRow {
             id: 1,
             commitment_tree_json: json,

@@ -2,11 +2,15 @@
 //!
 //! Every module that needs SQLite access should go through these functions
 //! so the default URL and env-var override live in exactly one place.
+//! Table creation is handled exclusively by embedded migrations.
 
 use diesel::prelude::*;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::env;
 
 const DEFAULT_DATABASE_URL: &str = "walletdb.sqlite";
+
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 /// Return the database URL from `DATABASE_URL` env var, falling back to the
 /// default `walletdb.sqlite`.
@@ -30,8 +34,11 @@ pub fn try_database_url() -> Option<String> {
     }
 }
 
-/// Open a SQLite connection to the given URL.
+/// Open a SQLite connection to the given URL and run pending migrations.
 pub fn establish_connection(database_url: &str) -> SqliteConnection {
-    SqliteConnection::establish(database_url)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
+    let mut conn = SqliteConnection::establish(database_url)
+        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url));
+    conn.run_pending_migrations(MIGRATIONS)
+        .expect("Failed to run database migrations");
+    conn
 }

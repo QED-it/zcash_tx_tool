@@ -120,29 +120,29 @@ pub fn sync(wallet: &mut User, rpc: &mut dyn RpcClient) -> Result<(), String> {
 }
 
 /// Sync the user with the node from the given height.
-/// Uses SQLite-backed storage to:
-/// 1. Track chain progression with block hashes (block_data table)
-/// 2. Persist the commitment tree across process restarts (wallet_state table)
-/// 3. Detect chain reorganizations by verifying block hashes match
-/// 4. Handle reorgs by deleting all cached state and rescanning from scratch
+///
+/// On each run the stored chain tip is compared to the live chain.
+/// If it matches we resume from where we left off; if it does not
+/// (reorg, corruption, first run) we wipe everything and start from
+/// `from_height`.
 pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcClient) -> Result<(), String> {
     info!("Starting sync from height {}", from_height);
 
     let mut block_data = BlockData::new();
 
-    let wallet_height = wallet.last_block_height().map_or(0, u32::from);
-    if wallet_height > 0 && block_data.last_height_block() != Some(wallet_height) {
-        info!(
-            "Wallet tree state (height {}) inconsistent with block data ({:?}), discarding",
-            wallet_height,
-            block_data.last_height_block()
-        );
-        wallet.discard_tree_state()?;
-    }
-
-    let start_height = determine_sync_start_height(from_height, wallet, &mut block_data, rpc)?;
-
-    info!("Determined sync start height: {}", start_height);
+    let start_height = match block_data.last_height_block() {
+        Some(tip) if tip_matches_chain(tip, &mut block_data, rpc) => {
+            let resume = tip + 1;
+            info!("Stored tip {} valid, resuming from {}", tip, resume);
+            resume.max(from_height)
+        }
+        _ => {
+            info!("No valid stored state, resetting and starting from {}", from_height);
+            block_data.clear();
+            wallet.reset()?;
+            from_height
+        }
+    };
 
     let mut next_height = start_height;
 
@@ -177,57 +177,6 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
     }
 }
 
-/// Pick sync start height using wallet state, stored block data, and chain validation.
-fn determine_sync_start_height(
-    from_height: u32,
-    wallet: &mut User,
-    block_data: &mut BlockData,
-    rpc: &mut dyn RpcClient,
-) -> Result<u32, String> {
-    let wallet_last_block_height = wallet.last_block_height().map_or(0, u32::from);
-
-    if wallet_last_block_height == 0 {
-        if block_data.last_height_block().is_some_and(|h| h >= from_height) {
-            info!(
-                "Wallet has no synced blocks; clearing stale block data from height {}",
-                from_height
-            );
-            block_data.truncate_from(from_height);
-        }
-        info!(
-            "Wallet has no synced blocks; rescanning from height {}",
-            from_height
-        );
-        return Ok(from_height);
-    }
-
-    let last_stored_height = block_data.last_height_block();
-
-    match last_stored_height {
-        Some(stored_height) => {
-            info!("Found stored block at height {}", stored_height);
-
-            match validate_stored_chain(stored_height, block_data, rpc) {
-                ChainValidationResult::Valid => {
-                    let resume_height = stored_height + 1;
-                    info!("Stored data valid, resuming from height {}", resume_height);
-                    Ok(resume_height.max(from_height))
-                }
-                ChainValidationResult::Invalid => {
-                    info!("Chain mismatch detected, resetting wallet and block data");
-                    block_data.clear();
-                    wallet.reset()?;
-                    Ok(from_height)
-                }
-            }
-        }
-        None => {
-            info!("No block data found, starting fresh");
-            Ok(from_height.max(wallet_last_block_height))
-        }
-    }
-}
-
 fn fetch_block_txs(tx_ids: &[TxId], rpc: &mut dyn RpcClient) -> Vec<Transaction> {
     tx_ids
         .iter()
@@ -235,44 +184,26 @@ fn fetch_block_txs(tx_ids: &[TxId], rpc: &mut dyn RpcClient) -> Vec<Transaction>
         .collect()
 }
 
-/// Result of validating the stored chain against the current blockchain
-enum ChainValidationResult {
-    /// The stored chain matches the current blockchain
-    Valid,
-    /// The stored chain does not match the current blockchain (reorg or missing blocks)
-    Invalid,
-}
-
-/// Validates that the stored chain tip matches the current blockchain.
-fn validate_stored_chain(
-    stored_height: u32,
-    block_data: &mut BlockData,
-    rpc: &mut dyn RpcClient,
-) -> ChainValidationResult {
-    let stored_hash = match block_data.get_hash(stored_height) {
-        Some(h) => h,
-        None => return ChainValidationResult::Invalid,
+/// Check whether the stored hash at `height` matches the live chain.
+fn tip_matches_chain(height: u32, block_data: &mut BlockData, rpc: &mut dyn RpcClient) -> bool {
+    let Some(stored_hash) = block_data.get_hash(height) else {
+        return false;
     };
-
-    match rpc.get_block(stored_height) {
-        Ok(chain_block) => {
-            let chain_hash = hex::encode(chain_block.hash.0);
+    match rpc.get_block(height) {
+        Ok(block) => {
+            let chain_hash = hex::encode(block.hash.0);
             if chain_hash == stored_hash {
-                return ChainValidationResult::Valid;
+                return true;
             }
-
             info!(
                 "Block hash mismatch at height {}: stored {} vs chain {}",
-                stored_height, stored_hash, chain_hash
+                height, stored_hash, chain_hash
             );
-            ChainValidationResult::Invalid
+            false
         }
         Err(_) => {
-            info!(
-                "Block at height {} not found on chain",
-                stored_height
-            );
-            ChainValidationResult::Invalid
+            info!("Block at height {} not found on chain", height);
+            false
         }
     }
 }
