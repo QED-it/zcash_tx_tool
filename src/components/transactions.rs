@@ -176,7 +176,7 @@ pub fn create_transfer_transaction(
     asset: AssetBase,
     wallet: &mut User,
 ) -> Transaction {
-    info!("Transfer {} zatoshi", amount);
+    info!("Transfer {} units", amount);
 
     let sender = wallet.address_for_account(sender_index, External);
     let recipient = wallet.address_for_account(recipient_index, External);
@@ -242,7 +242,7 @@ pub fn create_burn_transaction(
     asset: AssetBase,
     wallet: &mut User,
 ) -> Transaction {
-    info!("Burn {} zatoshi", amount);
+    info!("Burn {} units", amount);
 
     let arsonist = wallet.address_for_account(arsonist_index, External);
 

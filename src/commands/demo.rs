@@ -30,7 +30,7 @@ pub struct DemoCmd {}
 
 fn wait_for_enter() {
     use std::io::{self, Write};
-    print!("Press Enter to continue...");
+    print!("\n\n\n\nPress Enter to continue...");
     io::stdout().flush().unwrap();
     let _ = io::stdin().read_line(&mut String::new());
 }
@@ -52,7 +52,6 @@ impl Runnable for DemoCmd {
 
         let stable_issuer_addr = blockchain_state.address_for_account(stable_issuer, External);
         let nefertiti_addr = blockchain_state.address_for_account(nefertiti, External);
-        let sam_addr = blockchain_state.address_for_account(sam, External);
 
         let stable_asset_desc_hash =
             compute_asset_desc_hash(&NonEmpty::from_slice(b"ZUSD").unwrap());
@@ -79,6 +78,8 @@ impl Runnable for DemoCmd {
             &mut blockchain_state,
         );
         
+        wait_for_enter();
+
         mine(
             &mut blockchain_state,
             &mut rpc_client,
@@ -87,7 +88,7 @@ impl Runnable for DemoCmd {
         .expect("block mined successfully");
 
         print_balances(
-            "=== Balances after first issue ===",
+            "\n\n\n\n\n=== Balances after first issue ===",
             stable_asset,
             num_accounts,
             &mut blockchain_state,
@@ -110,7 +111,7 @@ impl Runnable for DemoCmd {
         check_balances(stable_asset, &expected_balances, &mut blockchain_state, num_accounts);
 
         print_balances(
-            "=== Balances after transfer ===",
+            "\n\n\n\n\n=== Balances after transfer ===",
             stable_asset,
             num_accounts,
             &mut blockchain_state,
@@ -118,40 +119,40 @@ impl Runnable for DemoCmd {
 
         wait_for_enter();
 
-        // --------------------- Issue NFT ---------------------
+        // --------------------- Issue Certificate ---------------------
 
-        let nft_asset_desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(b"Doge").unwrap());
+        let cert_asset_desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(b"Doge").unwrap());
 
-        let (nft_issue_tx, nft_asset) = create_issue_transaction(
+        let (cert_issue_tx, cert_asset) = create_issue_transaction(
             nefertiti_addr,
             1,
-            nft_asset_desc_hash,
+            cert_asset_desc_hash,
             true,
             &mut blockchain_state,
         );
 
-        // --------------------- Finalize NFT ---------------------
+        // --------------------- Finalize Cert ---------------------
 
-        let nft_finalize_tx =
-            create_finalization_transaction(nft_asset_desc_hash, &mut blockchain_state);
+        let cert_finalize_tx =
+            create_finalization_transaction(cert_asset_desc_hash, &mut blockchain_state);
 
         mine(
             &mut blockchain_state,
             &mut rpc_client,
-            Vec::from([nft_issue_tx, nft_finalize_tx]),
+            Vec::from([cert_issue_tx, cert_finalize_tx]),
         )
         .expect("block mined successfully");
 
         print_balances(
-            "=== Stablecoin balances now ===",
+            "\n\n\n\n\n=== Asset balances are ===",
             stable_asset,
             num_accounts,
             &mut blockchain_state,
         );
 
         print_balances(
-            "=== NFT balances now ===",
-            nft_asset,
+            "\n",
+            cert_asset,
             num_accounts,
             &mut blockchain_state,
         );
@@ -160,24 +161,24 @@ impl Runnable for DemoCmd {
 
         let mut expected_balances_stable_asset =
             TestBalances::get_asset_balances(stable_asset, num_accounts, &mut blockchain_state);
-        let mut expected_balances_nft_asset =
-            TestBalances::get_asset_balances(nft_asset, num_accounts, &mut blockchain_state);
+        let mut expected_balances_cert_asset =
+            TestBalances::get_asset_balances(cert_asset, num_accounts, &mut blockchain_state);
 
-        // --------------------- Swap Stablecoins for NFT ---------------------
+        // --------------------- Swap Stablecoins for Cert ---------------------
 
         let matcher_index = 2;
 
         let spread = 0;
         let swap_stable_asset_amount = 2;
-        let swap_nft_asset_amount = 1;
+        let swap_cert_asset_amount = 1;
         let swap_tx = create_swap_transaction_with_matcher(
             sam,
             nefertiti,
             matcher_index,
             swap_stable_asset_amount,
             stable_asset,
-            swap_nft_asset_amount,
-            nft_asset,
+            swap_cert_asset_amount,
+            cert_asset,
             spread,
             &mut blockchain_state,
         );
@@ -185,8 +186,8 @@ impl Runnable for DemoCmd {
         expected_balances_stable_asset.decrement(sam, swap_stable_asset_amount);
         expected_balances_stable_asset.increment(nefertiti, swap_stable_asset_amount - spread);
 
-        expected_balances_nft_asset.decrement(nefertiti, swap_nft_asset_amount);
-        expected_balances_nft_asset.increment(sam, swap_nft_asset_amount - spread);
+        expected_balances_cert_asset.decrement(nefertiti, swap_cert_asset_amount);
+        expected_balances_cert_asset.increment(sam, swap_cert_asset_amount - spread);
 
         mine(&mut blockchain_state, &mut rpc_client, Vec::from([swap_tx]))
             .expect("block mined successfully");
@@ -199,25 +200,26 @@ impl Runnable for DemoCmd {
         );
 
         print_balances(
-            "=== Stablecoin balances after swap ===",
+            "\n\n\n\n\n=== Asset balances after swap ===",
             stable_asset,
             num_accounts,
             &mut blockchain_state,
         );
 
         check_balances(
-            nft_asset,
-            &expected_balances_nft_asset,
+            cert_asset,
+            &expected_balances_cert_asset,
             &mut blockchain_state,
             num_accounts,
         );
 
         print_balances(
-            "=== NFT balances after swap ===",
-            nft_asset,
+            "\n",
+            cert_asset,
             num_accounts,
             &mut blockchain_state,
         );
+        print!("\n\n\n\n")
     }
 }
 
