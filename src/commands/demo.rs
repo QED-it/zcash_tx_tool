@@ -77,7 +77,7 @@ impl Runnable for DemoCmd {
             num_accounts,
             &mut blockchain_state,
         );
-        
+
         wait_for_enter();
 
         mine(
@@ -99,16 +99,23 @@ impl Runnable for DemoCmd {
         // --------------------- Transfer stablecoins to Sam ---------------------
 
         let stable_amount_to_transfer = 20;
-        let transfer_info = TransferInfo::new(stable_issuer, sam, stable_asset, stable_amount_to_transfer);
+        let transfer_info =
+            TransferInfo::new(stable_issuer, sam, stable_asset, stable_amount_to_transfer);
         let txi = TxiBatch::from_item(transfer_info);
-        let balances = TestBalances::get_asset_balances(stable_asset, num_accounts, &mut blockchain_state);
+        let balances =
+            TestBalances::get_asset_balances(stable_asset, num_accounts, &mut blockchain_state);
         let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
         let txs = txi.to_transactions(&mut blockchain_state);
 
         mine(&mut blockchain_state, &mut rpc_client, txs).expect("block mined successfully");
 
-        check_balances(stable_asset, &expected_balances, &mut blockchain_state, num_accounts);
+        check_balances(
+            stable_asset,
+            &expected_balances,
+            &mut blockchain_state,
+            num_accounts,
+        );
 
         print_balances(
             "\n\n\n\n\n=== Balances after transfer ===",
@@ -150,12 +157,7 @@ impl Runnable for DemoCmd {
             &mut blockchain_state,
         );
 
-        print_balances(
-            "\n",
-            cert_asset,
-            num_accounts,
-            &mut blockchain_state,
-        );
+        print_balances("\n", cert_asset, num_accounts, &mut blockchain_state);
 
         wait_for_enter();
 
@@ -213,12 +215,7 @@ impl Runnable for DemoCmd {
             num_accounts,
         );
 
-        print_balances(
-            "\n",
-            cert_asset,
-            num_accounts,
-            &mut blockchain_state,
-        );
+        print_balances("\n", cert_asset, num_accounts, &mut blockchain_state);
         print!("\n\n\n\n")
     }
 }
