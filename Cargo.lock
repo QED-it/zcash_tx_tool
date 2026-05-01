@@ -794,7 +794,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1607,6 +1607,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "549e471b99ccaf2f89101bec68f4d244457d5a95a9c3d0672e9564124397741d"
 
 [[package]]
+name = "nonempty"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9737e026353e5cd0736f98eddae28665118eb6f6600902a7f50db585621fecb6"
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1750,7 +1756,7 @@ dependencies = [
  "incrementalmerkletree",
  "lazy_static",
  "memuse",
- "nonempty",
+ "nonempty 0.11.0",
  "pasta_curves",
  "rand",
  "rand_core",
@@ -2125,7 +2131,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2527,7 +2533,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3023,7 +3029,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3350,7 +3356,7 @@ version = "0.3.0"
 source = "git+https://github.com/QED-it/librustzcash?rev=acd68d123997ea9788c14244bc3805c6d2e8d68c#acd68d123997ea9788c14244bc3805c6d2e8d68c"
 dependencies = [
  "core2",
- "nonempty",
+ "nonempty 0.11.0",
 ]
 
 [[package]]
@@ -3387,7 +3393,7 @@ dependencies = [
  "jubjub",
  "lazy_static",
  "memuse",
- "nonempty",
+ "nonempty 0.11.0",
  "orchard",
  "rand",
  "rand_core",
@@ -3498,7 +3504,7 @@ dependencies = [
  "diesel",
  "hex",
  "incrementalmerkletree",
- "nonempty",
+ "nonempty 0.12.0",
  "once_cell",
  "orchard",
  "rand",
