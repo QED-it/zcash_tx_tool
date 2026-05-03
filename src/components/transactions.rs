@@ -35,7 +35,7 @@ pub fn mine(
     rpc_client: &mut dyn RpcClient,
     txs: Vec<Transaction>,
 ) -> Result<(), Box<dyn Error>> {
-    let activate = wallet.last_block_height().is_none();
+    let activate = wallet.last_block_height().map(u32::from).unwrap_or(0) == 0;
     let (_, _) = mine_block(rpc_client, txs, activate)?;
     sync(wallet, rpc_client);
     Ok(())
@@ -161,15 +161,15 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                 }
             }
         }
-        Some(head) => {
-            info!(
-                "Chain reorganization detected at stored head {}; clearing all \
-                 persisted data and resyncing from block 0",
-                head,
-            );
-            wallet.reset_full();
-            0
-        }
+                Some(head) => {
+                    info!(
+                        "Chain reorganization detected at stored head {}; clearing all \
+                         persisted data and resyncing from block 0",
+                        head,
+                    );
+                    wallet.reset_full();
+                    0
+                }
         None => {
             if wallet.last_block_height().is_some() {
                 info!(
