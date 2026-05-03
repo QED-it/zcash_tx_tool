@@ -161,15 +161,15 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                 }
             }
         }
-                Some(head) => {
-                    info!(
-                        "Chain reorganization detected at stored head {}; clearing all \
+        Some(head) => {
+            info!(
+                "Chain reorganization detected at stored head {}; clearing all \
                          persisted data and resyncing from block 0",
-                        head,
-                    );
-                    wallet.reset_full();
-                    0
-                }
+                head,
+            );
+            wallet.reset_full();
+            0
+        }
         None => {
             if wallet.last_block_height().is_some() {
                 info!(
