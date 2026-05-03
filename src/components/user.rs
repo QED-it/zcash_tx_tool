@@ -70,14 +70,6 @@ pub struct NoteSpendMetadata {
     pub merkle_path: MerklePath,
 }
 
-/// Holds decrypted note information for storage
-struct DecryptedNoteData {
-    ivk: IncomingViewingKey,
-    note: Note,
-    recipient: Address,
-    memo_bytes: [u8; 512],
-}
-
 struct KeyStore {
     accounts: BTreeMap<u32, Address>,
     payment_addresses: BTreeMap<OrderedAddress, IncomingViewingKey>,
@@ -234,28 +226,33 @@ impl User {
     }
 
     /// Persist the current commitment tree and sync position to SQLite.
-    pub fn save_tree_state(&self) -> Result<(), String> {
+    pub fn save_tree_state(&self) {
         use crate::components::tree_state;
         if let (Some(height), Some(hash)) = (self.last_block_height, self.last_block_hash) {
             tree_state::save_tree_state(
                 &self.commitment_tree,
                 u32::from(height),
                 &hex::encode(hash.0),
-            )?;
+            )
+            .expect("Failed to save tree state");
         }
-        Ok(())
     }
 
-    /// Reset wallet state for rescan.
-    pub fn reset(&mut self) -> Result<(), String> {
-        use crate::components::block_data::BlockData;
+    /// Reset wallet-local state for rescan while preserving block hashes.
+    pub fn reset(&mut self) {
         use crate::components::tree_state;
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
         self.db.delete_all_notes();
+        tree_state::delete_tree_state().expect("Failed to delete tree state");
+    }
+
+    /// Reset all persisted wallet data, including the block hash cache.
+    pub fn reset_full(&mut self) {
+        use crate::components::block_data::BlockData;
+        self.reset();
         BlockData::new().clear();
-        tree_state::delete_tree_state()
     }
 
     pub fn last_block_hash(&self) -> Option<BlockHash> {
@@ -430,10 +427,9 @@ impl User {
         block_hash: BlockHash,
         transactions: Vec<Transaction>,
     ) -> Result<(), BundleLoadError> {
-        let height = u32::from(block_height);
         transactions.into_iter().try_for_each(|tx| {
             if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
-                self.add_notes_from_tx(tx, height)?;
+                self.add_notes_from_tx(tx)?;
             };
             Ok(())
         })?;
@@ -445,11 +441,7 @@ impl User {
 
     /// Add note data to the user, and return a data structure that describes
     /// the actions that are involved with this user.
-    fn add_notes_from_tx(
-        &mut self,
-        tx: Transaction,
-        block_height: u32,
-    ) -> Result<(), BundleLoadError> {
+    pub fn add_notes_from_tx(&mut self, tx: Transaction) -> Result<(), BundleLoadError> {
         let mut issued_notes_offset = 0;
 
         if let Some(orchard_bundle) = tx.orchard_bundle() {
@@ -457,25 +449,20 @@ impl User {
             match orchard_bundle {
                 OrchardBundle::OrchardVanilla(b) => {
                     issued_notes_offset = b.actions().len();
-                    self.add_notes_from_orchard_bundle(&tx.txid(), b, block_height);
-                    self.mark_potential_spends(&tx.txid(), b, block_height);
+                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
+                    self.mark_potential_spends(&tx.txid(), b);
                 }
                 OrchardBundle::OrchardZSA(b) => {
                     issued_notes_offset = b.actions().len();
-                    self.add_notes_from_orchard_bundle(&tx.txid(), b, block_height);
-                    self.mark_potential_spends(&tx.txid(), b, block_height);
+                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
+                    self.mark_potential_spends(&tx.txid(), b);
                 }
             }
         };
 
         // Add notes from Issue bundle
         if let Some(issue_bundle) = tx.issue_bundle() {
-            self.add_notes_from_issue_bundle(
-                &tx.txid(),
-                issue_bundle,
-                issued_notes_offset,
-                block_height,
-            );
+            self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, issued_notes_offset);
         };
 
         self.add_note_commitments(&tx.txid(), tx.orchard_bundle(), tx.issue_bundle())
@@ -492,7 +479,6 @@ impl User {
         &mut self,
         txid: &TxId,
         bundle: &Bundle<Authorized, ZatBalance, O>,
-        block_height: u32,
     ) {
         let keys = self
             .key_store
@@ -503,18 +489,8 @@ impl User {
 
         for (action_idx, ivk, note, recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
             info!("Store note");
-            self.store_note(
-                txid,
-                action_idx,
-                DecryptedNoteData {
-                    ivk: ivk.clone(),
-                    note,
-                    recipient,
-                    memo_bytes: memo,
-                },
-                block_height,
-            )
-            .unwrap();
+            self.store_note(txid, action_idx, ivk.clone(), note, recipient, memo)
+                .unwrap();
         }
     }
 
@@ -525,7 +501,6 @@ impl User {
         txid: &TxId,
         bundle: &IssueBundle<Signed>,
         note_index_offset: usize,
-        block_height: u32,
     ) {
         for (note_index, note) in bundle.actions().iter().flat_map(|a| a.notes()).enumerate() {
             if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
@@ -533,13 +508,10 @@ impl User {
                 self.store_note(
                     txid,
                     note_index,
-                    DecryptedNoteData {
-                        ivk: ivk.clone(),
-                        note: *note,
-                        recipient: note.recipient(),
-                        memo_bytes: [0; 512],
-                    },
-                    block_height,
+                    ivk.clone(),
+                    *note,
+                    note.recipient(),
+                    [0; 512],
                 )
                 .unwrap();
             }
@@ -550,42 +522,41 @@ impl User {
         &mut self,
         txid: &TxId,
         action_index: usize,
-        note_data: DecryptedNoteData,
-        block_height: u32,
+        ivk: IncomingViewingKey,
+        note: Note,
+        recipient: Address,
+        memo_bytes: [u8; 512],
     ) -> Result<(), BundleLoadError> {
-        if let Some(fvk) = self.key_store.viewing_keys.get(&note_data.ivk) {
+        if let Some(fvk) = self.key_store.viewing_keys.get(&ivk) {
             info!("Adding decrypted note to the user");
 
             let mut note_bytes = vec![];
-            write_note(&mut note_bytes, &note_data.note).unwrap();
+            write_note(&mut note_bytes, &note).unwrap();
 
-            let db_note_data = NoteData {
+            let note_data = NoteData {
                 id: 0,
-                amount: note_data.note.value().inner() as i64,
-                asset: note_data.note.asset().to_bytes().to_vec(),
+                amount: note.value().inner() as i64,
+                asset: note.asset().to_bytes().to_vec(),
                 tx_id: txid.as_ref().to_vec(),
                 action_index: action_index as i32,
                 position: -1,
-                memo: note_data.memo_bytes.to_vec(),
-                rho: note_data.note.rho().to_bytes().to_vec(),
-                nullifier: note_data.note.nullifier(fvk).to_bytes().to_vec(),
-                rseed: note_data.note.rseed().as_bytes().to_vec(),
-                recipient_address: note_data.recipient.to_raw_address_bytes().to_vec(),
+                memo: memo_bytes.to_vec(),
+                rho: note.rho().to_bytes().to_vec(),
+                nullifier: note.nullifier(fvk).to_bytes().to_vec(),
+                rseed: note.rseed().as_bytes().to_vec(),
+                recipient_address: recipient.to_raw_address_bytes().to_vec(),
                 spend_tx_id: None,
                 spend_action_index: -1,
-                origin_block_height: block_height as i32,
-                spend_block_height: None,
             };
-            self.db.insert_note(db_note_data);
+            self.db.insert_note(note_data);
 
             // add the association between the address and the IVK used
             // to decrypt the note
-            self.key_store
-                .add_raw_address(note_data.recipient, note_data.ivk.clone());
+            self.key_store.add_raw_address(recipient, ivk.clone());
             Ok(())
         } else {
             info!("Can't add decrypted note, missing FVK");
-            Err(BundleLoadError::FvkNotFound(note_data.ivk.clone()))
+            Err(BundleLoadError::FvkNotFound(ivk.clone()))
         }
     }
 
@@ -593,13 +564,12 @@ impl User {
         &mut self,
         txid: &TxId,
         orchard_bundle: &Bundle<Authorized, ZatBalance, O>,
-        block_height: u32,
     ) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
             if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {
                 info!("Adding spend of nullifier {:?}", action.nullifier());
                 self.db
-                    .mark_as_potentially_spent(note.id, txid, action_index as i32, block_height);
+                    .mark_as_potentially_spent(note.id, txid, action_index as i32);
             }
         }
     }

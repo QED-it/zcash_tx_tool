@@ -3,6 +3,7 @@
 use crate::components::db;
 use diesel::dsl::max;
 use diesel::prelude::*;
+use diesel::upsert::excluded;
 
 pub struct BlockData {
     conn: SqliteConnection,
@@ -36,12 +37,15 @@ impl BlockData {
             .expect("Error querying block data")
     }
 
-    /// Insert a block hash into the local db.
+    /// Insert or update a block hash in the local db.
     pub fn insert(&mut self, height: u32, hash: String) {
         use crate::schema::block_data::dsl as bd;
         let height_i32 = i32::try_from(height).expect("height too large");
         diesel::insert_into(bd::block_data)
             .values((bd::height.eq(height_i32), bd::hash.eq(hash)))
+            .on_conflict(bd::height)
+            .do_update()
+            .set(bd::hash.eq(excluded(bd::hash)))
             .execute(&mut self.conn)
             .expect("Error inserting block data");
     }
@@ -54,15 +58,6 @@ impl BlockData {
             .first::<Option<i32>>(&mut self.conn)
             .expect("Error querying max block height")
             .and_then(|h| u32::try_from(h).ok())
-    }
-
-    /// Remove all blocks from the given height onwards.
-    pub fn truncate_from(&mut self, from_height: u32) {
-        use crate::schema::block_data::dsl as bd;
-        let height_i32 = i32::try_from(from_height).expect("height too large");
-        diesel::delete(bd::block_data.filter(bd::height.ge(height_i32)))
-            .execute(&mut self.conn)
-            .expect("Error truncating block data");
     }
 
     /// Clear all stored blocks.
@@ -94,43 +89,16 @@ mod tests {
         assert_eq!(data.last_height_block(), Some(102));
         assert_eq!(data.get_hash(101).as_deref(), Some("hash101"));
 
+        data.insert(101, "hash101-updated".to_string());
+        assert_eq!(data.get_hash(101).as_deref(), Some("hash101-updated"));
+
         // Verify persistence by reading from a new connection
         let mut reloaded = BlockData::new_with_url(&database_url);
         assert_eq!(reloaded.last_height_block(), Some(102));
-        assert_eq!(reloaded.get_hash(101).as_deref(), Some("hash101"));
-
-        data.truncate_from(101);
-        assert_eq!(data.last_height_block(), Some(100));
-        assert!(data.get_hash(101).is_none());
-        assert!(data.get_hash(102).is_none());
+        assert_eq!(reloaded.get_hash(101).as_deref(), Some("hash101-updated"));
 
         data.clear();
         assert!(data.last_height_block().is_none());
-    }
-
-    #[test]
-    fn test_block_data_truncation() {
-        let db = NamedTempFile::new().unwrap();
-        let database_url = db.path().to_string_lossy().to_string();
-
-        let mut data = BlockData::new_with_url(&database_url);
-
-        for i in 100..=110 {
-            data.insert(i, format!("hash{}", i));
-        }
-
-        assert_eq!(data.last_height_block(), Some(110));
-
-        data.truncate_from(106);
-
-        for i in 100..=105 {
-            assert!(data.get_hash(i).is_some(), "Block {} should still exist", i);
-        }
-
-        for i in 106..=110 {
-            assert!(data.get_hash(i).is_none(), "Block {} should be removed", i);
-        }
-
-        assert_eq!(data.last_height_block(), Some(105));
+        assert!(data.get_hash(100).is_none());
     }
 }

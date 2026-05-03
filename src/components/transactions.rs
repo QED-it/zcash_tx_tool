@@ -37,7 +37,7 @@ pub fn mine(
 ) -> Result<(), Box<dyn Error>> {
     let activate = wallet.last_block_height().is_none();
     let (_, _) = mine_block(rpc_client, txs, activate)?;
-    sync(wallet, rpc_client)?;
+    sync(wallet, rpc_client);
     Ok(())
 }
 
@@ -114,42 +114,65 @@ pub fn create_shield_coinbase_transaction(
 }
 
 /// Sync the user with the node
-pub fn sync(wallet: &mut User, rpc: &mut dyn RpcClient) -> Result<(), String> {
+pub fn sync(wallet: &mut User, rpc: &mut dyn RpcClient) {
     let current_height = match wallet.last_block_height() {
         None => 0,
         Some(height) => height.add(1).into(),
     };
-    sync_from_height(current_height, wallet, rpc)
+    sync_from_height(current_height, wallet, rpc);
 }
 
 /// Sync the user with the node from the given height.
 ///
-/// On each run the stored chain tip is compared to the live chain.
-/// If it matches we resume from where we left off; if it does not
-/// (reorg, corruption, first run) we wipe everything and start from
-/// `from_height`.
-pub fn sync_from_height(
-    from_height: u32,
-    wallet: &mut User,
-    rpc: &mut dyn RpcClient,
-) -> Result<(), String> {
+/// On each run the stored chain head is compared to the live chain. If it
+/// matches and the persisted wallet state is consistent with `block_data`, we
+/// resume from where we left off. Any inconsistency (wallet state ahead of /
+/// out of sync with `block_data`, or a chain reorg detected at the stored head)
+/// is treated as a hard failure: we wipe everything and resync from
+/// `from_height`. We do not attempt per-block rollback or partial rewinds.
+pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcClient) {
     info!("Starting sync from height {}", from_height);
 
     let mut block_data = BlockData::new();
 
     let start_height = match block_data.last_height_block() {
-        Some(tip) if tip_matches_chain(tip, &mut block_data, rpc) => {
-            let resume = tip + 1;
-            info!("Stored tip {} valid, resuming from {}", tip, resume);
-            resume.max(from_height)
+        Some(head) if head_matches_chain(head, &mut block_data, rpc) => {
+            match wallet.last_block_height() {
+                Some(wallet_head) if wallet_head_matches_block_data(wallet, &mut block_data) => {
+                    let resume = u32::from(wallet_head) + 1;
+                    info!("Stored head {} valid, resuming from {}", head, resume);
+                    resume.max(from_height)
+                }
+                Some(wallet_head) => {
+                    info!(
+                        "Wallet state at height {} does not match stored block data; \
+                         clearing all persisted data and resyncing from {}",
+                        u32::from(wallet_head),
+                        from_height
+                    );
+                    wallet.reset_full();
+                    from_height
+                }
+                None => {
+                    info!(
+                        "Stored block data valid, rebuilding wallet state from {}",
+                        from_height
+                    );
+                    from_height
+                }
+            }
         }
-        _ => {
+        Some(head) => {
             info!(
-                "No valid stored state, resetting and starting from {}",
-                from_height
+                "Chain reorganization detected at stored head {}; clearing all \
+                 persisted data and resyncing from {}",
+                head, from_height
             );
-            block_data.clear();
-            wallet.reset()?;
+            wallet.reset_full();
+            from_height
+        }
+        None => {
+            info!("No block data found, starting from {}", from_height);
             from_height
         }
     };
@@ -164,14 +187,18 @@ pub fn sync_from_height(
                     block.hash, block.height
                 );
 
-                let transactions = fetch_block_txs(&block.tx_ids, rpc);
+                let transactions = block
+                    .tx_ids
+                    .iter()
+                    .map(|tx_id| rpc.get_transaction(tx_id).unwrap())
+                    .collect();
 
                 block_data.insert(next_height, hex::encode(block.hash.0));
 
                 wallet
                     .add_notes_from_block(block.height, block.hash, transactions)
                     .unwrap();
-                wallet.save_tree_state()?;
+                wallet.save_tree_state();
                 next_height += 1;
             }
             Err(err) => {
@@ -181,21 +208,14 @@ pub fn sync_from_height(
                     next_height - 1
                 );
                 debug!("rpc.get_block err: {:?}", err);
-                return Ok(());
+                return;
             }
         }
     }
 }
 
-fn fetch_block_txs(tx_ids: &[TxId], rpc: &mut dyn RpcClient) -> Vec<Transaction> {
-    tx_ids
-        .iter()
-        .map(|tx_id| rpc.get_transaction(tx_id).unwrap())
-        .collect()
-}
-
 /// Check whether the stored hash at `height` matches the live chain.
-fn tip_matches_chain(height: u32, block_data: &mut BlockData, rpc: &mut dyn RpcClient) -> bool {
+fn head_matches_chain(height: u32, block_data: &mut BlockData, rpc: &mut dyn RpcClient) -> bool {
     let Some(stored_hash) = block_data.get_hash(height) else {
         return false;
     };
@@ -216,6 +236,16 @@ fn tip_matches_chain(height: u32, block_data: &mut BlockData, rpc: &mut dyn RpcC
             false
         }
     }
+}
+
+fn wallet_head_matches_block_data(wallet: &User, block_data: &mut BlockData) -> bool {
+    let (Some(height), Some(hash)) = (wallet.last_block_height(), wallet.last_block_hash()) else {
+        return false;
+    };
+    block_data
+        .get_hash(u32::from(height))
+        .map(|stored_hash| stored_hash == hex::encode(hash.0))
+        .unwrap_or(false)
 }
 
 /// Create a transfer transaction
