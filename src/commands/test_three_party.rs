@@ -32,7 +32,7 @@ impl Runnable for TestThreePartyCmd {
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
         let mut wallet = User::random(&config.wallet.miner_seed_phrase, None);
 
-        wallet.reset().unwrap();
+        wallet.reset();
         prepare_test(
             config.chain.nu7_activation_height,
             &mut wallet,
@@ -138,5 +138,5 @@ impl Runnable for TestThreePartyCmd {
 }
 
 fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) {
-    sync_from_height(target_height, wallet, rpc_client).unwrap();
+    sync_from_height(target_height, wallet, rpc_client);
 }
