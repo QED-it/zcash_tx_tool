@@ -18,12 +18,11 @@ mod model;
 pub mod prelude;
 mod schema;
 
-/// Print an informational message to stdout, or to stderr for machine-readable
-/// subcommands (e.g. `get-block-data`) that require clean JSON on stdout.
+/// Print an informational message to stdout for human-readable commands.
+/// Suppressed entirely for machine-readable subcommands (e.g. `get-block-data`)
+/// that require clean, noise-free stdout.
 pub fn print_info(msg: &str) {
-    if std::env::args().any(|a| a == "get-block-data") {
-        eprintln!("{}", msg);
-    } else {
+    if !std::env::args().any(|a| a == "get-block-data") {
         println!("{}", msg);
     }
 }

@@ -146,12 +146,11 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                 Some(wallet_head) => {
                     info!(
                         "Wallet state at height {} does not match stored block data; \
-                         clearing all persisted data and resyncing from {}",
+                         clearing all persisted data and resyncing from block 0",
                         u32::from(wallet_head),
-                        from_height
                     );
                     wallet.reset_full();
-                    from_height
+                    0
                 }
                 None => {
                     info!(
@@ -165,11 +164,11 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
         Some(head) => {
             info!(
                 "Chain reorganization detected at stored head {}; clearing all \
-                 persisted data and resyncing from {}",
-                head, from_height
+                 persisted data and resyncing from block 0",
+                head,
             );
             wallet.reset_full();
-            from_height
+            0
         }
         None => {
             if wallet.last_block_height().is_some() {
