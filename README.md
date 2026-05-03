@@ -224,7 +224,7 @@ cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-scenario
 
 ## Testing Block Data Storage Locally
 
-The `tx-tool` includes a block data storage feature that speeds up wallet synchronization and enables chain reorganization detection. You can test this feature locally by running the GitHub Actions workflow with `act`.
+The `tx-tool` records block hashes locally so later runs can validate the stored chain head and detect chain reorganizations. You can test this feature locally by running the GitHub Actions workflow with `act`.
 
 ### Using `act` to Run GitHub Actions Locally
 
@@ -250,30 +250,32 @@ act push -W .github/workflows/block-data-test-ci.yaml
 
 The block data storage stores:
 - **Block hashes**: For chain validation and reorg detection  
-- **Transaction data**: To avoid re-downloading blocks
+- **Wallet tree state**: The note commitment tree and last synced block
 
 On subsequent runs, the tool:
 1. Validates the stored chain matches the node's chain
-2. Resumes sync from the last stored block (if valid)
-3. Detects and handles chain reorganizations
+2. Resumes sync from the persisted wallet head when wallet state is consistent with `block_data`
+3. Uses preserved block hashes to validate rescans after `reset()`
+4. On any chain reorganization (or wallet/block-data inconsistency), wipes all persisted state (`block_data`, `wallet_state`, notes, commitment tree) and resyncs from scratch — there is no per-block rollback or partial rewind
 
-**Note**: Test commands call `reset()` which clears wallet state but preserves the block data. For full persistence (skipping wallet rescan entirely), ensure wallet state persists between runs.
+**Note**: Test commands call `reset()`, which clears wallet notes/tree state but preserves `block_data`. Use `clean`/`reset_full()` when you need to clear both wallet state and stored block hashes. For full persistence that skips wallet rescans entirely, run without calling `reset()` so `wallet_state` can be loaded on startup.
 
 ## Block Data Storage Considerations
 
-When block data storage is enabled, disk usage depends on average block size and the amount of blocks.
+The tx-tool stores two pieces of state on disk:
 
-There are currently (January 2026) ~3.2M blocks on Zcash mainnet (i.e., the total number of blocks mined since genesis at the time of writing).
-Approximate totals for ~3.2M Zcash blocks:
+- **`block_data` table:** one row per synced block (`height` + hex-encoded 32-byte `hash`). Each row is ~100 bytes including SQLite overhead, **independent of the block's transaction size**. Storage scales linearly with block count.
+- **`wallet_state` table:** a single row holding the serialized commitment tree, last synced height, and last synced hash. Size scales with `O(N * log(T / N))`, where `N` is the number of wallet notes and `T` is the total chain commitments.
 
-- **Minimal blocks (0.5–1 KB):** ~1.6–3.2 GB
-- **Average blocks (50–100 KB):** ~160–322 GB
-- **Heavy blocks (300–500 KB):** ~1.0–1.6 TB
+There are currently (January 2026) ~3.2M blocks on Zcash mainnet. Approximate totals at that scale:
+
+- **`block_data`:** ~100 bytes per block × 3.2M ≈ **~300 MB** on mainnet (< 1 MB on regtest / ZSA testnet).
+- **`wallet_state`:** ~2 MB for 1K notes / 5M commitments on mainnet (a few KB on regtest / ZSA testnet).
 
 **Notes:**
-- Regtest / ZSA testnet runs are usually near the minimal range.
-- Long-running testnet or mainnet syncs trend toward the average case.
-- Disk usage grows over time unless block data is pruned.
+- `block_data` storage is bounded by block count, not block size, so heavy mainnet blocks don't make it any larger.
+- `wallet_state` is rewritten in-place on each sync step, so it does not grow with sync time, only with wallet activity.
+- Disk usage grows over time on mainnet unless old `block_data` rows are pruned (not implemented yet).
 
 ### Docker Volume Mount for Block Data Persistence
 
