@@ -17,3 +17,13 @@ pub mod error;
 mod model;
 pub mod prelude;
 mod schema;
+
+/// Print an informational message to stdout, or to stderr for machine-readable
+/// subcommands (e.g. `get-block-data`) that require clean JSON on stdout.
+pub fn print_info(msg: &str) {
+    if std::env::args().any(|a| a == "get-block-data") {
+        eprintln!("{}", msg);
+    } else {
+        println!("{}", msg);
+    }
+}
