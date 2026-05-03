@@ -172,8 +172,17 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
             from_height
         }
         None => {
-            info!("No block data found, starting from {}", from_height);
-            from_height
+            if wallet.last_block_height().is_some() {
+                info!(
+                    "Wallet state exists but block data is empty; \
+                     clearing all persisted state and resyncing from block 0"
+                );
+                wallet.reset_full();
+                0
+            } else {
+                info!("No block data found, starting from {}", from_height);
+                from_height
+            }
         }
     };
 
