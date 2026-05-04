@@ -112,19 +112,43 @@ jobs:
             exit 1
           fi
     
-      - name: Verify block_data persisted from run 1 and matches Zebra chain
+      - name: Verify block_data + wallet state persisted from run 1 and match Zebra chain
         run: |
-          # Read the cached head from the volume that test-orchard-zsa wrote into.
-          STORED=$(docker run --rm -v wallet-data:/app zcash-tx-tool:local get-block-data)
-          HEIGHT=$(jq -r '.block_height // empty' <<< "$STORED")
-          STORED_HASH=$(jq -r '.hash // empty' <<< "$STORED")
-          [ -n "$HEIGHT" ] && [ -n "$STORED_HASH" ] || { echo "block_data missing after run 1: $STORED"; exit 1; }
-          # Cross-check cached hash against Zebra's chain via JSON-RPC.
+          # Probe the SQLite DB directly via the sqlite3 binary already in the tx-tool image.
+          sql() { docker run --rm -v wallet-data:/app --entrypoint sqlite3 zcash-tx-tool:local /app/walletdb.sqlite "$1"; }
+
+          # Stored head from block_data (written by run 1's test-orchard-zsa).
+          HEIGHT=$(sql "SELECT MAX(height) FROM block_data")
+          STORED_HASH=$(sql "SELECT hash FROM block_data WHERE height = $HEIGHT")
+          [ -n "$HEIGHT" ] && [ -n "$STORED_HASH" ] || { echo "block_data missing after run 1"; exit 1; }
+
+          # Cross-check the cached hash against Zebra's chain via JSON-RPC.
           CHAIN_HASH=$(curl -sS -H 'content-type: text/plain;' \
             --data-binary "{\"jsonrpc\":\"1.0\",\"id\":\"ci\",\"method\":\"getblockhash\",\"params\":[$HEIGHT]}" \
             http://127.0.0.1:18232/ | jq -r '.result // empty')
           [ "$STORED_HASH" = "$CHAIN_HASH" ] || { echo "Hash mismatch at $HEIGHT: stored=$STORED_HASH chain=$CHAIN_HASH"; exit 1; }
-          echo "block_data persisted from run 1 at height $HEIGHT: hash matches Zebra chain"
+
+          # Notes record the test-orchard-zsa scenario:
+          # - original 1000-unit issuance is spent (by the transfer)
+          # - burn-leftover change notes (990 issuer, 1 alice) are unspent
+          # - exactly 2 distinct recipients (issuer + alice) and 2 distinct assets (WETH + zatoshi)
+          NOTE_PATTERN=$(sql "SELECT
+            (SELECT COUNT(*) FROM notes WHERE amount = 1000 AND spend_tx_id IS NOT NULL) = 1
+            AND (SELECT COUNT(*) FROM notes WHERE amount = 990 AND spend_tx_id IS NULL) = 1
+            AND (SELECT COUNT(*) FROM notes WHERE amount = 1 AND spend_tx_id IS NULL) = 1
+            AND (SELECT COUNT(DISTINCT recipient_address) FROM notes) = 2
+            AND (SELECT COUNT(DISTINCT asset) FROM notes) = 2")
+          [ "$NOTE_PATTERN" = "1" ] || { echo "test-orchard-zsa note pattern not found (expected 1000 spent, 990 + 1 unspent, 2 recipients, 2 assets)"; exit 1; }
+
+          # block_data heights should be contiguous.
+          GAPS=$(sql "SELECT MAX(height) - MIN(height) + 1 - COUNT(*) FROM block_data")
+          [ "$GAPS" = "0" ] || { echo "block_data has gaps (delta=$GAPS)"; exit 1; }
+
+          # wallet_state head must agree with block_data: same height and same hash.
+          CONSISTENT=$(sql "SELECT (SELECT MAX(height) FROM block_data) = ws.last_block_height AND (SELECT hash FROM block_data WHERE height = ws.last_block_height) = ws.last_block_hash FROM wallet_state ws")
+          [ "$CONSISTENT" = "1" ] || { echo "wallet_state and block_data disagree: $CONSISTENT"; exit 1; }
+
+          echo "Verified: head=$HEIGHT, scenario notes present, no gaps, wallet_state consistent, matches Zebra chain"
 
       - name: Run tx-tool again for test-three-party and verify success
         run: |                
