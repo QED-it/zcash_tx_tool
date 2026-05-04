@@ -1,0 +1,166 @@
+# CI Workflow to test tx-tool against a locally built Zebra node.
+# This workflow clones the zebra repo at a specific branch, builds the Zebra Docker image, and tests tx-tool against it.
+# The workflow ensures tx-tool works correctly by spinning up a Zebra container
+# and running the tx-tool from the current branch against it in a Docker network.
+# Triggers: push to main, pull requests, and manual runs via workflow_dispatch.
+# Please note that the selected Zebra branch should be a branch containing the testnet-single-node-deploy directory with a "dockerfile" and "regtest-config.toml" file in it.
+
+name: Check tx-tool against Zebra
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Free disk space (safe cleanup for Rust CI)
+        run: |
+          # Remove heavy preinstalled SDKs and toolchains
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/hostedtoolcache || true
+          df -h
+
+      - name: Checkout tx-tool code
+        uses: actions/checkout@v3
+        with:
+          path: tx-tool
+
+      - name: Checkout Zebra code
+        uses: actions/checkout@v3
+        with:
+          repository: QED-it/zebra
+          ref: ${{ vars.ZEBRA_BRANCH_TO_TEST || 'zsa-integration-demo' }} # The branch in Zebra we want to test against
+          path: zebra
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Set up Docker cache
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: zebra-cache-${{ runner.os }}-${{ hashFiles('zebra/testnet-single-node-deploy/dockerfile') }}
+          restore-keys: |
+            zebra-cache-${{ runner.os }}-
+            zebra-cache-
+
+      - name: Build Zebra Node
+        uses: docker/build-push-action@v7
+        with:
+          context: zebra
+          file: zebra/testnet-single-node-deploy/dockerfile
+          tags: zebra-node:local
+          push: false
+          load: true
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+
+      - name: Run Zebra Node container
+        run: |
+          docker run -d --name zebra-node -p 18232:18232 zebra-node:local
+          # Wait for the node to start up
+          echo "Waiting for Zebra node to initialize..."
+          sleep 15
+          echo "Finished waiting for Zebra node..."
+
+      - name: Build tx-tool
+        uses: docker/build-push-action@v7
+        with:
+          context: tx-tool
+          file: tx-tool/Dockerfile
+          tags: zcash-tx-tool:local
+          push: false
+          load: true
+
+      - name: Run tx-tool for test-orchard-zsa and verify success
+        run: |
+          # Create a network to connect the containers
+          docker network create zcash-net
+
+          # Connect zebra-node to the network
+          docker network connect zcash-net zebra-node
+
+          # Persistent volume so block_data / wallet_state survive between runs
+          docker volume create wallet-data
+
+          # Run the tx tool and capture exit code
+          docker run --network zcash-net \
+            -e ZCASH_NODE_ADDRESS=zebra-node \
+            -e ZCASH_NODE_PORT=18232 \
+            -e ZCASH_NODE_PROTOCOL=http \
+            -v wallet-data:/app \
+            --name zcash-tx-tool \
+            zcash-tx-tool:local test-orchard-zsa
+          
+          # Get the exit code from the container
+          EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
+          
+          # Clean up
+          docker rm zcash-tx-tool
+          
+          # Check if the tx_tool succeeded
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "tx-tool completed successfully!"
+            exit 0
+          else
+            echo "tx-tool failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+    
+      - name: Verify block_data persisted from run 1 and matches Zebra chain
+        run: |
+          # Read the cached head from the volume that test-orchard-zsa wrote into.
+          STORED=$(docker run --rm -v wallet-data:/app zcash-tx-tool:local get-block-data)
+          HEIGHT=$(jq -r '.block_height // empty' <<< "$STORED")
+          STORED_HASH=$(jq -r '.hash // empty' <<< "$STORED")
+          [ -n "$HEIGHT" ] && [ -n "$STORED_HASH" ] || { echo "block_data missing after run 1: $STORED"; exit 1; }
+          # Cross-check cached hash against Zebra's chain via JSON-RPC.
+          CHAIN_HASH=$(curl -sS -H 'content-type: text/plain;' \
+            --data-binary "{\"jsonrpc\":\"1.0\",\"id\":\"ci\",\"method\":\"getblockhash\",\"params\":[$HEIGHT]}" \
+            http://127.0.0.1:18232/ | jq -r '.result // empty')
+          [ "$STORED_HASH" = "$CHAIN_HASH" ] || { echo "Hash mismatch at $HEIGHT: stored=$STORED_HASH chain=$CHAIN_HASH"; exit 1; }
+          echo "block_data persisted from run 1 at height $HEIGHT: hash matches Zebra chain"
+
+      - name: Run tx-tool again for test-three-party and verify success
+        run: |                
+          # Run the tx tool and capture exit code
+          docker run --network zcash-net \
+            -e ZCASH_NODE_ADDRESS=zebra-node \
+            -e ZCASH_NODE_PORT=18232 \
+            -e ZCASH_NODE_PROTOCOL=http \
+            --name zcash-tx-tool \
+            zcash-tx-tool:local test-three-party
+          
+          # Get the exit code from the container
+          EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
+          
+          # Clean up
+          docker rm zcash-tx-tool
+          
+          # Check if the tx_tool succeeded
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "tx-tool completed successfully!"        
+            exit 0
+          else
+            echo "tx-tool failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+
+      - name: Print Zebra logs
+        if: always()
+        run: |
+          echo "Printing Zebra node logs:"
+          docker logs zebra-node || echo "Could not retrieve Zebra logs"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop zebra-node || true
+          docker rm zebra-node || true
+          docker network rm zcash-net || true
+          docker volume rm wallet-data || true
