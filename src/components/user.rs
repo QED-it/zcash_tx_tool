@@ -307,7 +307,7 @@ impl User {
     }
 
     pub(crate) fn issuance_key(&self) -> IssueAuthKey<ZSASchnorr> {
-        IssueAuthKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, 0)
+        IssueAuthKey::from_zip32_seed(self.seed.as_slice(), constants::regtest::COIN_TYPE, 0)
             .unwrap()
     }
 
