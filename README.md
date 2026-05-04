@@ -6,9 +6,9 @@ The **Zcash tx-tool** is designed to create and send Zcash transactions to a nod
 
 This repository includes a simple Zebra Docker image that incorporates the OrchardZSA version of Zebra and runs in regtest mode.
 
-## Note
+## Project Status
 
-This is a functional prototype with support for ZSA Swaps.
+**This is a functional prototype with support for ZSA Swaps.**
 It is not ready for production use.
 ZSA Swaps are a work-in-progress, and the protocol is not finalized.
 It is intended for testing and development purposes only, and should not be used in a production environment.
@@ -17,6 +17,7 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
 
 ## Table of Contents
 
+- [Project Status](#project-status)
 - [Features](#features)
 - [Core Components](#core-components)
 - [Prerequisites](#prerequisites)
