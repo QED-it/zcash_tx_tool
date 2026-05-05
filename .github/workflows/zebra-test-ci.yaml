@@ -12,10 +12,12 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Dedupe: a push and a pull_request event for the same ref would otherwise both
-# fire. Keep only the latest run per ref and cancel any older one in progress.
+# Dedupe: a push and a pull_request event for the same branch would otherwise
+# both fire. github.ref differs between the two (refs/heads/<br> vs refs/pull/N/merge),
+# so use head_ref (set on PR events to the source branch) with ref_name as the
+# fallback for plain pushes — both collapse to the branch name.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
