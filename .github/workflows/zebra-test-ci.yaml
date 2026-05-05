@@ -39,6 +39,7 @@ jobs:
         with:
           repository: QED-it/zebra
           ref: ${{ env.ZEBRA_COMMIT }}
+          path: zebra
 
 
       - name: Set up Docker Buildx
