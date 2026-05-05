@@ -52,6 +52,10 @@ impl Runnable for TestPersistencePart1Cmd {
             .expect("issue block mined successfully");
 
         let balances = TestBalances::get_asset_balances(asset, 1, &mut wallet);
-        print_balances("=== Persistence part 1: issued PERSIST ===", asset, &balances);
+        print_balances(
+            "=== Persistence part 1: issued PERSIST ===",
+            asset,
+            &balances,
+        );
     }
 }
