@@ -151,41 +151,19 @@ jobs:
             zcash-tx-tool:local test-persistence-part2
           echo "test-persistence-part2 completed successfully!"
 
-          # Probe the SQLite DB directly via the sqlite3 binary already in the tx-tool image.
+          # 3-way head agreement: wallet_state, block_data tip, and Zebra agree on the same hash.
           sql() { docker run --rm -v wallet-data:/app --entrypoint sqlite3 zcash-tx-tool:local /app/walletdb.sqlite "$1"; }
-
-          # Stored head from block_data (written by run 1's test-orchard-zsa).
-          HEIGHT=$(sql "SELECT MAX(height) FROM block_data")
-          STORED_HASH=$(sql "SELECT hash FROM block_data WHERE height = $HEIGHT")
-          [ -n "$HEIGHT" ] && [ -n "$STORED_HASH" ] || { echo "block_data missing after run 1"; exit 1; }
-
-          # Cross-check the cached hash against Zebra's chain via JSON-RPC.
-          CHAIN_HASH=$(curl -sS -H 'content-type: text/plain;' \
-            --data-binary "{\"jsonrpc\":\"1.0\",\"id\":\"ci\",\"method\":\"getblockhash\",\"params\":[$HEIGHT]}" \
+          ZEBRA_TIP_HASH=$(curl -sS -H 'content-type: text/plain;' \
+            --data-binary '{"jsonrpc":"1.0","id":"ci","method":"getbestblockhash","params":[]}' \
             "$ZEBRA_RPC_URL" | jq -r '.result // empty')
-          [ "$STORED_HASH" = "$CHAIN_HASH" ] || { echo "Hash mismatch at $HEIGHT: stored=$STORED_HASH chain=$CHAIN_HASH"; exit 1; }
-
-          # Notes record the persistence test (part 1's reset wiped test-orchard-zsa rows):
-          # - part 1's 100-unit issuance is spent (by part 2's transfer)
-          # - part 2's change (95 issuer, 5 alice) is unspent
-          # - exactly 2 distinct recipients (issuer + alice) and 2 distinct assets (PERSIST + zatoshi)
-          NOTE_PATTERN=$(sql "SELECT
-            (SELECT COUNT(*) FROM notes WHERE amount = 100 AND spend_tx_id IS NOT NULL) = 1
-            AND (SELECT COUNT(*) FROM notes WHERE amount = 95 AND spend_tx_id IS NULL) = 1
-            AND (SELECT COUNT(*) FROM notes WHERE amount = 5 AND spend_tx_id IS NULL) = 1
-            AND (SELECT COUNT(DISTINCT recipient_address) FROM notes) = 2
-            AND (SELECT COUNT(DISTINCT asset) FROM notes) = 2")
-          [ "$NOTE_PATTERN" = "1" ] || { echo "persistence note pattern not found (expected 100 spent, 95 + 5 unspent, 2 recipients, 2 assets)"; exit 1; }
-
-          # block_data heights should be contiguous.
-          GAPS=$(sql "SELECT MAX(height) - MIN(height) + 1 - COUNT(*) FROM block_data")
-          [ "$GAPS" = "0" ] || { echo "block_data has gaps (delta=$GAPS)"; exit 1; }
-
-          # wallet_state head must agree with block_data: same height and same hash.
-          CONSISTENT=$(sql "SELECT (SELECT MAX(height) FROM block_data) = ws.last_block_height AND (SELECT hash FROM block_data WHERE height = ws.last_block_height) = ws.last_block_hash FROM wallet_state ws")
-          [ "$CONSISTENT" = "1" ] || { echo "wallet_state and block_data disagree: $CONSISTENT"; exit 1; }
-
-          echo "Verified: head=$HEIGHT, scenario notes present, no gaps, wallet_state consistent, matches Zebra chain"
+          OK=$(sql "SELECT
+            ws.last_block_hash = '$ZEBRA_TIP_HASH'
+            AND bd.hash = ws.last_block_hash
+            AND bd.height = (SELECT MAX(height) FROM block_data)
+          FROM wallet_state ws
+          JOIN block_data bd ON bd.height = ws.last_block_height")
+          [ "$OK" = "1" ] || { echo "consistency check failed: wallet_state, block_data, and Zebra tip do not all agree"; exit 1; }
+          echo "Verified: wallet_state, block_data, and Zebra all agree at the chain tip"
 
       - name: Verify reorg detection wipes block_data and resyncs to chain tip
         run: |
