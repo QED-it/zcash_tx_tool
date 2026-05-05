@@ -20,6 +20,8 @@ jobs:
       # The Zebra commit we test against. Update this to bump the pinned Zebra version.
       # Latest from branch: https://github.com/QED-it/zebra/tree/zsa-integration-demo
       ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || '63341a59df8b73ed0f50dddacde768a34d8bc245' }}
+      # Host-side URL for talking to the Zebra container's JSON-RPC port.
+      ZEBRA_RPC_URL: http://127.0.0.1:18232/
 
     steps:
       - name: Free disk space (safe cleanup for Rust CI)
@@ -160,7 +162,7 @@ jobs:
           # Cross-check the cached hash against Zebra's chain via JSON-RPC.
           CHAIN_HASH=$(curl -sS -H 'content-type: text/plain;' \
             --data-binary "{\"jsonrpc\":\"1.0\",\"id\":\"ci\",\"method\":\"getblockhash\",\"params\":[$HEIGHT]}" \
-            http://127.0.0.1:18232/ | jq -r '.result // empty')
+            "$ZEBRA_RPC_URL" | jq -r '.result // empty')
           [ "$STORED_HASH" = "$CHAIN_HASH" ] || { echo "Hash mismatch at $HEIGHT: stored=$STORED_HASH chain=$CHAIN_HASH"; exit 1; }
 
           # Notes record the persistence test (part 1's reset wiped test-orchard-zsa rows):
@@ -214,7 +216,7 @@ jobs:
           # reached the actual chain tip and stored the correct hash for it.
           ZEBRA_TIP_HASH=$(curl -sS -H 'content-type: text/plain;' \
             --data-binary '{"jsonrpc":"1.0","id":"ci","method":"getbestblockhash","params":[]}' \
-            http://127.0.0.1:18232/ | jq -r '.result // empty')
+            "$ZEBRA_RPC_URL" | jq -r '.result // empty')
           POST_TIP_HASH=$(sql "SELECT hash FROM block_data ORDER BY height DESC LIMIT 1")
           [ "$POST_TIP_HASH" = "$ZEBRA_TIP_HASH" ] || { echo "cached tip hash $POST_TIP_HASH != Zebra tip hash $ZEBRA_TIP_HASH"; exit 1; }
 
