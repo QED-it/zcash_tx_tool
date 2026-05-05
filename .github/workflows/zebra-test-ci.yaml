@@ -26,12 +26,12 @@ jobs:
           df -h
 
       - name: Checkout tx-tool code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           path: tx-tool
 
       - name: Checkout Zebra code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           repository: QED-it/zebra
           ref: ${{ vars.ZEBRA_BRANCH_TO_TEST || 'zsa-integration-demo' }} # The branch in Zebra we want to test against

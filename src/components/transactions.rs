@@ -174,7 +174,7 @@ pub fn create_transfer_transaction(
     rpc_client: &dyn RpcClient,
     wallet: &mut User,
 ) -> Transaction {
-    info!("Transfer {} zatoshi", amount);
+    info!("Transfer {} units", amount);
 
     let ovk = wallet.orchard_ovk();
 
@@ -243,7 +243,7 @@ pub fn create_burn_transaction(
     rpc_client: &dyn RpcClient,
     wallet: &mut User,
 ) -> Transaction {
-    info!("Burn {} zatoshi", amount);
+    info!("Burn {} units", amount);
 
     // Add inputs
     let inputs = wallet.select_spendable_notes(arsonist, amount, asset);
