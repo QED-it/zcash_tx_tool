@@ -35,6 +35,7 @@ jobs:
         with:
           repository: QED-it/zebra
           ref: ${{ vars.ZEBRA_COMMIT_TO_TEST || '63341a59df8b73ed0f50dddacde768a34d8bc245' }} # The commit in Zebra we want to test against
+                                          # The '63341a59df8b73ed0f50dddacde768a34d8bc245' commit is from the 'zsa-integration-demo' branch, from the 03/03/2026
           path: zebra
 
       - name: Set up Docker Buildx
