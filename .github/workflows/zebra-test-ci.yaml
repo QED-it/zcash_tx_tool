@@ -22,6 +22,9 @@ concurrency:
 
 jobs:
   build-and-test:
+    # For a same-repo push, both `push` and `pull_request` events fire for the
+    # same commit. Skip the `pull_request` run in that case (the `push` covers it).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     env:
       # The Zebra commit we test against. Update this to bump the pinned Zebra version.
