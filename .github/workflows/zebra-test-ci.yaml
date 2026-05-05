@@ -12,12 +12,11 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Dedupe: a push and a pull_request event for the same branch would otherwise
-# both fire. github.ref differs between the two (refs/heads/<br> vs refs/pull/N/merge),
-# so use head_ref (set on PR events to the source branch) with ref_name as the
-# fallback for plain pushes — both collapse to the branch name.
+# Within a single event type, cancel older in-progress runs for the same branch
+# (e.g. successive pushes). event_name is part of the group so push runs aren't
+# cancelled by pull_request runs (which are skipped via the job's `if` anyway).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
