@@ -16,6 +16,8 @@ mod test_balances;
 mod test_issue_one;
 mod test_orchard;
 mod test_orchard_zsa;
+mod test_persistence_part1;
+mod test_persistence_part2;
 mod test_three_party;
 
 use crate::commands::clean::CleanCmd;
@@ -23,6 +25,8 @@ use crate::commands::get_block_data::GetBlockDataCmd;
 use crate::commands::test_issue_one::TestIssueOneCmd;
 use crate::commands::test_orchard::TestOrchardCmd;
 use crate::commands::test_orchard_zsa::TestOrchardZSACmd;
+use crate::commands::test_persistence_part1::TestPersistencePart1Cmd;
+use crate::commands::test_persistence_part2::TestPersistencePart2Cmd;
 use crate::commands::test_three_party::TestThreePartyCmd;
 use crate::config::AppConfig;
 use abscissa_core::{Command, Configurable, FrameworkError, Runnable};
@@ -38,6 +42,8 @@ pub enum AppCmd {
     TestOrchardZSA(TestOrchardZSACmd),
     TestThreeParty(TestThreePartyCmd),
     TestIssueOne(TestIssueOneCmd),
+    TestPersistencePart1(TestPersistencePart1Cmd),
+    TestPersistencePart2(TestPersistencePart2Cmd),
     Clean(CleanCmd),
     GetBlockData(GetBlockDataCmd),
 }

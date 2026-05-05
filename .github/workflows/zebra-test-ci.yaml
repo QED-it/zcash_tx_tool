@@ -99,21 +99,42 @@ jobs:
           
           # Get the exit code from the container
           EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
-          
+
           # Clean up
           docker rm zcash-tx-tool
-          
+
           # Check if the tx_tool succeeded
-          if [ $EXIT_CODE -eq 0 ]; then
-            echo "tx-tool completed successfully!"
-            exit 0
-          else
+          if [ $EXIT_CODE -ne 0 ]; then
             echo "tx-tool failed with exit code $EXIT_CODE"
             exit 1
           fi
+          echo "tx-tool completed successfully!"
+
+          # Persistence test, part 1: under a fixed seed, issue an asset and exit.
+          # Part 2 (next step) recreates the wallet with the same seed and must
+          # spend this note — that succeeds only if wallet_state, notes, and the
+          # commitment-tree marked positions all survive the process restart.
+          docker run --rm --network zcash-net \
+            -e ZCASH_NODE_ADDRESS=zebra-node \
+            -e ZCASH_NODE_PORT=18232 \
+            -e ZCASH_NODE_PROTOCOL=http \
+            -v wallet-data:/app \
+            zcash-tx-tool:local test-persistence-part1
+          echo "test-persistence-part1 completed successfully!"
     
       - name: Verify block_data + wallet state persisted from run 1 and match Zebra chain
         run: |
+          # Persistence test, part 2: same fixed seed as part 1. Must reload the
+          # persisted wallet state and successfully transfer the asset issued in
+          # part 1 — a successful mine here proves end-to-end persistence.
+          docker run --rm --network zcash-net \
+            -e ZCASH_NODE_ADDRESS=zebra-node \
+            -e ZCASH_NODE_PORT=18232 \
+            -e ZCASH_NODE_PROTOCOL=http \
+            -v wallet-data:/app \
+            zcash-tx-tool:local test-persistence-part2
+          echo "test-persistence-part2 completed successfully!"
+
           # Probe the SQLite DB directly via the sqlite3 binary already in the tx-tool image.
           sql() { docker run --rm -v wallet-data:/app --entrypoint sqlite3 zcash-tx-tool:local /app/walletdb.sqlite "$1"; }
 
@@ -128,17 +149,17 @@ jobs:
             http://127.0.0.1:18232/ | jq -r '.result // empty')
           [ "$STORED_HASH" = "$CHAIN_HASH" ] || { echo "Hash mismatch at $HEIGHT: stored=$STORED_HASH chain=$CHAIN_HASH"; exit 1; }
 
-          # Notes record the test-orchard-zsa scenario:
-          # - original 1000-unit issuance is spent (by the transfer)
-          # - burn-leftover change notes (990 issuer, 1 alice) are unspent
-          # - exactly 2 distinct recipients (issuer + alice) and 2 distinct assets (WETH + zatoshi)
+          # Notes record the persistence test (part 1's reset wiped test-orchard-zsa rows):
+          # - part 1's 100-unit issuance is spent (by part 2's transfer)
+          # - part 2's change (95 issuer, 5 alice) is unspent
+          # - exactly 2 distinct recipients (issuer + alice) and 2 distinct assets (PERSIST + zatoshi)
           NOTE_PATTERN=$(sql "SELECT
-            (SELECT COUNT(*) FROM notes WHERE amount = 1000 AND spend_tx_id IS NOT NULL) = 1
-            AND (SELECT COUNT(*) FROM notes WHERE amount = 990 AND spend_tx_id IS NULL) = 1
-            AND (SELECT COUNT(*) FROM notes WHERE amount = 1 AND spend_tx_id IS NULL) = 1
+            (SELECT COUNT(*) FROM notes WHERE amount = 100 AND spend_tx_id IS NOT NULL) = 1
+            AND (SELECT COUNT(*) FROM notes WHERE amount = 95 AND spend_tx_id IS NULL) = 1
+            AND (SELECT COUNT(*) FROM notes WHERE amount = 5 AND spend_tx_id IS NULL) = 1
             AND (SELECT COUNT(DISTINCT recipient_address) FROM notes) = 2
             AND (SELECT COUNT(DISTINCT asset) FROM notes) = 2")
-          [ "$NOTE_PATTERN" = "1" ] || { echo "test-orchard-zsa note pattern not found (expected 1000 spent, 990 + 1 unspent, 2 recipients, 2 assets)"; exit 1; }
+          [ "$NOTE_PATTERN" = "1" ] || { echo "persistence note pattern not found (expected 100 spent, 95 + 5 unspent, 2 recipients, 2 assets)"; exit 1; }
 
           # block_data heights should be contiguous.
           GAPS=$(sql "SELECT MAX(height) - MIN(height) + 1 - COUNT(*) FROM block_data")
