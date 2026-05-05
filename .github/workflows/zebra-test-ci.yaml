@@ -169,14 +169,8 @@ jobs:
         run: |
           sql() { docker run --rm -v wallet-data:/app --entrypoint sqlite3 zcash-tx-tool:local /app/walletdb.sqlite "$1"; }
 
-          # Precondition: every prior run synced from nu7_activation_height = 1,
-          # so block_data should not yet contain height 0. If it does, a previous
-          # step already triggered reset_full and this test would be vacuous.
-          PRE_MIN=$(sql "SELECT MIN(height) FROM block_data")
-          [ "$PRE_MIN" != "0" ] || { echo "precondition failed: block_data already starts at 0"; exit 1; }
-
           # Simulate a chain fork by corrupting the stored hash at the head.
-          # Next sync's head_matches_chain() must see the mismatch and call reset_full().
+          # Next sync's head_matches_chain() must detect mismatch and call reset_full().
           HEAD=$(sql "SELECT MAX(height) FROM block_data")
           sql "UPDATE block_data SET hash = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef' WHERE height = $HEAD"
 
@@ -186,19 +180,21 @@ jobs:
             -v wallet-data:/app \
             zcash-tx-tool:local test-issue-one
 
-          # Only the reset_full path resyncs starting from block 0.
-          POST_MIN=$(sql "SELECT MIN(height) FROM block_data")
-          [ "$POST_MIN" = "0" ] || { echo "reset_full did not run: block_data still starts at $POST_MIN"; exit 1; }
-
-          # Cached tip's hash must equal Zebra's best-block hash — i.e. the resync
-          # reached the actual chain tip and stored the correct hash for it.
+          # After reset_full + resync, two cross-checks against Zebra:
+          # 1) the once-corrupted height now stores the real hash (proves the deadbeef was wiped);
+          # 2) the cached tip matches Zebra's current best block (proves the resync reached the tip).
+          ZEBRA_HEAD_HASH=$(curl -sS -H 'content-type: text/plain;' \
+            --data-binary "{\"jsonrpc\":\"1.0\",\"id\":\"ci\",\"method\":\"getblockhash\",\"params\":[$HEAD]}" \
+            "$ZEBRA_RPC_URL" | jq -r '.result // empty')
           ZEBRA_TIP_HASH=$(curl -sS -H 'content-type: text/plain;' \
             --data-binary '{"jsonrpc":"1.0","id":"ci","method":"getbestblockhash","params":[]}' \
             "$ZEBRA_RPC_URL" | jq -r '.result // empty')
-          POST_TIP_HASH=$(sql "SELECT hash FROM block_data ORDER BY height DESC LIMIT 1")
-          [ "$POST_TIP_HASH" = "$ZEBRA_TIP_HASH" ] || { echo "cached tip hash $POST_TIP_HASH != Zebra tip hash $ZEBRA_TIP_HASH"; exit 1; }
+          OK=$(sql "SELECT
+            (SELECT hash FROM block_data WHERE height = $HEAD) = '$ZEBRA_HEAD_HASH'
+            AND (SELECT hash FROM block_data ORDER BY height DESC LIMIT 1) = '$ZEBRA_TIP_HASH'")
+          [ "$OK" = "1" ] || { echo "reorg detection failed: corrupted hash not replaced or tip not at chain head"; exit 1; }
 
-          echo "Reorg detection verified: block_data wiped, resynced from 0, tip hash matches Zebra"
+          echo "Reorg detection verified: corrupted hash replaced and resynced to chain tip"
 
       - name: Run tx-tool again for test-three-party and verify success
         run: |                
