@@ -9,9 +9,14 @@ name: Check tx-tool against Zebra
 
 on:
   push:
-    branches: [ main ]
   pull_request:
   workflow_dispatch:
+
+# Dedupe: a push and a pull_request event for the same ref would otherwise both
+# fire. Keep only the latest run per ref and cancel any older one in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
