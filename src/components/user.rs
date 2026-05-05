@@ -1,4 +1,4 @@
-/// Partially copied from `zebra/zebra-chain/src/block/merkle.rs`
+/// Partially copied from `zebra/zebra-chain/src/block/merkle.rs` 
 mod structs;
 
 use bridgetree::{self, BridgeTree};
