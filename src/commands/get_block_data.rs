@@ -33,7 +33,9 @@ impl Runnable for GetBlockDataCmd {
     fn run(&self) {
         let mut c = db::open();
 
-        let height = self.block_height.or_else(|| block_data::last_height(&mut c));
+        let height = self
+            .block_height
+            .or_else(|| block_data::last_height(&mut c));
 
         let result = match height {
             Some(height) => match block_data::get_hash(&mut c, height) {

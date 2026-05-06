@@ -166,11 +166,7 @@ pub struct User {
 }
 
 impl User {
-    fn from_seed(
-        conn: &mut SqliteConnection,
-        seed: [u8; 64],
-        miner_seed_phrase: &String,
-    ) -> Self {
+    fn from_seed(conn: &mut SqliteConnection, seed: [u8; 64], miner_seed_phrase: &String) -> Self {
         let mut user = User {
             key_store: KeyStore::empty(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
@@ -417,12 +413,7 @@ impl User {
         self.balance(conn, address, AssetBase::zatoshi())
     }
 
-    pub fn balance(
-        &self,
-        conn: &mut SqliteConnection,
-        address: Address,
-        asset: AssetBase,
-    ) -> u64 {
+    pub fn balance(&self, conn: &mut SqliteConnection, address: Address, asset: AssetBase) -> u64 {
         notes_db::find_non_spent_notes(conn, address, asset)
             .iter()
             .map(|n| n.amount)
@@ -515,9 +506,9 @@ impl User {
             .cloned()
             .collect::<Vec<_>>();
 
-        for (action_idx, ivk, note, recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
+        for (action_idx, ivk, note, _recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
             info!("Store note");
-            self.store_note(conn, txid, action_idx, ivk.clone(), note, recipient, memo)
+            self.store_note(conn, txid, action_idx, ivk.clone(), note, memo)
                 .unwrap();
         }
     }
@@ -532,16 +523,8 @@ impl User {
         for (note_index, note) in bundle.actions().iter().flat_map(|a| a.notes()).enumerate() {
             if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
                 let note_index = note_index + note_index_offset;
-                self.store_note(
-                    conn,
-                    txid,
-                    note_index,
-                    ivk.clone(),
-                    *note,
-                    note.recipient(),
-                    [0; 512],
-                )
-                .unwrap();
+                self.store_note(conn, txid, note_index, ivk.clone(), *note, [0; 512])
+                    .unwrap();
             }
         }
     }
@@ -553,7 +536,6 @@ impl User {
         action_index: usize,
         ivk: IncomingViewingKey,
         note: Note,
-        recipient: Address,
         memo_bytes: [u8; 512],
     ) -> Result<(), BundleLoadError> {
         if let Some(fvk) = self.key_store.viewing_keys.get(&ivk) {
@@ -562,6 +544,7 @@ impl User {
             let mut note_bytes = vec![];
             write_note(&mut note_bytes, &note).unwrap();
 
+            let recipient = note.recipient();
             let note_data = NoteData {
                 id: 0,
                 amount: note.value().inner() as i64,

@@ -230,9 +230,7 @@ pub struct LoadedTreeState {
 
 /// Load the saved wallet tree state from SQLite, given a connection.
 /// Returns `Ok(None)` if no row is stored.
-pub fn load_tree_state(
-    conn: &mut SqliteConnection,
-) -> Result<Option<LoadedTreeState>, String> {
+pub fn load_tree_state(conn: &mut SqliteConnection) -> Result<Option<LoadedTreeState>, String> {
     use crate::schema::wallet_state::dsl as ws;
     let row = ws::wallet_state
         .select(WalletStateRow::as_select())
