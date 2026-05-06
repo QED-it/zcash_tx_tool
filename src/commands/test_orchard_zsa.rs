@@ -47,13 +47,10 @@ impl Runnable for TestOrchardZSACmd {
 
         let issuer_addr = wallet.address_for_account(issuer_idx, External);
 
-        // Asset desc varies per run so the lifecycle is fresh on each invocation, even when
-        // the wallet (and chain) carry forward from a previous run.
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let asset_desc = format!("WETH-{}", timestamp);
+        // Random per-run asset desc so the lifecycle is fresh on each invocation, even when
+        // the wallet (and chain) carry forward from a previous run, and even when multiple
+        // CLI users with the same seed run against the same testnet.
+        let asset_desc = format!("WETH-{:016x}", rand::random::<u64>());
         let asset_desc_hash =
             compute_asset_desc_hash(&NonEmpty::from_slice(asset_desc.as_bytes()).unwrap());
 

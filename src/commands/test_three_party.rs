@@ -32,7 +32,12 @@ impl Runnable for TestThreePartyCmd {
         let config = APP.config();
         let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = User::random(&config.wallet.miner_seed_phrase, None);
+        // Stable wallet identity so tree state and notes persist across runs.
+        let mut wallet = User::new(
+            &mut c,
+            &config.wallet.seed_phrase,
+            &config.wallet.miner_seed_phrase,
+        );
 
         sync_from_height(
             &mut c,
@@ -51,7 +56,11 @@ impl Runnable for TestThreePartyCmd {
 
         // --------------------- Issue asset ---------------------
 
-        let asset_desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(b"MED").unwrap());
+        // Random per-run asset desc so each invocation issues a fresh asset, even
+        // across CLI users sharing a seed against the same testnet.
+        let asset_desc = format!("MED-{:016x}", rand::random::<u64>());
+        let asset_desc_hash =
+            compute_asset_desc_hash(&NonEmpty::from_slice(asset_desc.as_bytes()).unwrap());
 
         let (issue_tx, asset) = create_issue_transaction(
             manufacturer_addr,

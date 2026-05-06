@@ -31,7 +31,14 @@ impl Runnable for TestOrchardCmd {
         let config = APP.config();
         let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = User::random(&config.wallet.miner_seed_phrase, None);
+        // Stable wallet identity so tree state and notes persist across runs;
+        // each run shields a fresh coinbase and balance assertions are computed
+        // against the current (carried-forward) wallet balance.
+        let mut wallet = User::new(
+            &mut c,
+            &config.wallet.seed_phrase,
+            &config.wallet.miner_seed_phrase,
+        );
 
         let num_users = 2;
 
