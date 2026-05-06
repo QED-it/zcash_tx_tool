@@ -21,6 +21,6 @@ impl Runnable for CleanCmd {
             &config.wallet.miner_seed_phrase,
         );
 
-        wallet.reset_full(&mut c);
+        wallet.reset(&mut c);
     }
 }

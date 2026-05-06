@@ -151,7 +151,7 @@ pub fn sync_from_height(
                      clearing all persisted data and resyncing from block 0",
                     u32::from(wallet_head),
                 );
-                wallet.reset_full(conn);
+                wallet.reset(conn);
                 0
             }
             None => {
@@ -168,7 +168,7 @@ pub fn sync_from_height(
                          persisted data and resyncing from block 0",
                 head,
             );
-            wallet.reset_full(conn);
+            wallet.reset(conn);
             0
         }
         None => {
@@ -177,7 +177,7 @@ pub fn sync_from_height(
                     "Wallet state exists but block data is empty; \
                      clearing all persisted state and resyncing from block 0"
                 );
-                wallet.reset_full(conn);
+                wallet.reset(conn);
                 0
             } else {
                 info!("No block data found, starting from {}", from_height);

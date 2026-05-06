@@ -17,10 +17,9 @@ use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
 use orchard::tree::{MerkleHashOrchard, MerklePath};
 use orchard::value::NoteValue;
 use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
-use rand::Rng;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
-use sha2::{Sha256, Sha512};
+use sha2::Sha256;
 
 use crate::components::persistence::model::NoteData;
 use crate::components::persistence::sqlite as notes_db;
@@ -98,7 +97,6 @@ pub struct NoteSpendMetadata {
 }
 
 struct KeyStore {
-    accounts: BTreeMap<u32, Address>,
     payment_addresses: BTreeMap<OrderedAddress, IncomingViewingKey>,
     viewing_keys: BTreeMap<IncomingViewingKey, FullViewingKey>,
     spending_keys: BTreeMap<FullViewingKey, SpendingKey>,
@@ -107,7 +105,6 @@ struct KeyStore {
 impl KeyStore {
     pub fn empty() -> Self {
         KeyStore {
-            accounts: BTreeMap::new(),
             payment_addresses: BTreeMap::new(),
             viewing_keys: BTreeMap::new(),
             spending_keys: BTreeMap::new(),
@@ -166,7 +163,7 @@ pub struct User {
 }
 
 impl User {
-    fn from_seed(seed: [u8; 64], miner_seed_phrase: &String) -> Self {
+    fn from_seed(seed: [u8; 64], miner_seed_phrase: &str) -> Self {
         User {
             key_store: KeyStore::empty(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
@@ -182,11 +179,7 @@ impl User {
     /// Construct a `User` from seed phrases and restore any persisted
     /// commitment tree / sync position from SQLite. If no `wallet_state` row
     /// exists, returns a fresh wallet.
-    pub fn new(
-        conn: &mut SqliteConnection,
-        seed_phrase: &String,
-        miner_seed_phrase: &String,
-    ) -> Self {
+    pub fn new(conn: &mut SqliteConnection, seed_phrase: &str, miner_seed_phrase: &str) -> Self {
         let seed = <Mnemonic>::from_phrase(seed_phrase).unwrap().to_seed("");
         let mut user = Self::from_seed(seed, miner_seed_phrase);
         if let Err(e) = user.try_load_tree_state(conn) {
@@ -196,27 +189,6 @@ impl User {
             }
         }
         user
-    }
-
-    /// Create a fresh in-memory `User` with a random or deterministic seed.
-    /// If `random_seed` is provided, the wallet seed is deterministically
-    /// derived from it (so each test run with a unique seed gets a unique
-    /// wallet). If `None`, a fully random seed is used. Does not touch the
-    /// database — random wallets never inherit prior persisted state.
-    pub fn random(miner_seed_phrase: &String, random_seed: Option<u64>) -> Self {
-        let seed = match random_seed {
-            Some(val) => {
-                use sha2::Digest;
-                let hash: [u8; 64] = Sha512::digest(val.to_le_bytes()).into();
-                hash
-            }
-            None => {
-                let mut buf = [0u8; 64];
-                rand::thread_rng().fill(&mut buf);
-                buf
-            }
-        };
-        Self::from_seed(seed, miner_seed_phrase)
     }
 
     /// Attempt to restore the commitment tree and sync position from SQLite.
@@ -246,7 +218,7 @@ impl User {
     /// Reset all persisted wallet data: in-memory tree, notes, wallet_state row,
     /// and the block_data hash cache. Used by `clean` and by sync_from_height
     /// when chain/wallet divergence is detected.
-    pub fn reset_full(&mut self, conn: &mut SqliteConnection) {
+    pub fn reset(&mut self, conn: &mut SqliteConnection) {
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
@@ -330,25 +302,18 @@ impl User {
     }
 
     pub fn address_for_account(&mut self, account: usize, scope: Scope) -> Address {
-        let account = account as u32;
-        match self.key_store.accounts.get(&(account)) {
-            Some(addr) => *addr,
-            None => {
-                let sk = SpendingKey::from_zip32_seed(
-                    self.seed.as_slice(),
-                    constants::regtest::COIN_TYPE,
-                    AccountId::try_from(account).unwrap(),
-                )
-                .unwrap();
-                let fvk = FullViewingKey::from(&sk);
-                let address = fvk.address_at(0u32, scope);
-                self.key_store.add_raw_address(address, fvk.to_ivk(scope));
-                self.key_store.add_full_viewing_key(fvk);
-                self.key_store.add_spending_key(sk);
-                self.key_store.accounts.insert(account, address);
-                address
-            }
-        }
+        let sk = SpendingKey::from_zip32_seed(
+            self.seed.as_slice(),
+            constants::regtest::COIN_TYPE,
+            AccountId::try_from(account as u32).unwrap(),
+        )
+        .unwrap();
+        let fvk = FullViewingKey::from(&sk);
+        let address = fvk.address_at(0u32, scope);
+        self.key_store.add_raw_address(address, fvk.to_ivk(scope));
+        self.key_store.add_full_viewing_key(fvk);
+        self.key_store.add_spending_key(sk);
+        address
     }
 
     pub(crate) fn orchard_ovk(&self) -> OutgoingViewingKey {
@@ -371,7 +336,7 @@ impl User {
     }
 
     // Hack for claiming coinbase
-    pub fn miner_address(&self) -> TransparentAddress {
+    pub(crate) fn miner_address(&self) -> TransparentAddress {
         let account = AccountId::try_from(0).unwrap();
         let pubkey = zcash_transparent::keys::AccountPrivKey::from_seed(
             &REGTEST_NETWORK,
@@ -388,7 +353,7 @@ impl User {
     }
 
     // Hack for claiming coinbase
-    pub fn miner_sk(&self) -> SecretKey {
+    pub(crate) fn miner_sk(&self) -> SecretKey {
         let account = AccountId::try_from(0).unwrap();
         zcash_transparent::keys::AccountPrivKey::from_seed(
             &REGTEST_NETWORK,
