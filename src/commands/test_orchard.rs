@@ -12,12 +12,14 @@ use crate::commands::test_balances::{
     check_balances, print_balances, expected_balances_after_transfer, TestBalances, TransferInfo,
     expected_balances_after_mine, TxiBatch,
 };
+use crate::components::db;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{
     create_shield_coinbase_transaction, mine, mine_empty_blocks, sync_from_height,
 };
 use crate::components::user::User;
 use crate::prelude::*;
+use diesel::SqliteConnection;
 
 /// Run the E2E test
 #[derive(clap::Parser, Command, Debug)]
@@ -27,10 +29,11 @@ impl Runnable for TestOrchardCmd {
     /// Run the `test` subcommand.
     fn run(&self) {
         let config = APP.config();
+        let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = User::random(&config.wallet.miner_seed_phrase, None);
+        let mut wallet = User::random(&mut c, &config.wallet.miner_seed_phrase, None);
 
-        wallet.reset();
+        wallet.reset(&mut c);
 
         let num_users = 2;
 
@@ -40,23 +43,25 @@ impl Runnable for TestOrchardCmd {
         let miner_addr = wallet.address_for_account(miner_idx, External);
 
         let coinbase_txid = prepare_test(
+            &mut c,
             config.chain.nu5_activation_height,
             &mut wallet,
             &mut rpc_client,
         );
 
-        let balances = TestBalances::get_native_balances(num_users, &mut wallet);
+        let balances = TestBalances::get_native_balances(&mut c, num_users, &mut wallet);
         print_balances("=== Initial balances ===", AssetBase::zatoshi(), &balances);
 
         // --------------------- Shield miner's reward ---------------------
 
         let shielding_tx =
             create_shield_coinbase_transaction(miner_addr, coinbase_txid, &rpc_client, &mut wallet);
-        mine(&mut wallet, &mut rpc_client, Vec::from([shielding_tx]))
+        mine(&mut c, &mut wallet, &mut rpc_client, Vec::from([shielding_tx]))
             .expect("block mined successfully");
 
         let expected_balances = expected_balances_after_mine(&balances, 0);
         check_balances(
+            &mut c,
             AssetBase::zatoshi(),
             &expected_balances,
             &mut wallet,
@@ -72,7 +77,7 @@ impl Runnable for TestOrchardCmd {
         // --------------------- Create transfer ---------------------
 
         let amount_to_transfer_1: u64 = 2;
-        let balances = TestBalances::get_native_balances(num_users, &mut wallet);
+        let balances = TestBalances::get_native_balances(&mut c, num_users, &mut wallet);
         let transfer_info = TransferInfo::new(
             miner_idx,
             alice_idx,
@@ -83,11 +88,12 @@ impl Runnable for TestOrchardCmd {
 
         let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
-        let txs = txi.to_transactions(&rpc_client, &mut wallet);
+        let txs = txi.to_transactions(&mut c, &rpc_client, &mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
+        mine(&mut c, &mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
         check_balances(
+            &mut c,
             AssetBase::zatoshi(),
             &expected_balances,
             &mut wallet,
@@ -102,8 +108,13 @@ impl Runnable for TestOrchardCmd {
     }
 }
 
-fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) -> TxId {
-    sync_from_height(target_height, wallet, rpc_client);
+fn prepare_test(
+    c: &mut SqliteConnection,
+    target_height: u32,
+    wallet: &mut User,
+    rpc_client: &mut ReqwestRpcClient,
+) -> TxId {
+    sync_from_height(c, target_height, wallet, rpc_client);
     let activate = wallet.last_block_height().is_none();
     let (_, coinbase_txid) =
         mine_empty_blocks(100, rpc_client, activate).expect("block mined successfully"); // coinbase maturity = 100

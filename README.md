@@ -237,6 +237,8 @@ On subsequent runs, the tool:
 3. Uses preserved block hashes to validate rescans after `reset()`
 4. On any chain reorganization (or wallet/block-data inconsistency), wipes all persisted state (`block_data`, `wallet_state`, notes, commitment tree) and resyncs from scratch — there is no per-block rollback or partial rewind
 
+**Crash safety**: each block's three on-disk writes — `block_data` insert, per-tx `notes` inserts, and the `wallet_state` (commitment tree) save — are wrapped in a single SQLite transaction inside `User::process_block`. On any error or panic mid-block the transaction rolls back and the in-memory commitment tree is restored from a snapshot taken on entry. Restarting after a crash sees either the pre-block state or the fully-committed post-block state — never a partial mix.
+
 **Note**: Test commands call `reset()`, which clears wallet notes/tree state but preserves `block_data`. Use `clean`/`reset_full()` when you need to clear both wallet state and stored block hashes. For full persistence that skips wallet rescans entirely, run without calling `reset()` so `wallet_state` can be loaded on startup.
 
 ## Block Data Storage Considerations

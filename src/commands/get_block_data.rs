@@ -12,7 +12,7 @@
 use abscissa_core::{Command, Runnable};
 use serde::Serialize;
 
-use crate::components::block_data::BlockData;
+use crate::components::{block_data, db};
 
 #[derive(Serialize)]
 struct BlockDataResult {
@@ -31,14 +31,16 @@ pub struct GetBlockDataCmd {
 
 impl Runnable for GetBlockDataCmd {
     fn run(&self) {
-        let mut block_data = BlockData::new();
+        let mut c = db::open();
 
-        let height = self.block_height.or_else(|| block_data.last_height_block());
+        let height = self.block_height.or_else(|| block_data::last_height(&mut c));
 
         let result = match height {
-            Some(height) => match block_data.get_hash(height) {
+            Some(height) => match block_data::get_hash(&mut c, height) {
                 Some(hash) => {
-                    let prev_hash = height.checked_sub(1).and_then(|h| block_data.get_hash(h));
+                    let prev_hash = height
+                        .checked_sub(1)
+                        .and_then(|h| block_data::get_hash(&mut c, h));
                     BlockDataResult {
                         block_height: Some(height),
                         hash: Some(hash),

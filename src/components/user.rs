@@ -23,8 +23,11 @@ use secp256k1::{Secp256k1, SecretKey};
 use sha2::{Sha256, Sha512};
 
 use crate::components::persistence::model::NoteData;
-use crate::components::persistence::sqlite::SqliteDataStorage;
+use crate::components::persistence::sqlite as notes_db;
 use crate::components::user::structs::OrderedAddress;
+use crate::components::{block_data, tree_state};
+use diesel::prelude::*;
+use diesel::SqliteConnection;
 use zcash_primitives::block::BlockHash;
 use zcash_protocol::consensus::{BlockHeight, REGTEST_NETWORK};
 use zcash_primitives::transaction::components::issuance::write_note;
@@ -45,6 +48,30 @@ pub const NOTE_COMMITMENT_TREE_DEPTH: u8 = 32;
 pub enum WalletError {
     OutOfOrder(BlockHeight, usize),
     NoteCommitmentTreeFull,
+}
+
+/// Combined error type returned by [`User::process_block`].
+#[derive(Debug)]
+pub enum SyncError {
+    Bundle(BundleLoadError),
+    Diesel(diesel::result::Error),
+    TreeState(String),
+}
+
+impl From<BundleLoadError> for SyncError {
+    fn from(e: BundleLoadError) -> Self {
+        SyncError::Bundle(e)
+    }
+}
+impl From<diesel::result::Error> for SyncError {
+    fn from(e: diesel::result::Error) -> Self {
+        SyncError::Diesel(e)
+    }
+}
+impl From<String> for SyncError {
+    fn from(e: String) -> Self {
+        SyncError::TreeState(e)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -123,8 +150,6 @@ impl KeyStore {
 }
 
 pub struct User {
-    /// The database used to store the user's state.
-    db: SqliteDataStorage,
     /// The in-memory index of keys and addresses known to the user.
     key_store: KeyStore,
     /// The incremental Merkle tree used to track note commitments and witnesses for notes
@@ -141,32 +166,48 @@ pub struct User {
 }
 
 impl User {
-    pub fn new(seed_phrase: &String, miner_seed_phrase: &String) -> Self {
+    fn from_seed(
+        conn: &mut SqliteConnection,
+        seed: [u8; 64],
+        miner_seed_phrase: &String,
+    ) -> Self {
         let mut user = User {
-            db: SqliteDataStorage::new(),
             key_store: KeyStore::empty(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
             last_block_height: None,
             last_block_hash: None,
-            seed: <Mnemonic>::from_phrase(seed_phrase).unwrap().to_seed(""),
+            seed,
             miner_seed: <Mnemonic>::from_phrase(miner_seed_phrase)
                 .unwrap()
                 .to_seed(""),
         };
-        if let Err(e) = user.try_load_tree_state() {
+        if let Err(e) = user.try_load_tree_state(conn) {
             info!("Corrupt tree state, discarding: {}", e);
-            if let Err(e) = crate::components::tree_state::delete_tree_state() {
+            if let Err(e) = tree_state::delete_tree_state(conn) {
                 info!("Failed to delete corrupt tree state: {}", e);
             }
         }
         user
     }
 
+    pub fn new(
+        conn: &mut SqliteConnection,
+        seed_phrase: &String,
+        miner_seed_phrase: &String,
+    ) -> Self {
+        let seed = <Mnemonic>::from_phrase(seed_phrase).unwrap().to_seed("");
+        Self::from_seed(conn, seed, miner_seed_phrase)
+    }
+
     /// Create a user with a random or deterministic wallet seed.
     /// If `random_seed` is provided (e.g. a timestamp), the wallet seed is deterministically
     /// derived by hashing it, so each test run gets a unique wallet and avoids conflicts
     /// with cached blocks. If `None`, a fully random seed is used.
-    pub fn random(miner_seed_phrase: &String, random_seed: Option<u64>) -> Self {
+    pub fn random(
+        conn: &mut SqliteConnection,
+        miner_seed_phrase: &String,
+        random_seed: Option<u64>,
+    ) -> Self {
         let seed = match random_seed {
             Some(val) => {
                 use sha2::Digest;
@@ -179,32 +220,13 @@ impl User {
                 buf
             }
         };
-
-        let mut user = User {
-            db: SqliteDataStorage::new(),
-            key_store: KeyStore::empty(),
-            commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
-            last_block_height: None,
-            last_block_hash: None,
-            seed,
-            miner_seed: <Mnemonic>::from_phrase(miner_seed_phrase)
-                .unwrap()
-                .to_seed(""),
-        };
-        if let Err(e) = user.try_load_tree_state() {
-            info!("Corrupt tree state, discarding: {}", e);
-            if let Err(e) = crate::components::tree_state::delete_tree_state() {
-                info!("Failed to delete corrupt tree state: {}", e);
-            }
-        }
-        user
+        Self::from_seed(conn, seed, miner_seed_phrase)
     }
 
     /// Attempt to restore the commitment tree and sync position from SQLite.
     /// Returns `Err` if persisted state exists but is corrupt.
-    fn try_load_tree_state(&mut self) -> Result<(), String> {
-        use crate::components::tree_state;
-        if let Some(state) = tree_state::load_tree_state()? {
+    fn try_load_tree_state(&mut self, conn: &mut SqliteConnection) -> Result<(), String> {
+        if let Some(state) = tree_state::load_tree_state(conn)? {
             let hash_bytes: [u8; 32] = hex::decode(&state.last_block_hash)
                 .ok()
                 .and_then(|v| v.try_into().ok())
@@ -225,34 +247,19 @@ impl User {
         Ok(())
     }
 
-    /// Persist the current commitment tree and sync position to SQLite.
-    pub fn save_tree_state(&self) {
-        use crate::components::tree_state;
-        if let (Some(height), Some(hash)) = (self.last_block_height, self.last_block_hash) {
-            tree_state::save_tree_state(
-                &self.commitment_tree,
-                u32::from(height),
-                &hex::encode(hash.0),
-            )
-            .expect("Failed to save tree state");
-        }
-    }
-
     /// Reset wallet-local state for rescan while preserving block hashes.
-    pub fn reset(&mut self) {
-        use crate::components::tree_state;
+    pub fn reset(&mut self, conn: &mut SqliteConnection) {
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
-        self.db.delete_all_notes();
-        tree_state::delete_tree_state().expect("Failed to delete tree state");
+        notes_db::delete_all_notes(conn);
+        tree_state::delete_tree_state(conn).expect("Failed to delete tree state");
     }
 
     /// Reset all persisted wallet data, including the block hash cache.
-    pub fn reset_full(&mut self) {
-        use crate::components::block_data::BlockData;
-        self.reset();
-        BlockData::new().clear();
+    pub fn reset_full(&mut self, conn: &mut SqliteConnection) {
+        self.reset(conn);
+        block_data::clear(conn);
     }
 
     pub fn last_block_hash(&self) -> Option<BlockHash> {
@@ -265,11 +272,12 @@ impl User {
 
     pub(crate) fn select_spendable_notes(
         &mut self,
+        conn: &mut SqliteConnection,
         address: Address,
         total_amount: u64,
         asset: AssetBase,
     ) -> Vec<NoteSpendMetadata> {
-        let all_notes = self.db.find_non_spent_notes(address, asset);
+        let all_notes = notes_db::find_non_spent_notes(conn, address, asset);
         let mut selected_notes = Vec::new();
         let mut total_amount_selected = 0;
 
@@ -405,78 +413,98 @@ impl User {
         tss
     }
 
-    pub fn balance_zec(&mut self, address: Address) -> u64 {
-        self.balance(address, AssetBase::zatoshi())
+    pub fn balance_zec(&self, conn: &mut SqliteConnection, address: Address) -> u64 {
+        self.balance(conn, address, AssetBase::zatoshi())
     }
 
-    pub fn balance(&mut self, address: Address, asset: AssetBase) -> u64 {
-        let all_notes = self.db.find_non_spent_notes(address, asset);
-        let mut total_amount: i64 = 0;
-
-        for note_data in all_notes {
-            total_amount += note_data.amount;
-        }
-        total_amount as u64
+    pub fn balance(
+        &self,
+        conn: &mut SqliteConnection,
+        address: Address,
+        asset: AssetBase,
+    ) -> u64 {
+        notes_db::find_non_spent_notes(conn, address, asset)
+            .iter()
+            .map(|n| n.amount)
+            .sum::<i64>() as u64
     }
 
-    /// Add note data from all V5 transactions of the block to the user.
-    /// Versions other than V5 are ignored.
-    pub fn add_notes_from_block(
+    /// Atomic per-block sync step.
+    ///
+    /// Wraps `block_data` insert + per-tx note inserts + tree-state save in a
+    /// single SQL transaction. On error the transaction rolls back and the
+    /// in-memory tree / `last_block_*` are restored from a snapshot taken on
+    /// entry, keeping memory and disk consistent.
+    pub fn process_block(
         &mut self,
+        conn: &mut SqliteConnection,
         block_height: BlockHeight,
         block_hash: BlockHash,
         transactions: Vec<Transaction>,
-    ) -> Result<(), BundleLoadError> {
-        transactions.into_iter().try_for_each(|tx| {
-            if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
-                self.add_notes_from_tx(tx)?;
-            };
-            Ok(())
-        })?;
+    ) -> Result<(), SyncError> {
+        let height_u32 = u32::from(block_height);
+        let hash_hex = hex::encode(block_hash.0);
 
-        self.last_block_hash = Some(block_hash);
-        self.last_block_height = Some(block_height);
-        Ok(())
+        let saved_tree = self.commitment_tree.clone();
+        let saved_height = self.last_block_height;
+        let saved_hash = self.last_block_hash;
+
+        let result: Result<(), SyncError> = conn.transaction(|c| {
+            block_data::insert(c, height_u32, hash_hex.clone());
+            for tx in &transactions {
+                if tx.version().has_orchard() || tx.version().has_orchard_zsa() {
+                    self.add_notes_from_tx(c, tx)?;
+                }
+            }
+            self.last_block_height = Some(block_height);
+            self.last_block_hash = Some(block_hash);
+            tree_state::save_tree_state(c, &self.commitment_tree, height_u32, &hash_hex)?;
+            Ok(())
+        });
+
+        if result.is_err() {
+            self.commitment_tree = saved_tree;
+            self.last_block_height = saved_height;
+            self.last_block_hash = saved_hash;
+        }
+        result
     }
 
-    /// Add note data to the user, and return a data structure that describes
-    /// the actions that are involved with this user.
-    pub fn add_notes_from_tx(&mut self, tx: Transaction) -> Result<(), BundleLoadError> {
+    fn add_notes_from_tx(
+        &mut self,
+        conn: &mut SqliteConnection,
+        tx: &Transaction,
+    ) -> Result<(), BundleLoadError> {
         let mut issued_notes_offset = 0;
 
         if let Some(orchard_bundle) = tx.orchard_bundle() {
-            // Add notes from Orchard bundle
             match orchard_bundle {
                 OrchardBundle::OrchardVanilla(b) => {
                     issued_notes_offset = b.actions().len();
-                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
-                    self.mark_potential_spends(&tx.txid(), b);
+                    self.add_notes_from_orchard_bundle(conn, &tx.txid(), b);
+                    self.mark_potential_spends(conn, &tx.txid(), b);
                 }
                 OrchardBundle::OrchardZSA(b) => {
                     issued_notes_offset = b.actions().len();
-                    self.add_notes_from_orchard_bundle(&tx.txid(), b);
-                    self.mark_potential_spends(&tx.txid(), b);
+                    self.add_notes_from_orchard_bundle(conn, &tx.txid(), b);
+                    self.mark_potential_spends(conn, &tx.txid(), b);
                 }
             }
         };
 
-        // Add notes from Issue bundle
         if let Some(issue_bundle) = tx.issue_bundle() {
-            self.add_notes_from_issue_bundle(&tx.txid(), issue_bundle, issued_notes_offset);
+            self.add_notes_from_issue_bundle(conn, &tx.txid(), issue_bundle, issued_notes_offset);
         };
 
-        self.add_note_commitments(&tx.txid(), tx.orchard_bundle(), tx.issue_bundle())
+        self.add_note_commitments(conn, &tx.txid(), tx.orchard_bundle(), tx.issue_bundle())
             .unwrap();
 
         Ok(())
     }
 
-    /// Add note data for those notes that are decryptable with one of this user's
-    /// incoming viewing keys, and return a data structure that describes
-    /// the actions that are involved with this user, either spending notes belonging
-    /// to this user or creating new notes owned by this user.
     fn add_notes_from_orchard_bundle<O: OrchardPrimitives>(
         &mut self,
+        conn: &mut SqliteConnection,
         txid: &TxId,
         bundle: &Bundle<Authorized, ZatBalance, O>,
     ) {
@@ -489,15 +517,14 @@ impl User {
 
         for (action_idx, ivk, note, recipient, memo) in bundle.decrypt_outputs_with_keys(&keys) {
             info!("Store note");
-            self.store_note(txid, action_idx, ivk.clone(), note, recipient, memo)
+            self.store_note(conn, txid, action_idx, ivk.clone(), note, recipient, memo)
                 .unwrap();
         }
     }
 
-    /// Add note data to the user, and return a data structure that describes
-    /// the actions that are involved with this user.
     fn add_notes_from_issue_bundle(
         &mut self,
+        conn: &mut SqliteConnection,
         txid: &TxId,
         bundle: &IssueBundle<Signed>,
         note_index_offset: usize,
@@ -506,6 +533,7 @@ impl User {
             if let Some(ivk) = self.key_store.ivk_for_address(&note.recipient()) {
                 let note_index = note_index + note_index_offset;
                 self.store_note(
+                    conn,
                     txid,
                     note_index,
                     ivk.clone(),
@@ -520,6 +548,7 @@ impl User {
 
     fn store_note(
         &mut self,
+        conn: &mut SqliteConnection,
         txid: &TxId,
         action_index: usize,
         ivk: IncomingViewingKey,
@@ -548,10 +577,8 @@ impl User {
                 spend_tx_id: None,
                 spend_action_index: -1,
             };
-            self.db.insert_note(note_data);
+            notes_db::insert_note(conn, note_data);
 
-            // add the association between the address and the IVK used
-            // to decrypt the note
             self.key_store.add_raw_address(recipient, ivk.clone());
             Ok(())
         } else {
@@ -562,30 +589,27 @@ impl User {
 
     fn mark_potential_spends<O: OrchardPrimitives>(
         &mut self,
+        conn: &mut SqliteConnection,
         txid: &TxId,
         orchard_bundle: &Bundle<Authorized, ZatBalance, O>,
     ) {
         for (action_index, action) in orchard_bundle.actions().iter().enumerate() {
-            if let Some(note) = self.db.find_by_nullifier(action.nullifier()) {
+            if let Some(note) = notes_db::find_by_nullifier(conn, action.nullifier()) {
                 info!("Adding spend of nullifier {:?}", action.nullifier());
-                self.db
-                    .mark_as_potentially_spent(note.id, txid, action_index as i32);
+                notes_db::mark_as_potentially_spent(conn, note.id, txid, action_index as i32);
             }
         }
     }
 
-    /// Add note commitments for the Orchard components of a transaction to the note
-    /// commitment tree, and mark the tree at the notes decryptable by this user so that
-    /// in the future we can produce authentication paths to those notes.
-    pub fn add_note_commitments(
+    fn add_note_commitments(
         &mut self,
+        conn: &mut SqliteConnection,
         txid: &TxId,
         orchard_bundle_opt: Option<&OrchardBundle<Authorized>>,
         issue_bundle_opt: Option<&IssueBundle<Signed>>,
     ) -> Result<(), WalletError> {
-        let my_notes_for_tx: Vec<NoteData> = self.db.find_notes_for_tx(txid);
+        let my_notes_for_tx: Vec<NoteData> = notes_db::find_notes_for_tx(conn, txid);
 
-        // Process note commitments
         let mut note_commitments: Vec<ExtractedNoteCommitment> =
             if let Some(bundle) = orchard_bundle_opt {
                 match bundle {
@@ -616,7 +640,6 @@ impl User {
 
         for (note_index, commitment) in note_commitments.iter().enumerate() {
             info!("Adding note commitment ({}, {})", txid, note_index);
-            // append the note commitment for each action to the note commitment tree
             if !self
                 .commitment_tree
                 .append(MerkleHashOrchard::from_cmx(commitment))
@@ -624,7 +647,6 @@ impl User {
                 return Err(WalletError::NoteCommitmentTreeFull);
             }
 
-            // for notes that are ours, mark the current state of the tree
             if let Some(note) = my_notes_for_tx
                 .iter()
                 .find(|note| note.action_index == note_index as i32)
@@ -635,7 +657,7 @@ impl User {
                     .mark()
                     .expect("tree is not empty")
                     .into();
-                self.db.update_note_position(note.id, position as i64);
+                notes_db::update_note_position(conn, note.id, position as i64);
             }
         }
 

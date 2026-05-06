@@ -1,6 +1,7 @@
-use crate::components::block_data::BlockData;
+use crate::components::block_data;
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::components::user::User;
+use diesel::SqliteConnection;
 use crate::components::block_commitment::{
     block_commitment_from_parts, AuthDataRoot, TxMerkleRoot, AUTH_COMMITMENT_PLACEHOLDER,
 };
@@ -31,13 +32,14 @@ const COINBASE_VALUE: u64 = 625_000_000;
 
 /// Mine a block with the given transactions and sync the user
 pub fn mine(
+    conn: &mut SqliteConnection,
     wallet: &mut User,
     rpc_client: &mut dyn RpcClient,
     txs: Vec<Transaction>,
 ) -> Result<(), Box<dyn Error>> {
     let activate = wallet.last_block_height().map(u32::from).unwrap_or(0) == 0;
-    let (_, _) = mine_block(rpc_client, txs, activate)?;
-    sync(wallet, rpc_client);
+    mine_block(rpc_client, txs, activate)?;
+    sync(conn, wallet, rpc_client);
     Ok(())
 }
 
@@ -114,12 +116,12 @@ pub fn create_shield_coinbase_transaction(
 }
 
 /// Sync the user with the node
-pub fn sync(wallet: &mut User, rpc: &mut dyn RpcClient) {
+pub fn sync(conn: &mut SqliteConnection, wallet: &mut User, rpc: &mut dyn RpcClient) {
     let current_height = match wallet.last_block_height() {
         None => 0,
         Some(height) => height.add(1).into(),
     };
-    sync_from_height(current_height, wallet, rpc);
+    sync_from_height(conn, current_height, wallet, rpc);
 }
 
 /// Sync the user with the node from the given height.
@@ -130,44 +132,45 @@ pub fn sync(wallet: &mut User, rpc: &mut dyn RpcClient) {
 /// out of sync with `block_data`, or a chain reorg detected at the stored head)
 /// is treated as a hard failure: we wipe everything and resync from
 /// `from_height`. We do not attempt per-block rollback or partial rewinds.
-pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcClient) {
+pub fn sync_from_height(
+    conn: &mut SqliteConnection,
+    from_height: u32,
+    wallet: &mut User,
+    rpc: &mut dyn RpcClient,
+) {
     info!("Starting sync from height {}", from_height);
 
-    let mut block_data = BlockData::new();
-
-    let start_height = match block_data.last_height_block() {
-        Some(head) if head_matches_chain(head, &mut block_data, rpc) => {
-            match wallet.last_block_height() {
-                Some(wallet_head) if wallet_head_matches_block_data(wallet, &mut block_data) => {
-                    let resume = u32::from(wallet_head) + 1;
-                    info!("Stored head {} valid, resuming from {}", head, resume);
-                    resume.max(from_height)
-                }
-                Some(wallet_head) => {
-                    info!(
-                        "Wallet state at height {} does not match stored block data; \
-                         clearing all persisted data and resyncing from block 0",
-                        u32::from(wallet_head),
-                    );
-                    wallet.reset_full();
-                    0
-                }
-                None => {
-                    info!(
-                        "Stored block data valid, rebuilding wallet state from {}",
-                        from_height
-                    );
-                    from_height
-                }
+    let start_height = match block_data::last_height(conn) {
+        Some(head) if head_matches_chain(conn, head, rpc) => match wallet.last_block_height() {
+            Some(wallet_head) if wallet_head_matches_block_data(conn, wallet) => {
+                let resume = u32::from(wallet_head) + 1;
+                info!("Stored head {} valid, resuming from {}", head, resume);
+                resume.max(from_height)
             }
-        }
+            Some(wallet_head) => {
+                info!(
+                    "Wallet state at height {} does not match stored block data; \
+                     clearing all persisted data and resyncing from block 0",
+                    u32::from(wallet_head),
+                );
+                wallet.reset_full(conn);
+                0
+            }
+            None => {
+                info!(
+                    "Stored block data valid, rebuilding wallet state from {}",
+                    from_height
+                );
+                from_height
+            }
+        },
         Some(head) => {
             info!(
                 "Chain reorganization detected at stored head {}; clearing all \
                          persisted data and resyncing from block 0",
                 head,
             );
-            wallet.reset_full();
+            wallet.reset_full(conn);
             0
         }
         None => {
@@ -176,7 +179,7 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     "Wallet state exists but block data is empty; \
                      clearing all persisted state and resyncing from block 0"
                 );
-                wallet.reset_full();
+                wallet.reset_full(conn);
                 0
             } else {
                 info!("No block data found, starting from {}", from_height);
@@ -201,12 +204,9 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
                     .map(|tx_id| rpc.get_transaction(tx_id).unwrap())
                     .collect();
 
-                block_data.insert(next_height, hex::encode(block.hash.0));
-
                 wallet
-                    .add_notes_from_block(block.height, block.hash, transactions)
-                    .unwrap();
-                wallet.save_tree_state();
+                    .process_block(conn, block.height, block.hash, transactions)
+                    .expect("process_block");
                 next_height += 1;
             }
             Err(err) => {
@@ -223,8 +223,8 @@ pub fn sync_from_height(from_height: u32, wallet: &mut User, rpc: &mut dyn RpcCl
 }
 
 /// Check whether the stored hash at `height` matches the live chain.
-fn head_matches_chain(height: u32, block_data: &mut BlockData, rpc: &mut dyn RpcClient) -> bool {
-    let Some(stored_hash) = block_data.get_hash(height) else {
+fn head_matches_chain(conn: &mut SqliteConnection, height: u32, rpc: &mut dyn RpcClient) -> bool {
+    let Some(stored_hash) = block_data::get_hash(conn, height) else {
         return false;
     };
     match rpc.get_block(height) {
@@ -246,18 +246,18 @@ fn head_matches_chain(height: u32, block_data: &mut BlockData, rpc: &mut dyn Rpc
     }
 }
 
-fn wallet_head_matches_block_data(wallet: &User, block_data: &mut BlockData) -> bool {
+fn wallet_head_matches_block_data(conn: &mut SqliteConnection, wallet: &User) -> bool {
     let (Some(height), Some(hash)) = (wallet.last_block_height(), wallet.last_block_hash()) else {
         return false;
     };
-    block_data
-        .get_hash(u32::from(height))
+    block_data::get_hash(conn, u32::from(height))
         .map(|stored_hash| stored_hash == hex::encode(hash.0))
         .unwrap_or(false)
 }
 
 /// Create a transfer transaction
 pub fn create_transfer_transaction(
+    conn: &mut SqliteConnection,
     sender: Address,
     recipient: Address,
     amount: u64,
@@ -270,7 +270,7 @@ pub fn create_transfer_transaction(
     let ovk = wallet.orchard_ovk();
 
     // Add inputs
-    let inputs = wallet.select_spendable_notes(sender, amount, asset);
+    let inputs = wallet.select_spendable_notes(conn, sender, amount, asset);
     let total_inputs_amount = inputs
         .iter()
         .fold(0, |acc, input| acc + input.note.value().inner());
@@ -328,6 +328,7 @@ pub fn create_transfer_transaction(
 
 /// Create a burn transaction
 pub fn create_burn_transaction(
+    conn: &mut SqliteConnection,
     arsonist: Address,
     amount: u64,
     asset: AssetBase,
@@ -337,7 +338,7 @@ pub fn create_burn_transaction(
     info!("Burn {} units", amount);
 
     // Add inputs
-    let inputs = wallet.select_spendable_notes(arsonist, amount, asset);
+    let inputs = wallet.select_spendable_notes(conn, arsonist, amount, asset);
     let total_inputs_amount = inputs
         .iter()
         .fold(0, |acc, input| acc + input.note.value().inner());

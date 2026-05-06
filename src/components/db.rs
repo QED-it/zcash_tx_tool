@@ -42,3 +42,16 @@ pub fn establish_connection(database_url: &str) -> SqliteConnection {
         .expect("Failed to run database migrations");
     conn
 }
+
+/// Open the default-URL SQLite connection, run migrations once, and return it.
+/// Intended to be called once per command at the top of `run()`; the resulting
+/// connection is then threaded as `&mut SqliteConnection` through the call graph.
+pub fn open() -> SqliteConnection {
+    establish_connection(&database_url())
+}
+
+/// Like [`open`] but returns `None` when no DATABASE_URL is set and the default
+/// file does not exist on disk.
+pub fn try_open() -> Option<SqliteConnection> {
+    try_database_url().map(|url| establish_connection(&url))
+}

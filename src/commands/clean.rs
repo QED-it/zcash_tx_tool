@@ -2,6 +2,7 @@
 
 use abscissa_core::{Command, Runnable};
 
+use crate::components::db;
 use crate::components::user::User;
 use crate::prelude::*;
 
@@ -13,8 +14,13 @@ impl Runnable for CleanCmd {
     /// Run the `clean` subcommand.
     fn run(&self) {
         let config = APP.config();
-        let mut wallet = User::new(&config.wallet.seed_phrase, &config.wallet.miner_seed_phrase);
+        let mut c = db::open();
+        let mut wallet = User::new(
+            &mut c,
+            &config.wallet.seed_phrase,
+            &config.wallet.miner_seed_phrase,
+        );
 
-        wallet.reset_full();
+        wallet.reset_full(&mut c);
     }
 }

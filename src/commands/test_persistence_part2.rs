@@ -14,6 +14,7 @@ use crate::commands::test_balances::{
     check_balances, expected_balances_after_transfer, print_balances, TestBalances, TransferInfo,
     TxiBatch,
 };
+use crate::components::db;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{mine, sync_from_height};
 use crate::components::user::User;
@@ -25,14 +26,20 @@ pub struct TestPersistencePart2Cmd {}
 impl Runnable for TestPersistencePart2Cmd {
     fn run(&self) {
         let config = APP.config();
+        let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
 
         // Same fixed seed as part 1; do NOT call wallet.reset() — we want the
         // persisted commitment tree, last_block_*, and notes restored from disk.
-        let mut wallet = User::new(&config.wallet.seed_phrase, &config.wallet.miner_seed_phrase);
+        let mut wallet = User::new(
+            &mut c,
+            &config.wallet.seed_phrase,
+            &config.wallet.miner_seed_phrase,
+        );
 
         // Resume from the persisted head; usually a no-op here.
         sync_from_height(
+            &mut c,
             config.chain.nu7_activation_height,
             &mut wallet,
             &mut rpc_client,
@@ -48,7 +55,7 @@ impl Runnable for TestPersistencePart2Cmd {
         ));
 
         let num_users = 2;
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
+        let balances = TestBalances::get_asset_balances(&mut c, asset, num_users, &mut wallet);
         print_balances(
             "=== Persistence part 2: balances after reload ===",
             asset,
@@ -60,10 +67,10 @@ impl Runnable for TestPersistencePart2Cmd {
         let transfer_info = TransferInfo::new(issuer_idx, alice_idx, asset, 5);
         let txi = TxiBatch::from_item(transfer_info);
         let expected_balances = expected_balances_after_transfer(&balances, &txi);
-        let txs = txi.to_transactions(&rpc_client, &mut wallet);
-        mine(&mut wallet, &mut rpc_client, txs).expect("transfer block mined successfully");
+        let txs = txi.to_transactions(&mut c, &rpc_client, &mut wallet);
+        mine(&mut c, &mut wallet, &mut rpc_client, txs).expect("transfer block mined successfully");
 
-        check_balances(asset, &expected_balances, &mut wallet, num_users);
+        check_balances(&mut c, asset, &expected_balances, &mut wallet, num_users);
         print_balances(
             "=== Persistence part 2: balances after transfer ===",
             asset,

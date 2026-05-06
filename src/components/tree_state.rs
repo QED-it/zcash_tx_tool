@@ -8,7 +8,6 @@ use orchard::tree::MerkleHashOrchard;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use crate::components::db;
 use crate::components::user::NOTE_COMMITMENT_TREE_DEPTH;
 
 #[derive(Serialize, Deserialize)]
@@ -229,18 +228,15 @@ pub struct LoadedTreeState {
     pub last_block_hash: String,
 }
 
-/// Load the saved wallet tree state from SQLite.
-/// Returns `Ok(None)` if no state is stored or the database does not exist.
-pub fn load_tree_state() -> Result<Option<LoadedTreeState>, String> {
-    let Some(database_url) = db::try_database_url() else {
-        return Ok(None);
-    };
-    let mut conn = db::establish_connection(&database_url);
-
+/// Load the saved wallet tree state from SQLite, given a connection.
+/// Returns `Ok(None)` if no row is stored.
+pub fn load_tree_state(
+    conn: &mut SqliteConnection,
+) -> Result<Option<LoadedTreeState>, String> {
     use crate::schema::wallet_state::dsl as ws;
     let row = ws::wallet_state
         .select(WalletStateRow::as_select())
-        .first(&mut conn)
+        .first(conn)
         .optional()
         .map_err(|e| format!("Failed to query wallet_state: {e}"))?;
 
@@ -260,13 +256,11 @@ pub fn load_tree_state() -> Result<Option<LoadedTreeState>, String> {
 
 /// Persist the commitment tree, block height, and block hash to SQLite.
 pub fn save_tree_state(
+    conn: &mut SqliteConnection,
     tree: &BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH>,
     last_block_height: u32,
     last_block_hash: &str,
 ) -> Result<(), String> {
-    let database_url = db::database_url();
-    let mut conn = db::establish_connection(&database_url);
-
     let ser_tree = SerTree::from(tree);
     let json = serde_json::to_string(&ser_tree)
         .map_err(|e| format!("Failed to serialize commitment tree: {e}"))?;
@@ -278,28 +272,22 @@ pub fn save_tree_state(
         last_block_hash: last_block_hash.to_string(),
     };
 
-    conn.transaction(|conn| {
+    conn.transaction(|c| {
         use crate::schema::wallet_state::dsl as ws;
-        diesel::delete(ws::wallet_state).execute(conn)?;
+        diesel::delete(ws::wallet_state).execute(c)?;
         diesel::insert_into(ws::wallet_state)
             .values(&new_row)
-            .execute(conn)?;
+            .execute(c)?;
         Ok::<_, diesel::result::Error>(())
     })
     .map_err(|e| format!("Failed to save tree state: {e}"))
 }
 
 /// Delete the persisted tree state from SQLite.
-/// Does nothing if the database does not exist.
-pub fn delete_tree_state() -> Result<(), String> {
-    let Some(database_url) = db::try_database_url() else {
-        return Ok(());
-    };
-    let mut conn = db::establish_connection(&database_url);
-
+pub fn delete_tree_state(conn: &mut SqliteConnection) -> Result<(), String> {
     use crate::schema::wallet_state::dsl as ws;
     diesel::delete(ws::wallet_state)
-        .execute(&mut conn)
+        .execute(conn)
         .map_err(|e| format!("Failed to delete tree state: {e}"))?;
     Ok(())
 }
@@ -321,6 +309,7 @@ struct WalletStateRow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::db;
     use crate::components::user::MAX_CHECKPOINTS;
     use tempfile::NamedTempFile;
 

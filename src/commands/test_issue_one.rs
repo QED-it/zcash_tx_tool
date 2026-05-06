@@ -8,6 +8,7 @@ use nonempty::NonEmpty;
 use orchard::issuance::compute_asset_desc_hash;
 use orchard::keys::Scope::External;
 use crate::commands::test_balances::{print_balances, TestBalances};
+use crate::components::db;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
 use crate::components::user::User;
@@ -21,20 +22,22 @@ impl Runnable for TestIssueOneCmd {
     /// Run the `test-issue-one` subcommand.
     fn run(&self) {
         let config = APP.config();
+        let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
         // Use a unique wallet for each test run to avoid conflicts with cached blocks
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let mut wallet = User::random(&config.wallet.miner_seed_phrase, Some(timestamp));
+        let mut wallet = User::random(&mut c, &config.wallet.miner_seed_phrase, Some(timestamp));
 
-        wallet.reset();
+        wallet.reset(&mut c);
         let num_users = 1;
         let issuer_idx = 0;
         let issuer_addr = wallet.address_for_account(issuer_idx, External);
         let asset_desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(b"WETH").unwrap());
-        prepare_test(
+        sync_from_height(
+            &mut c,
             config.chain.nu7_activation_height,
             &mut wallet,
             &mut rpc_client,
@@ -50,17 +53,13 @@ impl Runnable for TestIssueOneCmd {
             &rpc_client,
             &mut wallet,
         );
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
+        let balances = TestBalances::get_asset_balances(&mut c, asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
 
-        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]))
+        mine(&mut c, &mut wallet, &mut rpc_client, Vec::from([issue_tx]))
             .expect("block mined successfully");
 
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
+        let balances = TestBalances::get_asset_balances(&mut c, asset, num_users, &mut wallet);
         print_balances("=== Balances after issue ===", asset, &balances);
     }
-}
-
-fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) {
-    sync_from_height(target_height, wallet, rpc_client);
 }
