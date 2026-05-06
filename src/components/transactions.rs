@@ -1,4 +1,5 @@
 use crate::components::block_data;
+use crate::components::miner::MinerKey;
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
 use crate::components::user::User;
 use diesel::SqliteConnection;
@@ -81,6 +82,7 @@ pub fn create_shield_coinbase_transaction(
     coinbase_txid: TxId,
     rpc_client: &dyn RpcClient,
     wallet: &mut User,
+    miner_key: &MinerKey,
 ) -> Transaction {
     info!("Shielding coinbase output from tx {}", coinbase_txid);
     let target_height = rpc_client
@@ -89,14 +91,13 @@ pub fn create_shield_coinbase_transaction(
     let mut tx = create_tx(target_height, wallet);
 
     let coinbase_amount = Zatoshis::from_u64(COINBASE_VALUE).unwrap();
-    let miner_taddr = wallet.miner_address();
-
-    let sk = wallet.miner_sk().public_key(&Secp256k1::new());
+    let coinbase_recipient = miner_key.address();
+    let pk = miner_key.secret_key().public_key(&Secp256k1::new());
 
     tx.add_transparent_input(
-        sk,
+        pk,
         OutPoint::new(coinbase_txid.into(), 0),
-        TxOut::new(coinbase_amount, miner_taddr.script().into()),
+        TxOut::new(coinbase_amount, coinbase_recipient.script().into()),
     )
     .unwrap();
     tx.add_orchard_output::<FeeError>(
@@ -108,7 +109,7 @@ pub fn create_shield_coinbase_transaction(
     )
     .unwrap();
 
-    build_tx(tx, &wallet.transparent_signing_set(), &[], None)
+    build_tx(tx, &miner_key.signing_set(), &[], None)
 }
 
 pub fn sync(conn: &mut SqliteConnection, wallet: &mut User, rpc: &mut dyn RpcClient) {
@@ -318,7 +319,7 @@ pub fn create_transfer_transaction(
 
     build_tx(
         tx,
-        &wallet.transparent_signing_set(),
+        &TransparentSigningSet::new(),
         orchard_keys.as_slice(),
         None,
     )
@@ -375,7 +376,7 @@ pub fn create_burn_transaction(
 
     build_tx(
         tx,
-        &wallet.transparent_signing_set(),
+        &TransparentSigningSet::new(),
         orchard_keys.as_slice(),
         None,
     )
@@ -427,7 +428,7 @@ pub fn create_issue_transaction(
     (
         build_tx(
             tx,
-            &wallet.transparent_signing_set(),
+            &TransparentSigningSet::new(),
             &[],
             first_issuance.then_some(asset),
         ),
@@ -466,7 +467,7 @@ pub fn create_finalization_transaction(
     )
     .unwrap();
 
-    build_tx(tx, &wallet.transparent_signing_set(), &[], Some(asset))
+    build_tx(tx, &TransparentSigningSet::new(), &[], Some(asset))
 }
 
 pub fn template_into_proposal(

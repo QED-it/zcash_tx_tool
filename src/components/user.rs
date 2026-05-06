@@ -17,9 +17,6 @@ use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
 use orchard::tree::{MerkleHashOrchard, MerklePath};
 use orchard::value::NoteValue;
 use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
-use ripemd::{Digest, Ripemd160};
-use secp256k1::{Secp256k1, SecretKey};
-use sha2::Sha256;
 
 use crate::components::persistence::model::NoteData;
 use crate::components::persistence::sqlite as notes_db;
@@ -28,7 +25,7 @@ use crate::components::{block_data, tree_state};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
 use zcash_primitives::block::BlockHash;
-use zcash_protocol::consensus::{BlockHeight, REGTEST_NETWORK};
+use zcash_protocol::consensus::BlockHeight;
 use zcash_primitives::transaction::components::issuance::write_note;
 use zcash_primitives::transaction::{OrchardBundle, Transaction, TxId};
 use bip0039::Mnemonic;
@@ -36,9 +33,6 @@ use orchard::primitives::OrchardPrimitives;
 use zcash_primitives::zip32::AccountId;
 use zcash_protocol::constants;
 use zcash_protocol::value::ZatBalance;
-use zcash_transparent::address::TransparentAddress;
-use zcash_transparent::builder::TransparentSigningSet;
-use zcash_transparent::keys::NonHardenedChildIndex;
 
 pub const MAX_CHECKPOINTS: usize = 100;
 pub const NOTE_COMMITMENT_TREE_DEPTH: u8 = 32;
@@ -158,30 +152,25 @@ pub struct User {
     last_block_hash: Option<BlockHash>,
     /// The seed used to derive the user's keys.
     seed: [u8; 64],
-    /// The seed used to derive the miner's keys. This is a hack for claiming coinbase.
-    miner_seed: [u8; 64],
 }
 
 impl User {
-    fn from_seed(seed: [u8; 64], miner_seed_phrase: &str) -> Self {
+    fn from_seed(seed: [u8; 64]) -> Self {
         User {
             key_store: KeyStore::empty(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
             last_block_height: None,
             last_block_hash: None,
             seed,
-            miner_seed: <Mnemonic>::from_phrase(miner_seed_phrase)
-                .unwrap()
-                .to_seed(""),
         }
     }
 
-    /// Construct a `User` from seed phrases and restore any persisted
+    /// Construct a `User` from a seed phrase and restore any persisted
     /// commitment tree / sync position from SQLite. If no `wallet_state` row
     /// exists, returns a fresh wallet.
-    pub fn new(conn: &mut SqliteConnection, seed_phrase: &str, miner_seed_phrase: &str) -> Self {
+    pub fn new(conn: &mut SqliteConnection, seed_phrase: &str) -> Self {
         let seed = <Mnemonic>::from_phrase(seed_phrase).unwrap().to_seed("");
-        let mut user = Self::from_seed(seed, miner_seed_phrase);
+        let mut user = Self::from_seed(seed);
         if let Err(e) = user.try_load_tree_state(conn) {
             info!("Corrupt tree state, discarding: {}", e);
             if let Err(e) = tree_state::delete_tree_state(conn) {
@@ -333,42 +322,6 @@ impl User {
     pub(crate) fn issuance_key(&self) -> IssueAuthKey<ZSASchnorr> {
         IssueAuthKey::from_zip32_seed(self.seed.as_slice(), constants::testnet::COIN_TYPE, 0)
             .unwrap()
-    }
-
-    // Hack for claiming coinbase
-    pub(crate) fn miner_address(&self) -> TransparentAddress {
-        let account = AccountId::try_from(0).unwrap();
-        let pubkey = zcash_transparent::keys::AccountPrivKey::from_seed(
-            &REGTEST_NETWORK,
-            &self.miner_seed,
-            account,
-        )
-        .unwrap()
-        .derive_external_secret_key(NonHardenedChildIndex::ZERO)
-        .unwrap()
-        .public_key(&Secp256k1::new())
-        .serialize();
-        let hash = &Ripemd160::digest(Sha256::digest(pubkey))[..];
-        TransparentAddress::PublicKeyHash(hash.try_into().unwrap())
-    }
-
-    // Hack for claiming coinbase
-    pub(crate) fn miner_sk(&self) -> SecretKey {
-        let account = AccountId::try_from(0).unwrap();
-        zcash_transparent::keys::AccountPrivKey::from_seed(
-            &REGTEST_NETWORK,
-            &self.miner_seed,
-            account,
-        )
-        .unwrap()
-        .derive_external_secret_key(NonHardenedChildIndex::ZERO)
-        .unwrap()
-    }
-
-    pub(crate) fn transparent_signing_set(&self) -> TransparentSigningSet {
-        let mut tss = TransparentSigningSet::new();
-        tss.add_key(self.miner_sk());
-        tss
     }
 
     pub fn balance_zec(&self, conn: &mut SqliteConnection, address: Address) -> u64 {

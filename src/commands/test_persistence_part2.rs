@@ -32,11 +32,7 @@ impl Runnable for TestPersistencePart2Cmd {
         // Same fixed seed as part 1. User::new auto-loads the persisted
         // wallet_state row (the issued PERSIST asset's note position lives
         // there) so that the transfer below can witness it.
-        let mut wallet = User::new(
-            &mut c,
-            &config.wallet.seed_phrase,
-            &config.wallet.miner_seed_phrase,
-        );
+        let mut wallet = User::new(&mut c, &config.wallet.seed_phrase);
 
         // Resume from the persisted head; usually a no-op here.
         sync_from_height(

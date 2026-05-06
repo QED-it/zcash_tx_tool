@@ -25,11 +25,7 @@ impl Runnable for TestIssueOneCmd {
         let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
         // Stable wallet identity so tree state and notes persist across runs.
-        let mut wallet = User::new(
-            &mut c,
-            &config.wallet.seed_phrase,
-            &config.wallet.miner_seed_phrase,
-        );
+        let mut wallet = User::new(&mut c, &config.wallet.seed_phrase);
 
         let num_users = 1;
         let issuer_idx = 0;

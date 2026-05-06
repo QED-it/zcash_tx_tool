@@ -30,11 +30,7 @@ impl Runnable for TestPersistencePart1Cmd {
         // Fixed seed so part 2 can re-derive the same keys. User::new
         // auto-loads any persisted wallet_state — for part 1's first run on
         // a fresh volume there's nothing to load.
-        let mut wallet = User::new(
-            &mut c,
-            &config.wallet.seed_phrase,
-            &config.wallet.miner_seed_phrase,
-        );
+        let mut wallet = User::new(&mut c, &config.wallet.seed_phrase);
 
         sync_from_height(
             &mut c,

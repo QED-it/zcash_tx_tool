@@ -13,6 +13,7 @@ use crate::commands::test_balances::{
     expected_balances_after_mine, TxiBatch,
 };
 use crate::components::db;
+use crate::components::miner::MinerKey;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{
     create_shield_coinbase_transaction, mine, mine_empty_blocks, sync_from_height,
@@ -34,11 +35,8 @@ impl Runnable for TestOrchardCmd {
         // Stable wallet identity so tree state and notes persist across runs;
         // each run shields a fresh coinbase and balance assertions are computed
         // against the current (carried-forward) wallet balance.
-        let mut wallet = User::new(
-            &mut c,
-            &config.wallet.seed_phrase,
-            &config.wallet.miner_seed_phrase,
-        );
+        let mut wallet = User::new(&mut c, &config.wallet.seed_phrase);
+        let miner_key = MinerKey::new(&config.wallet.miner_seed_phrase);
 
         let num_users = 2;
 
@@ -59,8 +57,13 @@ impl Runnable for TestOrchardCmd {
 
         // --------------------- Shield miner's reward ---------------------
 
-        let shielding_tx =
-            create_shield_coinbase_transaction(miner_addr, coinbase_txid, &rpc_client, &mut wallet);
+        let shielding_tx = create_shield_coinbase_transaction(
+            miner_addr,
+            coinbase_txid,
+            &rpc_client,
+            &mut wallet,
+            &miner_key,
+        );
         mine(
             &mut c,
             &mut wallet,

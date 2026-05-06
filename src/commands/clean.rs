@@ -15,11 +15,7 @@ impl Runnable for CleanCmd {
     fn run(&self) {
         let config = APP.config();
         let mut c = db::open();
-        let mut wallet = User::new(
-            &mut c,
-            &config.wallet.seed_phrase,
-            &config.wallet.miner_seed_phrase,
-        );
+        let mut wallet = User::new(&mut c, &config.wallet.seed_phrase);
 
         wallet.reset(&mut c);
     }
