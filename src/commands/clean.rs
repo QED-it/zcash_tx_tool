@@ -3,7 +3,7 @@
 use abscissa_core::{Command, Runnable};
 
 use crate::components::db;
-use crate::components::user::User;
+use crate::components::wallet::Wallet;
 use crate::prelude::*;
 
 /// Clean state
@@ -15,7 +15,7 @@ impl Runnable for CleanCmd {
     fn run(&self) {
         let config = APP.config();
         let mut c = db::open();
-        let mut wallet = User::new(&mut c, &config.wallet.seed_phrase);
+        let mut wallet = Wallet::new(&mut c, &config.wallet.seed_phrase);
 
         wallet.reset(&mut c);
     }

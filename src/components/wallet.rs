@@ -20,7 +20,7 @@ use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
 
 use crate::components::persistence::model::NoteData;
 use crate::components::persistence::sqlite as notes_db;
-use crate::components::user::structs::OrderedAddress;
+use crate::components::wallet::structs::OrderedAddress;
 use crate::components::{block_data, tree_state};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -38,21 +38,27 @@ pub const MAX_CHECKPOINTS: usize = 100;
 pub const NOTE_COMMITMENT_TREE_DEPTH: u8 = 32;
 
 #[derive(Debug, Clone)]
-pub enum WalletError {
-    OutOfOrder(BlockHeight, usize),
+pub enum Error {
     NoteCommitmentTreeFull,
 }
 
-/// Combined error type returned by [`User::process_block`].
+#[derive(Debug, Clone)]
+pub enum BundleError {
+    /// The keystore did not contain the full viewing key corresponding
+    /// to the incoming viewing key that successfully decrypted a note.
+    FvkNotFound(IncomingViewingKey),
+}
+
+/// Combined error type returned by [`Wallet::process_block`].
 #[derive(Debug)]
 pub enum SyncError {
-    Bundle(BundleLoadError),
+    Bundle(BundleError),
     Diesel(diesel::result::Error),
     TreeState(String),
 }
 
-impl From<BundleLoadError> for SyncError {
-    fn from(e: BundleLoadError) -> Self {
+impl From<BundleError> for SyncError {
+    fn from(e: BundleError) -> Self {
         SyncError::Bundle(e)
     }
 }
@@ -65,22 +71,6 @@ impl From<String> for SyncError {
     fn from(e: String) -> Self {
         SyncError::TreeState(e)
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum BundleLoadError {
-    /// The action at the specified index failed to decrypt with
-    /// the provided IVK.
-    ActionDecryptionFailed(usize),
-    /// The keystore did not contain the full viewing key corresponding
-    /// to the incoming viewing key that successfully decrypted a
-    /// note.
-    FvkNotFound(IncomingViewingKey),
-    /// An action index identified as potentially spending one of our
-    /// notes is not a valid action index for the bundle.
-    InvalidActionIndex(usize),
-    /// Invalid Transaction data format
-    InvalidTransactionFormat,
 }
 
 #[derive(Debug)]
@@ -140,7 +130,7 @@ impl KeyStore {
     }
 }
 
-pub struct User {
+pub struct Wallet {
     /// The in-memory index of keys and addresses known to the user.
     key_store: KeyStore,
     /// The incremental Merkle tree used to track note commitments and witnesses for notes
@@ -154,9 +144,9 @@ pub struct User {
     seed: [u8; 64],
 }
 
-impl User {
+impl Wallet {
     fn from_seed(seed: [u8; 64]) -> Self {
-        User {
+        Wallet {
             key_store: KeyStore::empty(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
             last_block_height: None,
@@ -165,7 +155,7 @@ impl User {
         }
     }
 
-    /// Construct a `User` from a seed phrase and restore any persisted
+    /// Construct a `Wallet` from a seed phrase and restore any persisted
     /// commitment tree / sync position from SQLite. If no `wallet_state` row
     /// exists, returns a fresh wallet.
     pub fn new(conn: &mut SqliteConnection, seed_phrase: &str) -> Self {
@@ -380,7 +370,7 @@ impl User {
         &mut self,
         conn: &mut SqliteConnection,
         tx: &Transaction,
-    ) -> Result<(), BundleLoadError> {
+    ) -> Result<(), BundleError> {
         let mut issued_notes_offset = 0;
 
         if let Some(orchard_bundle) = tx.orchard_bundle() {
@@ -452,7 +442,7 @@ impl User {
         ivk: IncomingViewingKey,
         note: Note,
         memo_bytes: [u8; 512],
-    ) -> Result<(), BundleLoadError> {
+    ) -> Result<(), BundleError> {
         if let Some(fvk) = self.key_store.viewing_keys.get(&ivk) {
             info!("Adding decrypted note to the user");
 
@@ -481,7 +471,7 @@ impl User {
             Ok(())
         } else {
             info!("Can't add decrypted note, missing FVK");
-            Err(BundleLoadError::FvkNotFound(ivk.clone()))
+            Err(BundleError::FvkNotFound(ivk.clone()))
         }
     }
 
@@ -505,7 +495,7 @@ impl User {
         txid: &TxId,
         orchard_bundle_opt: Option<&OrchardBundle<Authorized>>,
         issue_bundle_opt: Option<&IssueBundle<Signed>>,
-    ) -> Result<(), WalletError> {
+    ) -> Result<(), Error> {
         let my_notes_for_tx: Vec<NoteData> = notes_db::find_notes_for_tx(conn, txid);
 
         let mut note_commitments: Vec<ExtractedNoteCommitment> =
@@ -542,7 +532,7 @@ impl User {
                 .commitment_tree
                 .append(MerkleHashOrchard::from_cmx(commitment))
             {
-                return Err(WalletError::NoteCommitmentTreeFull);
+                return Err(Error::NoteCommitmentTreeFull);
             }
 
             if let Some(note) = my_notes_for_tx

@@ -15,7 +15,7 @@ use crate::commands::test_balances::{print_balances, TestBalances};
 use crate::components::db;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
-use crate::components::user::User;
+use crate::components::wallet::Wallet;
 use crate::prelude::*;
 
 #[derive(clap::Parser, Command, Debug)]
@@ -27,10 +27,10 @@ impl Runnable for TestPersistencePart1Cmd {
         let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
 
-        // Fixed seed so part 2 can re-derive the same keys. User::new
+        // Fixed seed so part 2 can re-derive the same keys. Wallet::new
         // auto-loads any persisted wallet_state — for part 1's first run on
         // a fresh volume there's nothing to load.
-        let mut wallet = User::new(&mut c, &config.wallet.seed_phrase);
+        let mut wallet = Wallet::new(&mut c, &config.wallet.seed_phrase);
 
         sync_from_height(
             &mut c,

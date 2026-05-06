@@ -20,7 +20,7 @@ use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{
     create_finalization_transaction, create_issue_transaction, mine, sync_from_height,
 };
-use crate::components::user::User;
+use crate::components::wallet::Wallet;
 use crate::prelude::*;
 
 /// Run the E2E test
@@ -34,7 +34,7 @@ impl Runnable for TestOrchardZSACmd {
         let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
         // Stable wallet identity so tree state and notes persist across runs.
-        let mut wallet = User::new(&mut c, &config.wallet.seed_phrase);
+        let mut wallet = Wallet::new(&mut c, &config.wallet.seed_phrase);
 
         let num_users = 2;
 

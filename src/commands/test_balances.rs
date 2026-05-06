@@ -1,6 +1,6 @@
 use crate::components::rpc_client::RpcClient;
 use crate::components::transactions::{create_burn_transaction, create_transfer_transaction};
-use crate::components::user::User;
+use crate::components::wallet::Wallet;
 use crate::prelude::info;
 use diesel::SqliteConnection;
 use orchard::keys::Scope::External;
@@ -14,7 +14,7 @@ impl TestBalances {
     pub(crate) fn get_native_balances(
         conn: &mut SqliteConnection,
         num_accounts: usize,
-        user: &mut User,
+        user: &mut Wallet,
     ) -> TestBalances {
         Self::get_asset_balances(conn, AssetBase::zatoshi(), num_accounts, user)
     }
@@ -23,7 +23,7 @@ impl TestBalances {
         conn: &mut SqliteConnection,
         asset: AssetBase,
         num_accounts: usize,
-        wallet: &mut User,
+        wallet: &mut Wallet,
     ) -> TestBalances {
         let balances = (0..num_accounts)
             .map(|i| {
@@ -59,7 +59,7 @@ pub(crate) trait TransactionCreator {
         &self,
         conn: &mut SqliteConnection,
         rpc_client: &dyn RpcClient,
-        wallet: &mut User,
+        wallet: &mut Wallet,
     ) -> Transaction;
 }
 
@@ -94,7 +94,7 @@ impl TransactionCreator for TransferInfo {
         &self,
         conn: &mut SqliteConnection,
         rpc_client: &dyn RpcClient,
-        wallet: &mut User,
+        wallet: &mut Wallet,
     ) -> Transaction {
         let from_addr = wallet.address_for_account(self.acc_idx_from, External);
         let to_addr = wallet.address_for_account(self.acc_idx_to, External);
@@ -115,7 +115,7 @@ impl TransactionCreator for BurnInfo {
         &self,
         conn: &mut SqliteConnection,
         rpc_client: &dyn RpcClient,
-        wallet: &mut User,
+        wallet: &mut Wallet,
     ) -> Transaction {
         let address = wallet.address_for_account(self.burner_acc_idx, External);
         create_burn_transaction(conn, address, self.amount, self.asset, rpc_client, wallet)
@@ -157,7 +157,7 @@ impl<T: Clone + TransactionCreator> TxiBatch<T> {
         &self,
         conn: &mut SqliteConnection,
         rpc_client: &dyn RpcClient,
-        wallet: &mut User,
+        wallet: &mut Wallet,
     ) -> Vec<Transaction> {
         self.0
             .iter()
@@ -204,7 +204,7 @@ pub(crate) fn check_balances(
     conn: &mut SqliteConnection,
     asset: AssetBase,
     expected_balances: &TestBalances,
-    user: &mut User,
+    user: &mut Wallet,
     num_accounts: usize,
 ) {
     let actual_balances = TestBalances::get_asset_balances(conn, asset, num_accounts, user);

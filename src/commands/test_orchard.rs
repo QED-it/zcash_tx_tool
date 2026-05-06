@@ -18,7 +18,7 @@ use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{
     create_shield_coinbase_transaction, mine, mine_empty_blocks, sync_from_height,
 };
-use crate::components::user::User;
+use crate::components::wallet::Wallet;
 use crate::prelude::*;
 use diesel::SqliteConnection;
 
@@ -35,7 +35,7 @@ impl Runnable for TestOrchardCmd {
         // Stable wallet identity so tree state and notes persist across runs;
         // each run shields a fresh coinbase and balance assertions are computed
         // against the current (carried-forward) wallet balance.
-        let mut wallet = User::new(&mut c, &config.wallet.seed_phrase);
+        let mut wallet = Wallet::new(&mut c, &config.wallet.seed_phrase);
         let miner_key = MinerKey::new(&config.wallet.miner_seed_phrase);
 
         let num_users = 2;
@@ -124,7 +124,7 @@ impl Runnable for TestOrchardCmd {
 fn prepare_test(
     c: &mut SqliteConnection,
     target_height: u32,
-    wallet: &mut User,
+    wallet: &mut Wallet,
     rpc_client: &mut ReqwestRpcClient,
 ) -> TxId {
     sync_from_height(c, target_height, wallet, rpc_client);

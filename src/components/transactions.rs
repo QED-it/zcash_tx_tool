@@ -1,7 +1,7 @@
 use crate::components::block_data;
 use crate::components::miner::MinerKey;
 use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
-use crate::components::user::User;
+use crate::components::wallet::Wallet;
 use diesel::SqliteConnection;
 use crate::components::block_commitment::{
     block_commitment_from_parts, AuthDataRoot, TxMerkleRoot, AUTH_COMMITMENT_PLACEHOLDER,
@@ -33,7 +33,7 @@ const COINBASE_VALUE: u64 = 625_000_000;
 
 pub fn mine(
     conn: &mut SqliteConnection,
-    wallet: &mut User,
+    wallet: &mut Wallet,
     rpc_client: &mut dyn RpcClient,
     txs: Vec<Transaction>,
 ) -> Result<(), Box<dyn Error>> {
@@ -81,7 +81,7 @@ pub fn create_shield_coinbase_transaction(
     recipient: Address,
     coinbase_txid: TxId,
     rpc_client: &dyn RpcClient,
-    wallet: &mut User,
+    wallet: &mut Wallet,
     miner_key: &MinerKey,
 ) -> Transaction {
     info!("Shielding coinbase output from tx {}", coinbase_txid);
@@ -112,7 +112,7 @@ pub fn create_shield_coinbase_transaction(
     build_tx(tx, &miner_key.signing_set(), &[], None)
 }
 
-pub fn sync(conn: &mut SqliteConnection, wallet: &mut User, rpc: &mut dyn RpcClient) {
+pub fn sync(conn: &mut SqliteConnection, wallet: &mut Wallet, rpc: &mut dyn RpcClient) {
     let current_height = match wallet.last_block_height() {
         None => 0,
         Some(height) => height.add(1).into(),
@@ -131,7 +131,7 @@ pub fn sync(conn: &mut SqliteConnection, wallet: &mut User, rpc: &mut dyn RpcCli
 pub fn sync_from_height(
     conn: &mut SqliteConnection,
     from_height: u32,
-    wallet: &mut User,
+    wallet: &mut Wallet,
     rpc: &mut dyn RpcClient,
 ) {
     info!("Starting sync from height {}", from_height);
@@ -250,7 +250,7 @@ fn head_matches_chain(conn: &mut SqliteConnection, height: u32, rpc: &mut dyn Rp
     }
 }
 
-fn wallet_head_matches_block_data(conn: &mut SqliteConnection, wallet: &User) -> bool {
+fn wallet_head_matches_block_data(conn: &mut SqliteConnection, wallet: &Wallet) -> bool {
     let (Some(height), Some(hash)) = (wallet.last_block_height(), wallet.last_block_hash()) else {
         return false;
     };
@@ -266,7 +266,7 @@ pub fn create_transfer_transaction(
     amount: u64,
     asset: AssetBase,
     rpc_client: &dyn RpcClient,
-    wallet: &mut User,
+    wallet: &mut Wallet,
 ) -> Transaction {
     info!("Transfer {} units", amount);
 
@@ -331,7 +331,7 @@ pub fn create_burn_transaction(
     amount: u64,
     asset: AssetBase,
     rpc_client: &dyn RpcClient,
-    wallet: &mut User,
+    wallet: &mut Wallet,
 ) -> Transaction {
     info!("Burn {} units", amount);
 
@@ -388,7 +388,7 @@ pub fn create_issue_transaction(
     asset_desc_hash: [u8; 32],
     first_issuance: bool,
     rpc_client: &dyn RpcClient,
-    wallet: &mut User,
+    wallet: &mut Wallet,
 ) -> (Transaction, AssetBase) {
     info!("Issue {} asset", amount);
     let target_height = rpc_client
@@ -439,7 +439,7 @@ pub fn create_issue_transaction(
 pub fn create_finalization_transaction(
     asset_desc_hash: [u8; 32],
     rpc_client: &dyn RpcClient,
-    wallet: &mut User,
+    wallet: &mut Wallet,
 ) -> Transaction {
     info!("Finalize asset");
     let target_height = rpc_client
@@ -538,7 +538,7 @@ pub fn template_into_proposal(
     }
 }
 
-fn create_tx(target_height: BlockHeight, wallet: &User) -> Builder<'_, RegtestNetwork, ()> {
+fn create_tx(target_height: BlockHeight, wallet: &Wallet) -> Builder<'_, RegtestNetwork, ()> {
     let build_config = BuildConfig::TxV6 {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),

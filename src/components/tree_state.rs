@@ -8,7 +8,7 @@ use orchard::tree::MerkleHashOrchard;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use crate::components::user::NOTE_COMMITMENT_TREE_DEPTH;
+use crate::components::wallet::NOTE_COMMITMENT_TREE_DEPTH;
 
 #[derive(Serialize, Deserialize)]
 struct SerAddress {
@@ -308,7 +308,7 @@ struct WalletStateRow {
 mod tests {
     use super::*;
     use crate::components::db;
-    use crate::components::user::MAX_CHECKPOINTS;
+    use crate::components::wallet::MAX_CHECKPOINTS;
     use tempfile::NamedTempFile;
 
     fn test_db_url() -> (NamedTempFile, String) {

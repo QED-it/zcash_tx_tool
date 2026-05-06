@@ -29,10 +29,7 @@ impl MinerKey {
     }
 
     pub(crate) fn address(&self) -> TransparentAddress {
-        let pubkey = self
-            .secret_key()
-            .public_key(&Secp256k1::new())
-            .serialize();
+        let pubkey = self.secret_key().public_key(&Secp256k1::new()).serialize();
         let hash = &Ripemd160::digest(Sha256::digest(pubkey))[..];
         TransparentAddress::PublicKeyHash(hash.try_into().unwrap())
     }
