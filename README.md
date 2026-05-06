@@ -24,7 +24,7 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
     - [Creating your own scenario](#creating-your-own-scenario)
 - [Block Data Storage](#block-data-storage)
 - [Block Data Storage Considerations](#block-data-storage-considerations)
-    - [Docker Volume Mount for Block Data Persistence](#docker-volume-mount-for-block-data-persistence)
+- [Running the tx-tool in Docker](#running-the-tx-tool-in-docker)
 - [Connecting to the Public ZSA Testnet](#connecting-to-the-public-zsa-testnet)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
@@ -237,9 +237,7 @@ On subsequent runs, the tool:
 3. Uses preserved block hashes to validate rescans after `reset()`
 4. On any chain reorganization (or wallet/block-data inconsistency), wipes all persisted state (`block_data`, `wallet_state`, notes, commitment tree) and resyncs from scratch — there is no per-block rollback or partial rewind
 
-**Crash safety**: each block's three on-disk writes — `block_data` insert, per-tx `notes` inserts, and the `wallet_state` (commitment tree) save — are wrapped in a single SQLite transaction inside `User::process_block`. On any error or panic mid-block the transaction rolls back and the in-memory commitment tree is restored from a snapshot taken on entry. Restarting after a crash sees either the pre-block state or the fully-committed post-block state — never a partial mix.
-
-**Note**: Test commands call `reset()`, which clears wallet notes/tree state but preserves `block_data`. Use `clean`/`reset_full()` when you need to clear both wallet state and stored block hashes. For full persistence that skips wallet rescans entirely, run without calling `reset()` so `wallet_state` can be loaded on startup.
+**Note**: `Wallet::reset` (and the `clean` subcommand) wipes everything: `block_data`, `wallet_state`, notes, and the in-memory tree. Subsequent runs auto-load any persisted `wallet_state` row and resume sync from `wallet_head + 1`, with no full re-sync.
 
 ## Block Data Storage Considerations
 
@@ -258,24 +256,9 @@ There are currently (January 2026) ~3.2M blocks on Zcash mainnet. Approximate to
 - `wallet_state` is rewritten in-place on each sync step, so it does not grow with sync time, only with wallet activity.
 - Disk usage grows over time on mainnet unless old `block_data` rows are pruned (not implemented yet).
 
-### Docker Volume Mount for Block Data Persistence
+## Running the tx-tool in Docker
 
-The container's runtime working directory is `/data` (a directory dedicated to runtime state, separate from the build tree at `/app`). To preserve the SQLite database across container runs, mount a named volume there:
-
-```bash
-docker run --network zcash-net \
-  -e ZCASH_NODE_ADDRESS=zebra-node \
-  -e ZCASH_NODE_PORT=18232 \
-  -e ZCASH_NODE_PROTOCOL=http \
-  -v wallet-data:/data \
-  zcash-tx-tool:local test-orchard-zsa
-```
-
-The `-v wallet-data:/data` flag creates a named Docker volume (`wallet-data`) and mounts it at `/data`. The tx-tool writes `walletdb.sqlite` (and any other runtime files) there.
-
-**Without `-v wallet-data:/data`**, the database is written into a writable layer that's discarded when the container is removed — block data and wallet state will not survive between runs.
-
-The mount targets `/data`, not `/app`, deliberately: mounting at `/app` would shadow the binary and source tree on subsequent runs, causing the container to execute a stale binary after image rebuilds.
+The tx-tool is normally built and run natively, as described above. A Docker workflow is also supported for CI and self-contained deployments. See [`docs/tx_tool_docker_setup.md`](docs/tx_tool_docker_setup.md) for the build, persistence-volume layout, and a host-network example, plus a pointer to the multi-container recipe in `.github/workflows/zebra-test-ci.yaml`.
 
 ## Connecting to the Public ZSA Testnet
 
