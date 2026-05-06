@@ -1,49 +1,57 @@
+# syntax=docker/dockerfile:1.7
 # Match the channel pinned in rust-toolchain.toml so rustup has nothing to install at build time.
 FROM rust:1.86.0
 
-# Install system dependencies
+# System dependencies (cached unless this RUN changes)
 RUN apt-get update && apt-get install -y \
     sqlite3 \
     libsqlite3-dev \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory
 WORKDIR /app
 
-# Copy the entire repository
-COPY . .
+# diesel_cli — independent of project source. Cargo registry/git mounts persist the
+# crate index and downloaded sources across CI builds.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo install diesel_cli@2.1.1 --no-default-features --features sqlite --locked
 
-# Install diesel_cli with specific version
-RUN cargo install diesel_cli@2.1.1 --no-default-features --features sqlite --locked
-
-# Run migrations
-RUN DATABASE_URL=walletdb.sqlite diesel migration run
-
-# Build the application in release mode
-RUN cargo build --release
-
-# Install ipfs (for fetch-params.sh)
-RUN wget https://dist.ipfs.io/go-ipfs/v0.9.1/go-ipfs_v0.9.1_linux-amd64.tar.gz && \
-    tar -xvzf go-ipfs_v0.9.1_linux-amd64.tar.gz && \
+# go-ipfs — needed by fetch-params.sh; layer cached unless the install steps change.
+RUN wget -q https://dist.ipfs.io/go-ipfs/v0.9.1/go-ipfs_v0.9.1_linux-amd64.tar.gz && \
+    tar -xzf go-ipfs_v0.9.1_linux-amd64.tar.gz && \
     cd go-ipfs && \
     bash install.sh && \
     cd .. && \
     rm -rf go-ipfs go-ipfs_v0.9.1_linux-amd64.tar.gz
 
-# Make fetch-params.sh executable
-RUN chmod +x ./zcutil/fetch-params.sh
-
-# Run fetch-params.sh
-RUN ./zcutil/fetch-params.sh
-
-# Create necessary directories
+# Zcash params (~700 MB). Copying just fetch-params.sh first means the layer is
+# cached across source-only changes and only invalidates if the script itself changes.
+COPY zcutil/fetch-params.sh /app/zcutil/fetch-params.sh
+RUN chmod +x /app/zcutil/fetch-params.sh && /app/zcutil/fetch-params.sh
 RUN mkdir -p /root/.local/share/ZcashParams
 
-# Validate the presence of the file
-RUN test -f /app/target/release/zcash_tx_tool
+# Project source. Everything below this layer rebuilds when any tracked file changes,
+# but cargo's incremental build (via the /app/target cache mount) keeps it fast.
+COPY . .
 
-# Set default environment variables
+# Release build. The /app/target cache mount preserves cargo's incremental state
+# across CI runs, so source-only changes recompile only the changed crate(s).
+# The binary is copied out of the cache mount because cache mounts are not part
+# of the resulting image filesystem.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo build --release && \
+    cp target/release/zcash_tx_tool /app/zcash_tx_tool
+
+# Run migrations (build-time; the runtime app also runs them on /data/walletdb.sqlite)
+RUN DATABASE_URL=walletdb.sqlite diesel migration run
+
+# Validate the binary landed where we expect.
+RUN test -f /app/zcash_tx_tool
+
+# Default environment variables
 ENV ZCASH_NODE_ADDRESS=127.0.0.1
 ENV ZCASH_NODE_PORT=18232
 ENV ZCASH_NODE_PROTOCOL=http
@@ -55,6 +63,5 @@ ENV ZCASH_NODE_PROTOCOL=http
 RUN mkdir -p /data
 WORKDIR /data
 
-# Set the entrypoint with default scenario as "test-orchard-zsa"
-ENTRYPOINT ["/app/target/release/zcash_tx_tool"]
+ENTRYPOINT ["/app/zcash_tx_tool"]
 CMD ["test-orchard-zsa"]
