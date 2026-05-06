@@ -1,7 +1,8 @@
 use crate::components::rpc_client::RpcClient;
 use crate::components::transactions::{create_burn_transaction, create_transfer_transaction};
-use crate::components::user::User;
+use crate::components::wallet::Wallet;
 use crate::prelude::info;
+use diesel::SqliteConnection;
 use orchard::keys::Scope::External;
 use orchard::note::AssetBase;
 use zcash_primitives::transaction::Transaction;
@@ -10,19 +11,24 @@ use zcash_primitives::transaction::Transaction;
 pub(crate) struct TestBalances(Vec<u64>);
 
 impl TestBalances {
-    pub(crate) fn get_native_balances(num_accounts: usize, user: &mut User) -> TestBalances {
-        Self::get_asset_balances(AssetBase::zatoshi(), num_accounts, user)
+    pub(crate) fn get_native_balances(
+        conn: &mut SqliteConnection,
+        num_accounts: usize,
+        user: &mut Wallet,
+    ) -> TestBalances {
+        Self::get_asset_balances(conn, AssetBase::zatoshi(), num_accounts, user)
     }
 
     pub(crate) fn get_asset_balances(
+        conn: &mut SqliteConnection,
         asset: AssetBase,
         num_accounts: usize,
-        wallet: &mut User,
+        wallet: &mut Wallet,
     ) -> TestBalances {
         let balances = (0..num_accounts)
             .map(|i| {
                 let address = wallet.address_for_account(i, External);
-                wallet.balance(address, asset)
+                wallet.balance(conn, address, asset)
             })
             .collect();
 
@@ -49,7 +55,12 @@ pub(crate) struct BurnInfo {
 
 /// A trait to create a transaction from the information provided in the struct.
 pub(crate) trait TransactionCreator {
-    fn create_tx(&self, rpc_client: &dyn RpcClient, wallet: &mut User) -> Transaction;
+    fn create_tx(
+        &self,
+        conn: &mut SqliteConnection,
+        rpc_client: &dyn RpcClient,
+        wallet: &mut Wallet,
+    ) -> Transaction;
 }
 
 impl TransferInfo {
@@ -79,10 +90,16 @@ impl BurnInfo {
 }
 
 impl TransactionCreator for TransferInfo {
-    fn create_tx(&self, rpc_client: &dyn RpcClient, wallet: &mut User) -> Transaction {
+    fn create_tx(
+        &self,
+        conn: &mut SqliteConnection,
+        rpc_client: &dyn RpcClient,
+        wallet: &mut Wallet,
+    ) -> Transaction {
         let from_addr = wallet.address_for_account(self.acc_idx_from, External);
         let to_addr = wallet.address_for_account(self.acc_idx_to, External);
         create_transfer_transaction(
+            conn,
             from_addr,
             to_addr,
             self.amount,
@@ -94,9 +111,14 @@ impl TransactionCreator for TransferInfo {
 }
 
 impl TransactionCreator for BurnInfo {
-    fn create_tx(&self, rpc_client: &dyn RpcClient, wallet: &mut User) -> Transaction {
+    fn create_tx(
+        &self,
+        conn: &mut SqliteConnection,
+        rpc_client: &dyn RpcClient,
+        wallet: &mut Wallet,
+    ) -> Transaction {
         let address = wallet.address_for_account(self.burner_acc_idx, External);
-        create_burn_transaction(address, self.amount, self.asset, rpc_client, wallet)
+        create_burn_transaction(conn, address, self.amount, self.asset, rpc_client, wallet)
     }
 }
 
@@ -133,12 +155,13 @@ impl<T: Clone + TransactionCreator> TxiBatch<T> {
     /// This function creates a Vec of transactions for each item in the InfoBatch.
     pub(crate) fn to_transactions(
         &self,
+        conn: &mut SqliteConnection,
         rpc_client: &dyn RpcClient,
-        wallet: &mut User,
+        wallet: &mut Wallet,
     ) -> Vec<Transaction> {
         self.0
             .iter()
-            .map(|item| item.create_tx(rpc_client, wallet))
+            .map(|item| item.create_tx(conn, rpc_client, wallet))
             .collect()
     }
 }
@@ -178,12 +201,13 @@ pub(crate) fn expected_balances_after_burn(
 }
 
 pub(crate) fn check_balances(
+    conn: &mut SqliteConnection,
     asset: AssetBase,
     expected_balances: &TestBalances,
-    user: &mut User,
+    user: &mut Wallet,
     num_accounts: usize,
 ) {
-    let actual_balances = TestBalances::get_asset_balances(asset, num_accounts, user);
+    let actual_balances = TestBalances::get_asset_balances(conn, asset, num_accounts, user);
     assert_eq!(&actual_balances, expected_balances);
 }
 

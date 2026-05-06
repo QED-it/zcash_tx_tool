@@ -8,7 +8,7 @@ This workflow is configured to build, tag, and push Docker images to Amazon ECR.
 
 - **Checkout**: Checks out the latest code from the repository.
 - **Configure AWS Credentials**: Sets up the necessary AWS credentials for interacting with AWS services.
-- **Login to Amazon ECR**: Logs into the Amazon ECR service.
+- **Login to Amazon ECR**: Logs into the Amazon ECR service. 
 - **Build, Tag, and Push Docker Image**: Builds a Docker image using the Dockerfile, tags it with the latest and current commit identifiers, and pushes these tags to ECR.
 
 This workflow is manually triggered to provide flexibility and control over when Docker images are pushed to ECR.

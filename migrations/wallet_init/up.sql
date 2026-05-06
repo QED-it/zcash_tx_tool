@@ -12,4 +12,16 @@ CREATE TABLE notes (
     recipient_address BINARY(43) NOT NULL,
     spend_tx_id BINARY(32),
     spend_action_index INTEGER NOT NULL
-)
+);
+
+CREATE TABLE block_data (
+    height INTEGER PRIMARY KEY NOT NULL,
+    hash TEXT NOT NULL
+);
+
+CREATE TABLE wallet_state (
+    id INTEGER PRIMARY KEY NOT NULL DEFAULT 1,
+    commitment_tree_json TEXT NOT NULL,
+    last_block_height INTEGER NOT NULL,
+    last_block_hash TEXT NOT NULL
+);
