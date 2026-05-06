@@ -30,7 +30,6 @@ use zcash_transparent::bundle::{OutPoint, TxOut};
 
 const COINBASE_VALUE: u64 = 625_000_000;
 
-/// Mine a block with the given transactions and sync the user
 pub fn mine(
     conn: &mut SqliteConnection,
     wallet: &mut User,
@@ -43,7 +42,6 @@ pub fn mine(
     Ok(())
 }
 
-/// Mine a block with the given transactions and return the block height and coinbase txid
 pub fn mine_block(
     rpc_client: &mut dyn RpcClient,
     txs: Vec<Transaction>,
@@ -60,7 +58,6 @@ pub fn mine_block(
     Ok((block_height, coinbase_txid))
 }
 
-/// Mine the given number of empty blocks and return the block height and coinbase txid of the first block
 pub fn mine_empty_blocks(
     num_blocks: u32,
     rpc_client: &mut dyn RpcClient,
@@ -79,7 +76,6 @@ pub fn mine_empty_blocks(
     Ok((block_height, coinbase_txid))
 }
 
-/// Create a shielded coinbase transaction
 pub fn create_shield_coinbase_transaction(
     recipient: Address,
     coinbase_txid: TxId,
@@ -115,7 +111,6 @@ pub fn create_shield_coinbase_transaction(
     build_tx(tx, &wallet.transparent_signing_set(), &[], None)
 }
 
-/// Sync the user with the node
 pub fn sync(conn: &mut SqliteConnection, wallet: &mut User, rpc: &mut dyn RpcClient) {
     let current_height = match wallet.last_block_height() {
         None => 0,
@@ -188,51 +183,46 @@ pub fn sync_from_height(
         }
     };
 
-    // Read the chain tip once and bound the loop. Any RPC error inside the
-    // loop is now a real error rather than a "synced to tip" signal — fixes
-    // the previous behaviour where a transient network blip silently left the
-    // wallet at a stale height.
-    let target = rpc
-        .get_target_height()
-        .expect("failed to get target height");
-    let chain_tip = u32::from(target).saturating_sub(1);
+    // Catch up in passes: read the chain tip, drain start_height..=tip, then
+    // re-read the tip in case the chain advanced during the pass. Loop exits
+    // when no new blocks appeared in the last pass.
+    let mut next_height = start_height;
+    loop {
+        let target = rpc
+            .get_target_height()
+            .expect("failed to get target height");
+        let chain_tip = u32::from(target).saturating_sub(1);
 
-    if start_height > chain_tip {
-        info!("Already at chain tip {}; nothing to sync", chain_tip);
-        return;
-    }
+        if next_height > chain_tip {
+            info!("Synced up to height {}", chain_tip);
+            return;
+        }
 
-    for next_height in start_height..=chain_tip {
-        let block = rpc
-            .get_block(next_height)
-            .unwrap_or_else(|e| panic!("RPC error fetching block {}: {}", next_height, e));
-
-        info!(
-            "Adding transactions from block {} at height {}",
-            block.hash, block.height
-        );
-
-        let transactions = block
-            .tx_ids
-            .iter()
-            .map(|tx_id| {
-                rpc.get_transaction(tx_id).unwrap_or_else(|e| {
-                    panic!(
-                        "RPC error fetching tx {} in block {}: {}",
-                        tx_id, next_height, e
-                    )
+        for h in next_height..=chain_tip {
+            let block = rpc
+                .get_block(h)
+                .unwrap_or_else(|e| panic!("RPC error fetching block {}: {}", h, e));
+            info!(
+                "Adding transactions from block {} at height {}",
+                block.hash, block.height
+            );
+            let transactions = block
+                .tx_ids
+                .iter()
+                .map(|tx_id| {
+                    rpc.get_transaction(tx_id).unwrap_or_else(|e| {
+                        panic!("RPC error fetching tx {} in block {}: {}", tx_id, h, e)
+                    })
                 })
-            })
-            .collect();
-
-        wallet
-            .process_block(conn, block.height, block.hash, transactions)
-            .expect("process_block");
+                .collect();
+            wallet
+                .process_block(conn, block.height, block.hash, transactions)
+                .expect("process_block");
+        }
+        next_height = chain_tip + 1;
     }
-    info!("Synced up to height {}", chain_tip);
 }
 
-/// Check whether the stored hash at `height` matches the live chain.
 fn head_matches_chain(conn: &mut SqliteConnection, height: u32, rpc: &mut dyn RpcClient) -> bool {
     let Some(stored_hash) = block_data::get_hash(conn, height) else {
         return false;
@@ -265,7 +255,6 @@ fn wallet_head_matches_block_data(conn: &mut SqliteConnection, wallet: &User) ->
         .unwrap_or(false)
 }
 
-/// Create a transfer transaction
 pub fn create_transfer_transaction(
     conn: &mut SqliteConnection,
     sender: Address,
@@ -279,7 +268,6 @@ pub fn create_transfer_transaction(
 
     let ovk = wallet.orchard_ovk();
 
-    // Add inputs
     let inputs = wallet.select_spendable_notes(conn, sender, amount, asset);
     let total_inputs_amount = inputs
         .iter()
@@ -304,7 +292,6 @@ pub fn create_transfer_transaction(
         })
         .collect();
 
-    // Add main transfer output
     tx.add_orchard_output::<FeeError>(
         Some(ovk.clone()),
         recipient,
@@ -314,9 +301,7 @@ pub fn create_transfer_transaction(
     )
     .unwrap();
 
-    // Add change output
     let change_amount = total_inputs_amount - amount;
-
     if change_amount != 0 {
         tx.add_orchard_output::<FeeError>(
             Some(ovk),
@@ -336,7 +321,6 @@ pub fn create_transfer_transaction(
     )
 }
 
-/// Create a burn transaction
 pub fn create_burn_transaction(
     conn: &mut SqliteConnection,
     arsonist: Address,
@@ -347,7 +331,6 @@ pub fn create_burn_transaction(
 ) -> Transaction {
     info!("Burn {} units", amount);
 
-    // Add inputs
     let inputs = wallet.select_spendable_notes(conn, arsonist, amount, asset);
     let total_inputs_amount = inputs
         .iter()
@@ -372,10 +355,8 @@ pub fn create_burn_transaction(
         })
         .collect();
 
-    // Add main transfer output
     tx.add_burn::<FeeError>(amount, asset).unwrap();
 
-    // Add change output if needed
     let change_amount = total_inputs_amount - amount;
     if change_amount != 0 {
         let ovk = wallet.orchard_ovk();
@@ -397,7 +378,6 @@ pub fn create_burn_transaction(
     )
 }
 
-/// Create a transaction that issues a new asset
 pub fn create_issue_transaction(
     recipient: Address,
     amount: u64,
@@ -452,7 +432,6 @@ pub fn create_issue_transaction(
     )
 }
 
-/// Create a transaction that issues a new asset
 pub fn create_finalization_transaction(
     asset_desc_hash: [u8; 32],
     rpc_client: &dyn RpcClient,
@@ -487,7 +466,6 @@ pub fn create_finalization_transaction(
     build_tx(tx, &wallet.transparent_signing_set(), &[], Some(asset))
 }
 
-/// Convert a block template and a list of transactions into a block proposal
 pub fn template_into_proposal(
     block_template: BlockTemplate,
     mut txs: Vec<Transaction>,
