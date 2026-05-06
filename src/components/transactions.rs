@@ -37,7 +37,7 @@ pub fn mine(
     rpc_client: &mut dyn RpcClient,
     txs: Vec<Transaction>,
 ) -> Result<(), Box<dyn Error>> {
-    let activate = wallet.last_block_height().map(u32::from).unwrap_or(0) == 0;
+    let activate = wallet.last_block_height().is_none();
     mine_block(rpc_client, txs, activate)?;
     sync(conn, wallet, rpc_client);
     Ok(())
