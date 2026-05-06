@@ -5,7 +5,7 @@ use diesel::SqliteConnection;
 use crate::components::block_commitment::{
     block_commitment_from_parts, AuthDataRoot, TxMerkleRoot, AUTH_COMMITMENT_PLACEHOLDER,
 };
-use crate::prelude::{debug, info};
+use crate::prelude::info;
 use orchard::issuance::{IssueInfo, auth::IssueValidatingKey};
 use orchard::note::{AssetId, AssetBase};
 use orchard::value::NoteValue;
@@ -188,38 +188,48 @@ pub fn sync_from_height(
         }
     };
 
-    let mut next_height = start_height;
+    // Read the chain tip once and bound the loop. Any RPC error inside the
+    // loop is now a real error rather than a "synced to tip" signal — fixes
+    // the previous behaviour where a transient network blip silently left the
+    // wallet at a stale height.
+    let target = rpc
+        .get_target_height()
+        .expect("failed to get target height");
+    let chain_tip = u32::from(target).saturating_sub(1);
 
-    loop {
-        match rpc.get_block(next_height) {
-            Ok(block) => {
-                info!(
-                    "Adding transactions from block {} at height {}",
-                    block.hash, block.height
-                );
-
-                let transactions = block
-                    .tx_ids
-                    .iter()
-                    .map(|tx_id| rpc.get_transaction(tx_id).unwrap())
-                    .collect();
-
-                wallet
-                    .process_block(conn, block.height, block.hash, transactions)
-                    .expect("process_block");
-                next_height += 1;
-            }
-            Err(err) => {
-                info!(
-                    "No block at height {}. Synced up to height {}",
-                    next_height,
-                    next_height - 1
-                );
-                debug!("rpc.get_block err: {:?}", err);
-                return;
-            }
-        }
+    if start_height > chain_tip {
+        info!("Already at chain tip {}; nothing to sync", chain_tip);
+        return;
     }
+
+    for next_height in start_height..=chain_tip {
+        let block = rpc
+            .get_block(next_height)
+            .unwrap_or_else(|e| panic!("RPC error fetching block {}: {}", next_height, e));
+
+        info!(
+            "Adding transactions from block {} at height {}",
+            block.hash, block.height
+        );
+
+        let transactions = block
+            .tx_ids
+            .iter()
+            .map(|tx_id| {
+                rpc.get_transaction(tx_id).unwrap_or_else(|e| {
+                    panic!(
+                        "RPC error fetching tx {} in block {}: {}",
+                        tx_id, next_height, e
+                    )
+                })
+            })
+            .collect();
+
+        wallet
+            .process_block(conn, block.height, block.hash, transactions)
+            .expect("process_block");
+    }
+    info!("Synced up to height {}", chain_tip);
 }
 
 /// Check whether the stored hash at `height` matches the live chain.
