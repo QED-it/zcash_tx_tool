@@ -140,7 +140,10 @@ pub fn sync_from_height(
             Some(wallet_head) if wallet_head_matches_block_data(conn, wallet) => {
                 let resume = u32::from(wallet_head) + 1;
                 info!("Stored head {} valid, resuming from {}", head, resume);
-                resume.max(from_height)
+                // Honour the resume position; `from_height` is only an
+                // activation hint for cold syncs and would create a gap if
+                // it ever exceeded `wallet_head + 1`.
+                resume
             }
             Some(wallet_head) => {
                 info!(

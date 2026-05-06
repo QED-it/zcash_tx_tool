@@ -33,7 +33,12 @@ impl Runnable for TestOrchardZSACmd {
         let config = APP.config();
         let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = User::random(&config.wallet.miner_seed_phrase, None);
+        // Stable wallet identity so tree state and notes persist across runs.
+        let mut wallet = User::new(
+            &mut c,
+            &config.wallet.seed_phrase,
+            &config.wallet.miner_seed_phrase,
+        );
 
         let num_users = 2;
 
@@ -42,7 +47,16 @@ impl Runnable for TestOrchardZSACmd {
 
         let issuer_addr = wallet.address_for_account(issuer_idx, External);
 
-        let asset_desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(b"WETH").unwrap());
+        // Asset desc varies per run so the lifecycle is fresh on each invocation, even when
+        // the wallet (and chain) carry forward from a previous run.
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let asset_desc = format!("WETH-{}", timestamp);
+        let asset_desc_hash =
+            compute_asset_desc_hash(&NonEmpty::from_slice(asset_desc.as_bytes()).unwrap());
+
         sync_from_height(
             &mut c,
             config.chain.nu7_activation_height,
