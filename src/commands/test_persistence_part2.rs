@@ -29,8 +29,9 @@ impl Runnable for TestPersistencePart2Cmd {
         let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
 
-        // Same fixed seed as part 1; do NOT call wallet.reset() — we want the
-        // persisted commitment tree, last_block_*, and notes restored from disk.
+        // Same fixed seed as part 1. User::new auto-loads the persisted
+        // wallet_state row (the issued PERSIST asset's note position lives
+        // there) so that the transfer below can witness it.
         let mut wallet = User::new(
             &mut c,
             &config.wallet.seed_phrase,

@@ -32,9 +32,8 @@ impl Runnable for TestThreePartyCmd {
         let config = APP.config();
         let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = User::random(&mut c, &config.wallet.miner_seed_phrase, None);
+        let mut wallet = User::random(&config.wallet.miner_seed_phrase, None);
 
-        wallet.reset(&mut c);
         sync_from_height(
             &mut c,
             config.chain.nu7_activation_height,

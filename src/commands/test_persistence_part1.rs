@@ -27,14 +27,14 @@ impl Runnable for TestPersistencePart1Cmd {
         let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
 
-        // Fixed seed so part 2 can re-derive the same keys.
+        // Fixed seed so part 2 can re-derive the same keys. User::new
+        // auto-loads any persisted wallet_state — for part 1's first run on
+        // a fresh volume there's nothing to load.
         let mut wallet = User::new(
             &mut c,
             &config.wallet.seed_phrase,
             &config.wallet.miner_seed_phrase,
         );
-        // Wipe wallet-local state from any prior run; block_data is preserved.
-        wallet.reset(&mut c);
 
         sync_from_height(
             &mut c,

@@ -166,8 +166,8 @@ pub struct User {
 }
 
 impl User {
-    fn from_seed(conn: &mut SqliteConnection, seed: [u8; 64], miner_seed_phrase: &String) -> Self {
-        let mut user = User {
+    fn from_seed(seed: [u8; 64], miner_seed_phrase: &String) -> Self {
+        User {
             key_store: KeyStore::empty(),
             commitment_tree: BridgeTree::new(MAX_CHECKPOINTS),
             last_block_height: None,
@@ -176,7 +176,19 @@ impl User {
             miner_seed: <Mnemonic>::from_phrase(miner_seed_phrase)
                 .unwrap()
                 .to_seed(""),
-        };
+        }
+    }
+
+    /// Construct a `User` from seed phrases and restore any persisted
+    /// commitment tree / sync position from SQLite. If no `wallet_state` row
+    /// exists, returns a fresh wallet.
+    pub fn new(
+        conn: &mut SqliteConnection,
+        seed_phrase: &String,
+        miner_seed_phrase: &String,
+    ) -> Self {
+        let seed = <Mnemonic>::from_phrase(seed_phrase).unwrap().to_seed("");
+        let mut user = Self::from_seed(seed, miner_seed_phrase);
         if let Err(e) = user.try_load_tree_state(conn) {
             info!("Corrupt tree state, discarding: {}", e);
             if let Err(e) = tree_state::delete_tree_state(conn) {
@@ -186,24 +198,12 @@ impl User {
         user
     }
 
-    pub fn new(
-        conn: &mut SqliteConnection,
-        seed_phrase: &String,
-        miner_seed_phrase: &String,
-    ) -> Self {
-        let seed = <Mnemonic>::from_phrase(seed_phrase).unwrap().to_seed("");
-        Self::from_seed(conn, seed, miner_seed_phrase)
-    }
-
-    /// Create a user with a random or deterministic wallet seed.
-    /// If `random_seed` is provided (e.g. a timestamp), the wallet seed is deterministically
-    /// derived by hashing it, so each test run gets a unique wallet and avoids conflicts
-    /// with cached blocks. If `None`, a fully random seed is used.
-    pub fn random(
-        conn: &mut SqliteConnection,
-        miner_seed_phrase: &String,
-        random_seed: Option<u64>,
-    ) -> Self {
+    /// Create a fresh in-memory `User` with a random or deterministic seed.
+    /// If `random_seed` is provided, the wallet seed is deterministically
+    /// derived from it (so each test run with a unique seed gets a unique
+    /// wallet). If `None`, a fully random seed is used. Does not touch the
+    /// database — random wallets never inherit prior persisted state.
+    pub fn random(miner_seed_phrase: &String, random_seed: Option<u64>) -> Self {
         let seed = match random_seed {
             Some(val) => {
                 use sha2::Digest;
@@ -216,7 +216,7 @@ impl User {
                 buf
             }
         };
-        Self::from_seed(conn, seed, miner_seed_phrase)
+        Self::from_seed(seed, miner_seed_phrase)
     }
 
     /// Attempt to restore the commitment tree and sync position from SQLite.
@@ -243,18 +243,15 @@ impl User {
         Ok(())
     }
 
-    /// Reset wallet-local state for rescan while preserving block hashes.
-    pub fn reset(&mut self, conn: &mut SqliteConnection) {
+    /// Reset all persisted wallet data: in-memory tree, notes, wallet_state row,
+    /// and the block_data hash cache. Used by `clean` and by sync_from_height
+    /// when chain/wallet divergence is detected.
+    pub fn reset_full(&mut self, conn: &mut SqliteConnection) {
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
         self.last_block_hash = None;
         notes_db::delete_all_notes(conn);
         tree_state::delete_tree_state(conn).expect("Failed to delete tree state");
-    }
-
-    /// Reset all persisted wallet data, including the block hash cache.
-    pub fn reset_full(&mut self, conn: &mut SqliteConnection) {
-        self.reset(conn);
         block_data::clear(conn);
     }
 

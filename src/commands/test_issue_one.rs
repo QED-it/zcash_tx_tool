@@ -29,9 +29,8 @@ impl Runnable for TestIssueOneCmd {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let mut wallet = User::random(&mut c, &config.wallet.miner_seed_phrase, Some(timestamp));
+        let mut wallet = User::random(&config.wallet.miner_seed_phrase, Some(timestamp));
 
-        wallet.reset(&mut c);
         let num_users = 1;
         let issuer_idx = 0;
         let issuer_addr = wallet.address_for_account(issuer_idx, External);
