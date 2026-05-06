@@ -66,10 +66,10 @@ impl Default for NetworkConfig {
             .unwrap_or(18232);
         let protocol = env::var("ZCASH_NODE_PROTOCOL").unwrap_or_else(|_| "http".to_string());
 
-        println!(
+        crate::print_info(&format!(
             "Using NetworkConfig: node_address = {} ; node_port = {} ; protocol = {}",
             node_address, node_port, protocol
-        );
+        ));
 
         Self {
             node_address,

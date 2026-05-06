@@ -5,114 +5,79 @@ use diesel::associations::HasTable;
 use diesel::prelude::*;
 use orchard::note::{AssetBase, Nullifier};
 use orchard::Address;
-use std::env;
 use zcash_primitives::transaction::TxId;
 
-pub struct SqliteDataStorage {
-    connection: SqliteConnection,
+/// Free functions taking `&mut SqliteConnection` so callers can wrap them in
+/// a single transaction.
+pub fn find_non_spent_notes(
+    conn: &mut SqliteConnection,
+    recipient: Address,
+    asset_base: AssetBase,
+) -> Vec<NoteData> {
+    notes
+        .filter(
+            spend_tx_id
+                .is_null()
+                .and(recipient_address.eq(recipient.to_raw_address_bytes().to_vec()))
+                .and(asset.eq(asset_base.to_bytes().to_vec())),
+        )
+        .select(NoteData::as_select())
+        .load(conn)
+        .expect("Error loading notes")
 }
 
-impl SqliteDataStorage {
-    pub fn new() -> Self {
-        Self {
-            connection: establish_connection(),
-        }
-    }
+pub fn find_notes_for_tx(conn: &mut SqliteConnection, txid: &TxId) -> Vec<NoteData> {
+    notes
+        .filter(tx_id.eq(txid.as_ref().to_vec()))
+        .select(NoteData::as_select())
+        .load(conn)
+        .expect("Error loading notes")
 }
 
-impl Default for SqliteDataStorage {
-    fn default() -> Self {
-        Self::new()
-    }
+pub fn find_by_nullifier(conn: &mut SqliteConnection, nf: &Nullifier) -> Option<NoteData> {
+    notes
+        .filter(nullifier.eq(nf.to_bytes().to_vec()))
+        .select(NoteData::as_select())
+        .limit(1)
+        .load(conn)
+        .expect("Error loading notes")
+        .pop()
 }
 
-impl SqliteDataStorage {
-    pub fn find_notes(&mut self) -> Vec<NoteData> {
-        notes
-            .select(NoteData::as_select())
-            .load(&mut self.connection)
-            .expect("Error loading notes")
-    }
-
-    pub fn find_non_spent_notes(
-        &mut self,
-        recipient: Address,
-        asset_base: AssetBase,
-    ) -> Vec<NoteData> {
-        notes
-            .filter(
-                spend_tx_id
-                    .is_null()
-                    .and(recipient_address.eq(recipient.to_raw_address_bytes().to_vec()))
-                    .and(asset.eq(asset_base.to_bytes().to_vec())),
-            )
-            .select(NoteData::as_select())
-            .load(&mut self.connection)
-            .expect("Error loading notes")
-    }
-
-    pub fn find_notes_for_tx(&mut self, txid: &TxId) -> Vec<NoteData> {
-        notes
-            .filter(tx_id.eq(txid.as_ref().to_vec()))
-            .select(NoteData::as_select())
-            .load(&mut self.connection)
-            .expect("Error loading notes")
-    }
-
-    pub fn find_by_nullifier(&mut self, nf: &Nullifier) -> Option<NoteData> {
-        notes
-            .filter(nullifier.eq(nf.to_bytes().to_vec()))
-            .select(NoteData::as_select())
-            .limit(1)
-            .load(&mut self.connection)
-            .expect("Error loading notes")
-            .pop()
-    }
-
-    pub fn mark_as_potentially_spent(
-        &mut self,
-        note_id: i32,
-        spend_tx_id_value: &TxId,
-        spend_action_index_value: i32,
-    ) {
-        diesel::update(notes)
-            .filter(id.eq(note_id))
-            .set((
-                spend_tx_id.eq(spend_tx_id_value.as_ref().to_vec()),
-                spend_action_index.eq(spend_action_index_value),
-            ))
-            .execute(&mut self.connection)
-            .unwrap();
-    }
-
-    pub fn update_note_position(&mut self, note_id: i32, position_value: i64) {
-        diesel::update(notes)
-            .filter(id.eq(note_id))
-            .set(position.eq(position_value))
-            .execute(&mut self.connection)
-            .unwrap();
-    }
-
-    pub fn insert_note(&mut self, note: NoteData) -> NoteData {
-        diesel::insert_into(notes::table())
-            .values(&InsertableNoteData::from_note_data(note))
-            .returning(NoteData::as_returning())
-            .get_result(&mut self.connection)
-            .expect("Error saving new note")
-    }
-
-    pub fn delete_all_notes(&mut self) {
-        diesel::delete(notes)
-            .execute(&mut self.connection)
-            .expect("Error deleting notes");
-    }
+pub fn mark_as_potentially_spent(
+    conn: &mut SqliteConnection,
+    note_id: i32,
+    spend_tx_id_value: &TxId,
+    spend_action_index_value: i32,
+) {
+    diesel::update(notes)
+        .filter(id.eq(note_id))
+        .set((
+            spend_tx_id.eq(spend_tx_id_value.as_ref().to_vec()),
+            spend_action_index.eq(spend_action_index_value),
+        ))
+        .execute(conn)
+        .unwrap();
 }
 
-const DEFAULT_DATABASE_URL: &str = "walletdb.sqlite";
+pub fn update_note_position(conn: &mut SqliteConnection, note_id: i32, position_value: i64) {
+    diesel::update(notes)
+        .filter(id.eq(note_id))
+        .set(position.eq(position_value))
+        .execute(conn)
+        .unwrap();
+}
 
-fn establish_connection() -> SqliteConnection {
-    let database_url =
-        env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string());
-    SqliteConnection::establish(&database_url)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
+pub fn insert_note(conn: &mut SqliteConnection, note: NoteData) -> NoteData {
+    diesel::insert_into(notes::table())
+        .values(&InsertableNoteData::from_note_data(note))
+        .returning(NoteData::as_returning())
+        .get_result(conn)
+        .expect("Error saving new note")
+}
+
+pub fn delete_all_notes(conn: &mut SqliteConnection) {
+    diesel::delete(notes)
+        .execute(conn)
+        .expect("Error deleting notes");
 }
