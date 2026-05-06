@@ -118,7 +118,7 @@ jobs:
             -e ZCASH_NODE_ADDRESS=zebra-node \
             -e ZCASH_NODE_PORT=18232 \
             -e ZCASH_NODE_PROTOCOL=http \
-            -v wallet-data:/app \
+            -v wallet-data:/data \
             --name zcash-tx-tool \
             zcash-tx-tool:local test-orchard-zsa
           
@@ -143,7 +143,7 @@ jobs:
             -e ZCASH_NODE_ADDRESS=zebra-node \
             -e ZCASH_NODE_PORT=18232 \
             -e ZCASH_NODE_PROTOCOL=http \
-            -v wallet-data:/app \
+            -v wallet-data:/data \
             zcash-tx-tool:local test-persistence-part1
           echo "test-persistence-part1 completed successfully!"
     
@@ -156,12 +156,12 @@ jobs:
             -e ZCASH_NODE_ADDRESS=zebra-node \
             -e ZCASH_NODE_PORT=18232 \
             -e ZCASH_NODE_PROTOCOL=http \
-            -v wallet-data:/app \
+            -v wallet-data:/data \
             zcash-tx-tool:local test-persistence-part2
           echo "test-persistence-part2 completed successfully!"
 
           # 3-way head agreement: wallet_state, block_data tip, and Zebra agree on the same hash.
-          sql() { docker run --rm -v wallet-data:/app --entrypoint sqlite3 zcash-tx-tool:local /app/walletdb.sqlite "$1"; }
+          sql() { docker run --rm -v wallet-data:/data --entrypoint sqlite3 zcash-tx-tool:local /data/walletdb.sqlite "$1"; }
           ZEBRA_TIP_HASH=$(curl -sS -H 'content-type: text/plain;' \
             --data-binary '{"jsonrpc":"1.0","id":"ci","method":"getbestblockhash","params":[]}' \
             "$ZEBRA_RPC_URL" | jq -r '.result // empty')
@@ -176,7 +176,7 @@ jobs:
 
       - name: Verify reorg detection wipes block_data and resyncs to chain tip
         run: |
-          sql() { docker run --rm -v wallet-data:/app --entrypoint sqlite3 zcash-tx-tool:local /app/walletdb.sqlite "$1"; }
+          sql() { docker run --rm -v wallet-data:/data --entrypoint sqlite3 zcash-tx-tool:local /data/walletdb.sqlite "$1"; }
 
           # Simulate a chain fork by corrupting the stored hash at the head.
           # Next sync's head_matches_chain() must detect mismatch and call reset_full().
@@ -186,7 +186,7 @@ jobs:
           # Any sync-triggering command exercises the check; test-issue-one is the cheapest.
           docker run --rm --network zcash-net \
             -e ZCASH_NODE_ADDRESS=zebra-node -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http \
-            -v wallet-data:/app \
+            -v wallet-data:/data \
             zcash-tx-tool:local test-issue-one
 
           # After reset_full + resync, two cross-checks against Zebra:

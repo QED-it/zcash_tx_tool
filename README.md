@@ -260,20 +260,22 @@ There are currently (January 2026) ~3.2M blocks on Zcash mainnet. Approximate to
 
 ### Docker Volume Mount for Block Data Persistence
 
-When running the tx-tool in Docker, you **must** use the `-v` flag to mount a volume for block data persistence. The Docker volume mount cannot be configured from inside the Dockerfile — the host running the command needs to specify it explicitly.
+The container's runtime working directory is `/data` (a directory dedicated to runtime state, separate from the build tree at `/app`). To preserve the SQLite database across container runs, mount a named volume there:
 
 ```bash
 docker run --network zcash-net \
   -e ZCASH_NODE_ADDRESS=zebra-node \
   -e ZCASH_NODE_PORT=18232 \
   -e ZCASH_NODE_PROTOCOL=http \
-  -v wallet-data:/app \
+  -v wallet-data:/data \
   zcash-tx-tool:local test-orchard-zsa
 ```
 
-The `-v wallet-data:/app` flag creates a named Docker volume (`wallet-data`) and mounts it at `/app` inside the container. This is where the tx-tool stores its block data (SQLite database and related files).
+The `-v wallet-data:/data` flag creates a named Docker volume (`wallet-data`) and mounts it at `/data`. The tx-tool writes `walletdb.sqlite` (and any other runtime files) there.
 
-**Without `-v wallet-data:/app`**, Docker will start the container with an empty directory at `/app`. The tx-tool will still run, but all block data will be ephemeral and lost when the container exits, so subsequent runs won't benefit from the cached block data.
+**Without `-v wallet-data:/data`**, the database is written into a writable layer that's discarded when the container is removed — block data and wallet state will not survive between runs.
+
+The mount targets `/data`, not `/app`, deliberately: mounting at `/app` would shadow the binary and source tree on subsequent runs, causing the container to execute a stale binary after image rebuilds.
 
 ## Connecting to the Public ZSA Testnet
 
