@@ -1,0 +1,70 @@
+# Validates that the production Dockerfile still builds and the resulting
+# image is runnable. Triggered only when the docker artifact could plausibly
+# have changed — keeps the slow ~700 MB params download off every PR.
+#
+# The smoke test invokes the entrypoint with --help and checks that the
+# binary printed something meaningful (the subcommand list). That catches:
+#   - Dockerfile syntax / install errors
+#   - missing or wrong-path ENTRYPOINT
+#   - the binary failing to start (linker errors, missing libs, etc.)
+
+name: Docker image build & smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - zcutil/fetch-params.sh
+      - .github/workflows/docker-build.yaml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Free disk space (safe cleanup for Rust CI)
+        run: |
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/hostedtoolcache || true
+          df -h
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build tx-tool image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          tags: zcash-tx-tool:local
+          push: false
+          load: true
+          cache-from: type=gha,scope=tx-tool
+          cache-to: type=gha,mode=max,scope=tx-tool
+
+      - name: Smoke test (image runs, --help lists subcommands)
+        run: |
+          echo "=== docker run --rm zcash-tx-tool:local --help ==="
+          docker run --rm zcash-tx-tool:local --help | tee help.txt
+
+          # The image must invoke the binary cleanly and produce help output
+          # that includes our subcommands. If any of these fail, the image
+          # is broken in a way that wouldn't be caught at build time.
+          grep -q "test-orchard-zsa" help.txt
+          grep -q "test-three-party" help.txt
+          echo "Smoke test passed: image runs and prints expected subcommand list"
