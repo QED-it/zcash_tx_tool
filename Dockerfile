@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 # Match the channel pinned in rust-toolchain.toml so rustup has nothing to install at build time.
 FROM rust:1.86.0
 
@@ -11,8 +10,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# diesel_cli — independent of project source. Populates /usr/local/cargo/registry
-# as part of this layer so later cargo invocations can reuse the index.
+# diesel_cli — independent of project source.
 RUN cargo install diesel_cli@2.1.1 --no-default-features --features sqlite --locked
 
 # go-ipfs — needed by fetch-params.sh
@@ -23,26 +21,16 @@ RUN wget -q https://dist.ipfs.io/go-ipfs/v0.9.1/go-ipfs_v0.9.1_linux-amd64.tar.g
     cd .. && \
     rm -rf go-ipfs go-ipfs_v0.9.1_linux-amd64.tar.gz
 
-# Zcash params (~700 MB). Layer cached unless fetch-params.sh changes.
+# Zcash params (~700 MB). Copy just fetch-params.sh first so this layer stays
+# cached across source-only changes.
 COPY zcutil/fetch-params.sh /app/zcutil/fetch-params.sh
 RUN chmod +x /app/zcutil/fetch-params.sh && /app/zcutil/fetch-params.sh
 RUN mkdir -p /root/.local/share/ZcashParams
 
-# --- Dependencies layer (deps-stub trick) ---
-# Compile every dependency against stubbed source so the resulting target/ is
-# baked into a Docker layer. Layer cache key = manifests + build.rs only, so
-# source-only PRs reuse this layer entirely. When Cargo.lock changes, this
-# layer rebuilds (correct behavior).
-COPY Cargo.toml Cargo.lock rust-toolchain.toml build.rs ./
-RUN mkdir -p src/bin/zcash_tx_tool && \
-    echo 'fn main() {}' > src/bin/zcash_tx_tool/main.rs && \
-    echo '' > src/lib.rs && \
-    cargo build --release --locked
-
-# --- Real build ---
-# COPY overwrites the stubs with real source; cargo recompiles only the user
-# crate(s), reusing compiled deps from target/ in the cached layer above.
+# Project source
 COPY . .
+
+# Build
 RUN cargo build --release && \
     cp target/release/zcash_tx_tool /app/zcash_tx_tool
 
