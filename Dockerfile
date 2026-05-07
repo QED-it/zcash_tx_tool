@@ -13,8 +13,8 @@ WORKDIR /app
 
 # diesel_cli — independent of project source. Cargo registry/git mounts persist the
 # crate index and downloaded sources across CI builds.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
+RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     cargo install diesel_cli@2.1.1 --no-default-features --features sqlite --locked
 
 # go-ipfs — needed by fetch-params.sh; layer cached unless the install steps change.
@@ -39,9 +39,9 @@ COPY . .
 # across CI runs, so source-only changes recompile only the changed crate(s).
 # The binary is copied out of the cache mount because cache mounts are not part
 # of the resulting image filesystem.
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/app/target,sharing=locked \
+RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=cargo-target,target=/app/target,sharing=locked \
     cargo build --release && \
     cp target/release/zcash_tx_tool /app/zcash_tx_tool
 
