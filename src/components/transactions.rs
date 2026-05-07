@@ -37,8 +37,7 @@ pub fn mine(
     rpc_client: &mut dyn RpcClient,
     txs: Vec<Transaction>,
 ) -> Result<(), Box<dyn Error>> {
-    let activate = wallet.last_block_height().is_none();
-    mine_block(rpc_client, txs, activate)?;
+    mine_block(rpc_client, txs)?;
     sync(conn, wallet, rpc_client);
     Ok(())
 }
@@ -46,12 +45,11 @@ pub fn mine(
 pub fn mine_block(
     rpc_client: &mut dyn RpcClient,
     txs: Vec<Transaction>,
-    activate: bool,
 ) -> Result<(u32, TxId), Box<dyn Error>> {
     let block_template = rpc_client.get_block_template()?;
     let block_height = block_template.height;
 
-    let block_proposal = template_into_proposal(block_template, txs, activate);
+    let block_proposal = template_into_proposal(block_template, txs);
     let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
 
     rpc_client.submit_block(block_proposal)?;
@@ -62,16 +60,15 @@ pub fn mine_block(
 pub fn mine_empty_blocks(
     num_blocks: u32,
     rpc_client: &mut dyn RpcClient,
-    activate: bool,
 ) -> Result<(u32, TxId), Box<dyn Error>> {
     if num_blocks == 0 {
         panic!("num_blocks must be greater than 0")
     }
 
-    let (block_height, coinbase_txid) = mine_block(rpc_client, vec![], activate)?;
+    let (block_height, coinbase_txid) = mine_block(rpc_client, vec![])?;
 
     for _ in 1..num_blocks {
-        mine_block(rpc_client, vec![], false)?;
+        mine_block(rpc_client, vec![])?;
     }
 
     Ok((block_height, coinbase_txid))
@@ -473,7 +470,6 @@ pub fn create_finalization_transaction(
 pub fn template_into_proposal(
     block_template: BlockTemplate,
     mut txs: Vec<Transaction>,
-    activate: bool,
 ) -> BlockProposal {
     let coinbase = Transaction::read(
         hex::decode(block_template.coinbase_txn.data)
@@ -519,11 +515,7 @@ pub fn template_into_proposal(
             block_template.previous_block_hash,
         )),
         merkle_root,
-        final_sapling_root: if activate {
-            [0; 32]
-        } else {
-            hash_block_commitments
-        },
+        final_sapling_root: hash_block_commitments,
         time: block_template.cur_time,
         bits: u32::from_str_radix(block_template.bits.as_str(), 16).unwrap(),
         nonce: [2; 32],                 // Currently PoW is switched off in Zebra
