@@ -1,21 +1,34 @@
 # CI Workflow to test tx-tool against a locally built Zebra node.
-# This workflow clones the zebra repo at a specific branch, builds the Zebra Docker image, and tests tx-tool against it.
+# This workflow clones the zebra repo at a specific commit, builds the Zebra Docker image, and tests tx-tool against it.
 # The workflow ensures tx-tool works correctly by spinning up a Zebra container
 # and running the tx-tool from the current branch against it in a Docker network.
 # Triggers: push to main, pull requests, and manual runs via workflow_dispatch.
-# Please note that the selected Zebra branch should be a branch containing the testnet-single-node-deploy directory with a "dockerfile" and "regtest-config.toml" file in it.
+# Please note that the selected Zebra commit should be a commit containing the testnet-single-node-deploy directory with a "dockerfile" and "regtest-config.toml" file in it.
 
 name: Check tx-tool against Zebra
 
 on:
   push:
-    branches: [ main ]
   pull_request:
   workflow_dispatch:
 
+# Within a single event type, cancel older in-progress runs for the same branch
+# (e.g. successive pushes). event_name is part of the group so push runs aren't
+# cancelled by pull_request runs (which are skipped via the job's `if` anyway).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
+    # For a same-repo push, both `push` and `pull_request` events fire for the
+    # same commit. Skip the `pull_request` run in that case (the `push` covers it).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
+    env:
+      # The Zebra commit we test against. Update this to bump the pinned Zebra version.
+      # Latest from branch: https://github.com/QED-it/zebra/tree/zsa-swap-multiple-ag
+      ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || '0aef55cea41b83f17610e6ea708e59995f9e739f' }}
 
     steps:
       - name: Free disk space (safe cleanup for Rust CI)
@@ -26,39 +39,49 @@ jobs:
           df -h
 
       - name: Checkout tx-tool code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           path: tx-tool
 
       - name: Checkout Zebra code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           repository: QED-it/zebra
-          ref: ${{ 'zsa-swap-multiple-ag' }} # The branch in Zebra we want to test against
+          ref: ${{ env.ZEBRA_COMMIT }}
           path: zebra
+
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Set up Docker cache
+      # Cache the *built* zebra-node image as a tar, keyed by the Zebra commit.
+      # On hit we skip the docker build entirely; on miss we build and save the
+      # tar so the next run can hit. One key = one cached image; old commits'
+      # caches go stale and are evicted by GitHub's normal LRU policy.
+      - name: Cache Zebra docker image
+        id: zebra-image-cache
         uses: actions/cache@v3
         with:
-          path: /tmp/.buildx-cache
-          key: zebra-cache-${{ runner.os }}-${{ hashFiles('zebra/testnet-single-node-deploy/dockerfile') }}
-          restore-keys: |
-            zebra-cache-${{ runner.os }}-
-            zebra-cache-
+          path: /tmp/zebra-node.tar
+          key: zebra-image-${{ env.ZEBRA_COMMIT }}
+
+      - name: Load cached Zebra image
+        if: steps.zebra-image-cache.outputs.cache-hit == 'true'
+        run: docker load -i /tmp/zebra-node.tar
 
       - name: Build Zebra Node
-        uses: docker/build-push-action@v4
+        if: steps.zebra-image-cache.outputs.cache-hit != 'true'
+        uses: docker/build-push-action@v7
         with:
           context: zebra
           file: zebra/testnet-single-node-deploy/dockerfile
           tags: zebra-node:local
           push: false
           load: true
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+
+      - name: Save Zebra image for cache
+        if: steps.zebra-image-cache.outputs.cache-hit != 'true'
+        run: docker save zebra-node:local -o /tmp/zebra-node.tar
 
       - name: Run Zebra Node container
         run: |
@@ -69,7 +92,7 @@ jobs:
           echo "Finished waiting for Zebra node..."
 
       - name: Build tx-tool
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v7
         with:
           context: tx-tool
           file: tx-tool/Dockerfile
@@ -81,10 +104,10 @@ jobs:
         run: |
           # Create a network to connect the containers
           docker network create zcash-net
-          
+
           # Connect zebra-node to the network
           docker network connect zcash-net zebra-node
-          
+
           # Run the tx tool and capture exit code
           docker run --network zcash-net \
             -e ZCASH_NODE_ADDRESS=zebra-node \
@@ -92,24 +115,23 @@ jobs:
             -e ZCASH_NODE_PROTOCOL=http \
             --name zcash-tx-tool \
             zcash-tx-tool:local test-orchard-zsa
-          
+
           # Get the exit code from the container
           EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
-          
+
           # Clean up
           docker rm zcash-tx-tool
-          
+
           # Check if the tx_tool succeeded
           if [ $EXIT_CODE -eq 0 ]; then
             echo "tx-tool completed successfully!"
-            exit 0
           else
             echo "tx-tool failed with exit code $EXIT_CODE"
             exit 1
           fi
-    
+
       - name: Run tx-tool again for test-three-party and verify success
-        run: |                
+        run: |
           # Run the tx tool and capture exit code
           docker run --network zcash-net \
             -e ZCASH_NODE_ADDRESS=zebra-node \
@@ -117,16 +139,16 @@ jobs:
             -e ZCASH_NODE_PROTOCOL=http \
             --name zcash-tx-tool \
             zcash-tx-tool:local test-three-party
-          
+
           # Get the exit code from the container
           EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
-          
+
           # Clean up
           docker rm zcash-tx-tool
-          
+
           # Check if the tx_tool succeeded
           if [ $EXIT_CODE -eq 0 ]; then
-            echo "tx-tool completed successfully!"        
+            echo "tx-tool completed successfully!"
             exit 0
           else
             echo "tx-tool failed with exit code $EXIT_CODE"
