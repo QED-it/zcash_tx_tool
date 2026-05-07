@@ -30,7 +30,7 @@ use zcash_primitives::transaction::components::issuance::write_note;
 use zcash_primitives::transaction::{OrchardBundle, Transaction, TxId};
 use bip0039::Mnemonic;
 use orchard::primitives::OrchardPrimitives;
-use zcash_primitives::zip32::AccountId;
+use zip32::AccountId;
 use zcash_protocol::constants;
 use zcash_protocol::value::ZatBalance;
 
