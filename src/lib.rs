@@ -1,6 +1,8 @@
 //! Zcash Tx Tool
 //!
-//! Application based on the [Abscissa] framework.
+//! Testing utility for Zcash Shielded Assets (ZSA): builds and submits
+//! transactions against a Zebra node. Application based on the [Abscissa]
+//! framework.
 //!
 //! [Abscissa]: https://github.com/iqlusioninc/abscissa
 
