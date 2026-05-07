@@ -2,7 +2,7 @@
 # Match the channel pinned in rust-toolchain.toml so rustup has nothing to install at build time.
 FROM rust:1.86.0
 
-# System dependencies (cached unless this RUN changes)
+# System dependencies
 RUN apt-get update && apt-get install -y \
     sqlite3 \
     libsqlite3-dev \
@@ -11,13 +11,11 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# diesel_cli — independent of project source. Cargo registry/git mounts persist the
-# crate index and downloaded sources across CI builds.
-RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
-    cargo install diesel_cli@2.1.1 --no-default-features --features sqlite --locked
+# diesel_cli — independent of project source. Populates /usr/local/cargo/registry
+# as part of this layer so later cargo invocations can reuse the index.
+RUN cargo install diesel_cli@2.1.1 --no-default-features --features sqlite --locked
 
-# go-ipfs — needed by fetch-params.sh; layer cached unless the install steps change.
+# go-ipfs — needed by fetch-params.sh
 RUN wget -q https://dist.ipfs.io/go-ipfs/v0.9.1/go-ipfs_v0.9.1_linux-amd64.tar.gz && \
     tar -xzf go-ipfs_v0.9.1_linux-amd64.tar.gz && \
     cd go-ipfs && \
@@ -25,24 +23,27 @@ RUN wget -q https://dist.ipfs.io/go-ipfs/v0.9.1/go-ipfs_v0.9.1_linux-amd64.tar.g
     cd .. && \
     rm -rf go-ipfs go-ipfs_v0.9.1_linux-amd64.tar.gz
 
-# Zcash params (~700 MB). Copying just fetch-params.sh first means the layer is
-# cached across source-only changes and only invalidates if the script itself changes.
+# Zcash params (~700 MB). Layer cached unless fetch-params.sh changes.
 COPY zcutil/fetch-params.sh /app/zcutil/fetch-params.sh
 RUN chmod +x /app/zcutil/fetch-params.sh && /app/zcutil/fetch-params.sh
 RUN mkdir -p /root/.local/share/ZcashParams
 
-# Project source. Everything below this layer rebuilds when any tracked file changes,
-# but cargo's incremental build (via the /app/target cache mount) keeps it fast.
-COPY . .
+# --- Dependencies layer (deps-stub trick) ---
+# Compile every dependency against stubbed source so the resulting target/ is
+# baked into a Docker layer. Layer cache key = manifests + build.rs only, so
+# source-only PRs reuse this layer entirely. When Cargo.lock changes, this
+# layer rebuilds (correct behavior).
+COPY Cargo.toml Cargo.lock rust-toolchain.toml build.rs ./
+RUN mkdir -p src/bin/zcash_tx_tool && \
+    echo 'fn main() {}' > src/bin/zcash_tx_tool/main.rs && \
+    echo '' > src/lib.rs && \
+    cargo build --release --locked
 
-# Release build. The /app/target cache mount preserves cargo's incremental state
-# across CI runs, so source-only changes recompile only the changed crate(s).
-# The binary is copied out of the cache mount because cache mounts are not part
-# of the resulting image filesystem.
-RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
-    --mount=type=cache,id=cargo-target,target=/app/target,sharing=locked \
-    cargo build --release && \
+# --- Real build ---
+# COPY overwrites the stubs with real source; cargo recompiles only the user
+# crate(s), reusing compiled deps from target/ in the cached layer above.
+COPY . .
+RUN cargo build --release && \
     cp target/release/zcash_tx_tool /app/zcash_tx_tool
 
 # Run migrations (build-time; the runtime app also runs them on /data/walletdb.sqlite)
