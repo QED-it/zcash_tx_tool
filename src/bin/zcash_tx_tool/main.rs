@@ -12,6 +12,5 @@ fn main() {
         option_env!("GIT_TAG").unwrap_or("none")
     ));
     zcash_tx_tool::print_info(&format!("Git commit: {}", env!("GIT_COMMIT")));
-    zcash_tx_tool::print_info(&format!("Dockerfile hash: {}", env!("DOCKERFILE_HASH")));
     abscissa_core::boot(&APP);
 }
