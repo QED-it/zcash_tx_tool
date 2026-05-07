@@ -17,3 +17,12 @@ pub mod error;
 mod model;
 pub mod prelude;
 mod schema;
+
+/// Print an informational message to stdout for human-readable commands.
+/// Suppressed entirely for machine-readable subcommands (e.g. `get-block-data`)
+/// that require clean, noise-free stdout.
+pub fn print_info(msg: &str) {
+    if !std::env::args().any(|a| a == "get-block-data") {
+        println!("{}", msg);
+    }
+}

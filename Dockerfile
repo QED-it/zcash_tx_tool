@@ -1,5 +1,5 @@
-# Use a more recent Rust version
-FROM rust:1.74.0
+# Match the channel pinned in rust-toolchain.toml so rustup has nothing to install at build time.
+FROM rust:1.86.0
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -47,6 +47,13 @@ RUN test -f /app/target/release/zcash_tx_tool
 ENV ZCASH_NODE_ADDRESS=127.0.0.1
 ENV ZCASH_NODE_PORT=18232
 ENV ZCASH_NODE_PROTOCOL=http
+
+# Runtime working directory is separate from the build tree so a volume
+# mount at /data only shadows the SQLite database, not the binary or
+# source. The default DATABASE_URL is the relative `walletdb.sqlite`,
+# which resolves to /data/walletdb.sqlite at runtime.
+RUN mkdir -p /data
+WORKDIR /data
 
 # Set the entrypoint with default scenario as "test-orchard-zsa"
 ENTRYPOINT ["/app/target/release/zcash_tx_tool"]

@@ -16,9 +16,10 @@ use crate::commands::test_balances::{
     check_balances, print_balances, expected_balances_after_burn, expected_balances_after_transfer,
     BurnInfo, TestBalances, TransferInfo, TxiBatch,
 };
+use crate::components::db;
 use crate::components::rpc_client::reqwest::ReqwestRpcClient;
 use crate::components::transactions::{create_issue_transaction, mine, sync_from_height};
-use crate::components::user::User;
+use crate::components::wallet::Wallet;
 use crate::prelude::*;
 
 /// Run the test scenario
@@ -29,11 +30,13 @@ impl Runnable for TestThreePartyCmd {
     /// Run the `test` subcommand.
     fn run(&self) {
         let config = APP.config();
+        let mut c = db::open();
         let mut rpc_client = ReqwestRpcClient::new(config.network.node_url());
-        let mut wallet = User::random(&config.wallet.miner_seed_phrase, None);
+        // Stable wallet identity so tree state and notes persist across runs.
+        let mut wallet = Wallet::new(&mut c, &config.wallet.seed_phrase);
 
-        wallet.reset();
-        prepare_test(
+        sync_from_height(
+            &mut c,
             config.chain.nu7_activation_height,
             &mut wallet,
             &mut rpc_client,
@@ -49,7 +52,11 @@ impl Runnable for TestThreePartyCmd {
 
         // --------------------- Issue asset ---------------------
 
-        let asset_desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(b"MED").unwrap());
+        // Random per-run asset desc so each invocation issues a fresh asset, even
+        // across CLI users sharing a seed against the same testnet.
+        let asset_desc = format!("MED-{:016x}", rand::random::<u64>());
+        let asset_desc_hash =
+            compute_asset_desc_hash(&NonEmpty::from_slice(asset_desc.as_bytes()).unwrap());
 
         let (issue_tx, asset) = create_issue_transaction(
             manufacturer_addr,
@@ -60,13 +67,13 @@ impl Runnable for TestThreePartyCmd {
             &mut wallet,
         );
 
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
+        let balances = TestBalances::get_asset_balances(&mut c, asset, num_users, &mut wallet);
         print_balances("=== Initial balances ===", asset, &balances);
 
-        mine(&mut wallet, &mut rpc_client, Vec::from([issue_tx]))
+        mine(&mut c, &mut wallet, &mut rpc_client, Vec::from([issue_tx]))
             .expect("block mined successfully");
 
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
+        let balances = TestBalances::get_asset_balances(&mut c, asset, num_users, &mut wallet);
         print_balances("=== Balances after issue ===", asset, &balances);
 
         // --------------------- ZSA transfer from manufacturer to purchaser ---------------------
@@ -77,11 +84,11 @@ impl Runnable for TestThreePartyCmd {
 
         let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
-        let txs = txi.to_transactions(&rpc_client, &mut wallet);
+        let txs = txi.to_transactions(&mut c, &rpc_client, &mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
+        mine(&mut c, &mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
-        check_balances(asset, &expected_balances, &mut wallet, num_users);
+        check_balances(&mut c, asset, &expected_balances, &mut wallet, num_users);
 
         print_balances(
             "=== Balances after transfer to purchaser ===",
@@ -91,7 +98,7 @@ impl Runnable for TestThreePartyCmd {
 
         // --------------------- ZSA transfer from purchaser to supplier ---------------------
 
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
+        let balances = TestBalances::get_asset_balances(&mut c, asset, num_users, &mut wallet);
         let amount_to_transfer_2 = 1;
 
         let transfer_info =
@@ -101,11 +108,11 @@ impl Runnable for TestThreePartyCmd {
         // Generate expected balances after transfer
         let expected_balances = expected_balances_after_transfer(&balances, &txi);
 
-        let txs = txi.to_transactions(&rpc_client, &mut wallet);
+        let txs = txi.to_transactions(&mut c, &rpc_client, &mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
+        mine(&mut c, &mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
-        check_balances(asset, &expected_balances, &mut wallet, num_users);
+        check_balances(&mut c, asset, &expected_balances, &mut wallet, num_users);
 
         print_balances(
             "=== Balances after transfer to supplier ===",
@@ -115,7 +122,7 @@ impl Runnable for TestThreePartyCmd {
 
         // --------------------- Supplier burning asset ---------------------
 
-        let balances = TestBalances::get_asset_balances(asset, num_users, &mut wallet);
+        let balances = TestBalances::get_asset_balances(&mut c, asset, num_users, &mut wallet);
         let amount_to_burn_supplier = 1;
 
         let txi = TxiBatch::from_item(BurnInfo::new(supplier_idx, asset, amount_to_burn_supplier));
@@ -123,11 +130,11 @@ impl Runnable for TestThreePartyCmd {
         // Generate expected balances after burn
         let expected_balances = expected_balances_after_burn(&balances, &txi);
 
-        let txs = txi.to_transactions(&rpc_client, &mut wallet);
+        let txs = txi.to_transactions(&mut c, &rpc_client, &mut wallet);
 
-        mine(&mut wallet, &mut rpc_client, txs).expect("block mined successfully");
+        mine(&mut c, &mut wallet, &mut rpc_client, txs).expect("block mined successfully");
 
-        check_balances(asset, &expected_balances, &mut wallet, num_users);
+        check_balances(&mut c, asset, &expected_balances, &mut wallet, num_users);
 
         print_balances(
             "=== Balances after burning by supplier ===",
@@ -135,8 +142,4 @@ impl Runnable for TestThreePartyCmd {
             &expected_balances,
         );
     }
-}
-
-fn prepare_test(target_height: u32, wallet: &mut User, rpc_client: &mut ReqwestRpcClient) {
-    sync_from_height(target_height, wallet, rpc_client);
 }

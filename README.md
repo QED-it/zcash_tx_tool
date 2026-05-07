@@ -22,6 +22,9 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
     - [Orchard-ZSA Two Party Scenario](#orchard-zsa-two-party-scenario)
     - [Orchard-ZSA Three Party Scenario](#orchard-zsa-three-party-scenario)
     - [Creating your own scenario](#creating-your-own-scenario)
+- [Block Data Storage](#block-data-storage)
+- [Block Data Storage Considerations](#block-data-storage-considerations)
+    - [Docker Volume Mount for Block Data Persistence](#docker-volume-mount-for-block-data-persistence)
 - [Connecting to the Public ZSA Testnet](#connecting-to-the-public-zsa-testnet)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
@@ -219,6 +222,60 @@ You should then be able to run your scenario via (assuming `test-scenario` is th
 ```bash
 cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-scenario
 ```
+
+## Block Data Storage
+
+The `tx-tool` records block hashes locally so later runs can validate the stored chain head and detect chain reorganizations.
+
+The block data storage stores:
+- **Block hashes**: For chain validation and reorg detection
+- **Wallet tree state**: The note commitment tree and last synced block
+
+On subsequent runs, the tool:
+1. Validates the stored chain matches the node's chain
+2. Resumes sync from the persisted wallet head when wallet state is consistent with `block_data`
+3. Uses preserved block hashes to validate rescans after `reset()`
+4. On any chain reorganization (or wallet/block-data inconsistency), wipes all persisted state (`block_data`, `wallet_state`, notes, commitment tree) and resyncs from scratch — there is no per-block rollback or partial rewind
+
+**Crash safety**: each block's three on-disk writes — `block_data` insert, per-tx `notes` inserts, and the `wallet_state` (commitment tree) save — are wrapped in a single SQLite transaction inside `User::process_block`. On any error or panic mid-block the transaction rolls back and the in-memory commitment tree is restored from a snapshot taken on entry. Restarting after a crash sees either the pre-block state or the fully-committed post-block state — never a partial mix.
+
+**Note**: Test commands call `reset()`, which clears wallet notes/tree state but preserves `block_data`. Use `clean`/`reset_full()` when you need to clear both wallet state and stored block hashes. For full persistence that skips wallet rescans entirely, run without calling `reset()` so `wallet_state` can be loaded on startup.
+
+## Block Data Storage Considerations
+
+The tx-tool stores two pieces of state on disk:
+
+- **`block_data` table:** one row per synced block (`height` + hex-encoded 32-byte `hash`). Each row is ~100 bytes including SQLite overhead, **independent of the block's transaction size**. Storage scales linearly with block count.
+- **`wallet_state` table:** a single row holding the serialized commitment tree, last synced height, and last synced hash. Size scales with `O(N * log(T / N))`, where `N` is the number of wallet notes and `T` is the total chain commitments.
+
+There are currently (January 2026) ~3.2M blocks on Zcash mainnet. Approximate totals at that scale:
+
+- **`block_data`:** ~100 bytes per block × 3.2M ≈ **~300 MB** on mainnet (< 1 MB on regtest / ZSA testnet).
+- **`wallet_state`:** ~2 MB for 1K notes / 5M commitments on mainnet (a few KB on regtest / ZSA testnet).
+
+**Notes:**
+- `block_data` storage is bounded by block count, not block size, so heavy mainnet blocks don't make it any larger.
+- `wallet_state` is rewritten in-place on each sync step, so it does not grow with sync time, only with wallet activity.
+- Disk usage grows over time on mainnet unless old `block_data` rows are pruned (not implemented yet).
+
+### Docker Volume Mount for Block Data Persistence
+
+The container's runtime working directory is `/data` (a directory dedicated to runtime state, separate from the build tree at `/app`). To preserve the SQLite database across container runs, mount a named volume there:
+
+```bash
+docker run --network zcash-net \
+  -e ZCASH_NODE_ADDRESS=zebra-node \
+  -e ZCASH_NODE_PORT=18232 \
+  -e ZCASH_NODE_PROTOCOL=http \
+  -v wallet-data:/data \
+  zcash-tx-tool:local test-orchard-zsa
+```
+
+The `-v wallet-data:/data` flag creates a named Docker volume (`wallet-data`) and mounts it at `/data`. The tx-tool writes `walletdb.sqlite` (and any other runtime files) there.
+
+**Without `-v wallet-data:/data`**, the database is written into a writable layer that's discarded when the container is removed — block data and wallet state will not survive between runs.
+
+The mount targets `/data`, not `/app`, deliberately: mounting at `/app` would shadow the binary and source tree on subsequent runs, causing the container to execute a stale binary after image rebuilds.
 
 ## Connecting to the Public ZSA Testnet
 
