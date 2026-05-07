@@ -12,7 +12,14 @@ name: Docker image build & smoke test
 
 on:
   push:
-    branches: [main]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - zcutil/fetch-params.sh
+      - .github/workflows/docker-build.yaml
   pull_request:
     paths:
       - Dockerfile
@@ -30,6 +37,10 @@ concurrency:
 
 jobs:
   build:
+    # For a same-repo push, both `push` and `pull_request` events fire for the
+    # same commit. Skip the `pull_request` run in that case (the `push` covers it).
+    # Fork PRs only fire `pull_request` (no push permission), so this branch lets
+    # them run.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
 
