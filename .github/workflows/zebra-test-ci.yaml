@@ -28,7 +28,7 @@ jobs:
     env:
       # The Zebra commit we test against. Update this to bump the pinned Zebra version.
       # Latest from branch: https://github.com/QED-it/zebra/tree/zsa-integration-demo
-      ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || 'e9710632479fd449d00097a4817dc3d93dcdf0fe' }}
+      ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || '2b036fd6d511011e06f632519c7c9d64c2a8ac2d' }}
       # Host-side URL for talking to the Zebra container's JSON-RPC port.
       ZEBRA_RPC_URL: http://127.0.0.1:18232/
 
