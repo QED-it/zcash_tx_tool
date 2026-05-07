@@ -3574,7 +3574,7 @@ dependencies = [
 
 [[package]]
 name = "zcash_tx_tool"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "abscissa_core",
  "bip0039",
