@@ -54,7 +54,7 @@ jobs:
 
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v4
 
       # Cache the *built* zebra-node image as a tar, keyed by the Zebra commit.
       # On hit we skip the docker build entirely; on miss we build and save the
