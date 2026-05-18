@@ -2,11 +2,13 @@
 # image is runnable. Triggered only when the docker artifact could plausibly
 # have changed — keeps the slow ~700 MB params download off every PR.
 #
-# The smoke test invokes the entrypoint with --help and checks that the
-# binary printed something meaningful (the subcommand list). That catches:
+# The smoke test invokes a couple of subcommands with `--help` and checks
+# their exit codes. clap returns non-zero for unknown subcommands, so this
+# catches:
 #   - Dockerfile syntax / install errors
 #   - missing or wrong-path ENTRYPOINT
 #   - the binary failing to start (linker errors, missing libs, etc.)
+#   - a subcommand being renamed or removed
 
 name: Docker image build & smoke test
 
@@ -68,14 +70,12 @@ jobs:
           cache-from: type=gha,scope=tx-tool
           cache-to: type=gha,mode=max,scope=tx-tool
 
-      - name: Smoke test (image runs, --help lists subcommands)
+      - name: Smoke test (image runs, subcommands are registered)
         run: |
-          echo "=== docker run --rm zcash-tx-tool:local --help ==="
-          docker run --rm zcash-tx-tool:local --help | tee help.txt
-
-          # The image must invoke the binary cleanly and produce help output
-          # that includes our subcommands. If any of these fail, the image
-          # is broken in a way that wouldn't be caught at build time.
-          grep -q "test-orchard-zsa" help.txt
-          grep -q "test-three-party" help.txt
-          echo "Smoke test passed: image runs and prints expected subcommand list"
+          # clap exits non-zero if a subcommand is unknown, so `<sub> --help`
+          # asserts both "image starts cleanly" and "this subcommand exists"
+          # without parsing output. Catches Dockerfile/linker errors, a wrong
+          # ENTRYPOINT, and renamed/removed subcommands.
+          docker run --rm zcash-tx-tool:local test-orchard-zsa --help >/dev/null
+          docker run --rm zcash-tx-tool:local test-three-party  --help >/dev/null
+          echo "Smoke test passed: image runs and expected subcommands are registered"
