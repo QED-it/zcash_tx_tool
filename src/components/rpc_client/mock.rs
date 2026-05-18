@@ -8,7 +8,7 @@ use std::error::Error;
 use std::io;
 use std::io::ErrorKind;
 use zcash_primitives::block::BlockHash;
-use zcash_primitives::consensus::{BlockHeight, BranchId};
+use zcash_protocol::consensus::{BlockHeight, BranchId};
 use zcash_primitives::transaction::{Transaction, TxId};
 
 pub struct MockZcashNode {
