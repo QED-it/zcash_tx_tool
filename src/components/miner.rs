@@ -11,7 +11,7 @@ use bip0039::Mnemonic;
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{Secp256k1, SecretKey};
 use sha2::Sha256;
-use zcash_primitives::zip32::AccountId;
+use zip32::AccountId;
 use zcash_protocol::consensus::REGTEST_NETWORK;
 use zcash_transparent::address::TransparentAddress;
 use zcash_transparent::builder::TransparentSigningSet;
