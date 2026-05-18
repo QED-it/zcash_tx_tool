@@ -1,9 +1,10 @@
-# CI Workflow to test tx-tool against a locally built Zebra node.
-# This workflow clones the zebra repo at a specific commit, builds the Zebra Docker image, and tests tx-tool against it.
-# The workflow ensures tx-tool works correctly by spinning up a Zebra container
-# and running the tx-tool from the current branch against it in a Docker network.
-# Triggers: push to main, pull requests, and manual runs via workflow_dispatch.
-# Please note that the selected Zebra commit should be a commit containing the testnet-single-node-deploy directory with a "dockerfile" and "regtest-config.toml" file in it.
+# CI workflow to test tx-tool against a locally built Zebra node.
+# tx-tool is built natively (cargo) with Swatinem/rust-cache for incremental
+# builds; only Zebra runs in Docker. The Dockerfile itself is validated by a
+# separate workflow (.github/workflows/docker-build.yaml).
+# Triggers: push, pull requests, and manual runs via workflow_dispatch.
+# The selected Zebra commit must contain the testnet-single-node-deploy
+# directory with a "dockerfile" and "regtest-config.toml" file.
 
 name: Check tx-tool against Zebra
 
@@ -28,9 +29,16 @@ jobs:
     env:
       # The Zebra commit we test against. Update this to bump the pinned Zebra version.
       # Latest from branch: https://github.com/QED-it/zebra/tree/zsa-integration-demo
-      ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || '63341a59df8b73ed0f50dddacde768a34d8bc245' }}
+      ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || '2b036fd6d511011e06f632519c7c9d64c2a8ac2d' }}
       # Host-side URL for talking to the Zebra container's JSON-RPC port.
       ZEBRA_RPC_URL: http://127.0.0.1:18232/
+      # Persistence tests share state via this dir; binary is invoked from
+      # inside it so DATABASE_URL=walletdb.sqlite resolves to $WALLET_DIR/walletdb.sqlite.
+      WALLET_DIR: ${{ github.workspace }}/wallet-data
+      # Native tx-tool talks to Zebra via the published port on the runner host.
+      ZCASH_NODE_ADDRESS: 127.0.0.1
+      ZCASH_NODE_PORT: 18232
+      ZCASH_NODE_PROTOCOL: http
 
     steps:
       - name: Free disk space (safe cleanup for Rust CI)
@@ -42,8 +50,6 @@ jobs:
 
       - name: Checkout tx-tool code
         uses: actions/checkout@v6
-        with:
-          path: tx-tool
 
       - name: Checkout Zebra code
         uses: actions/checkout@v6
@@ -51,7 +57,6 @@ jobs:
           repository: QED-it/zebra
           ref: ${{ env.ZEBRA_COMMIT }}
           path: zebra
-
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -93,75 +98,58 @@ jobs:
           sleep 15
           echo "Finished waiting for Zebra node..."
 
-      - name: Build tx-tool
-        uses: docker/build-push-action@v7
+      # --- Native tx-tool build ---
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.86.0
+
+      - name: Rust cache (registry, git, target/)
+        uses: Swatinem/rust-cache@v2
+
+      # Sapling/Sprout params (~700 MB). The script verifies content via
+      # embedded SHA256s, so caching by the script hash is correct: any param
+      # change requires a script update, which busts the key.
+      - name: Cache Zcash params
+        id: zcash-params-cache
+        uses: actions/cache@v3
         with:
-          context: tx-tool
-          file: tx-tool/Dockerfile
-          tags: zcash-tx-tool:local
-          push: false
-          load: true
+          path: ~/.zcash-params
+          key: zcash-params-${{ hashFiles('zcutil/fetch-params.sh') }}
 
-      - name: Run tx-tool for test-orchard-zsa and verify success
+      - name: Fetch Zcash params
+        if: steps.zcash-params-cache.outputs.cache-hit != 'true'
         run: |
-          # Create a network to connect the containers
-          docker network create zcash-net
+          chmod +x ./zcutil/fetch-params.sh
+          ./zcutil/fetch-params.sh
 
-          # Connect zebra-node to the network
-          docker network connect zcash-net zebra-node
+      - name: Build tx-tool
+        run: cargo build --release
 
-          # Persistent volume so block_data / wallet_state survive between runs
-          docker volume create wallet-data
-
-          # Run the tx tool and capture exit code
-          docker run --network zcash-net \
-            -e ZCASH_NODE_ADDRESS=zebra-node \
-            -e ZCASH_NODE_PORT=18232 \
-            -e ZCASH_NODE_PROTOCOL=http \
-            -v wallet-data:/data \
-            --name zcash-tx-tool \
-            zcash-tx-tool:local test-orchard-zsa
-          
-          # Get the exit code from the container
-          EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
-
-          # Clean up
-          docker rm zcash-tx-tool
-
-          # Check if the tx_tool succeeded
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo "tx-tool failed with exit code $EXIT_CODE"
-            exit 1
-          fi
-          echo "tx-tool completed successfully!"
+      # --- Tests ---
+      # The runtime app runs diesel_migrations on startup, so no separate
+      # migration step is needed.
+      - name: Run test-orchard-zsa and persistence part 1
+        run: |
+          mkdir -p "$WALLET_DIR"
+          (cd "$WALLET_DIR" && "$GITHUB_WORKSPACE/target/release/zcash_tx_tool" test-orchard-zsa)
+          echo "tx-tool test-orchard-zsa completed!"
 
           # Persistence test, part 1: under a fixed seed, issue an asset and exit.
           # Part 2 (next step) recreates the wallet with the same seed and must
           # spend this note — that succeeds only if wallet_state, notes, and the
           # commitment-tree marked positions all survive the process restart.
-          docker run --rm --network zcash-net \
-            -e ZCASH_NODE_ADDRESS=zebra-node \
-            -e ZCASH_NODE_PORT=18232 \
-            -e ZCASH_NODE_PROTOCOL=http \
-            -v wallet-data:/data \
-            zcash-tx-tool:local test-persistence-part1
-          echo "test-persistence-part1 completed successfully!"
-    
+          (cd "$WALLET_DIR" && "$GITHUB_WORKSPACE/target/release/zcash_tx_tool" test-persistence-part1)
+          echo "test-persistence-part1 completed!"
+
       - name: Verify block_data + wallet state persisted from run 1 and match Zebra chain
         run: |
           # Persistence test, part 2: same fixed seed as part 1. Must reload the
           # persisted wallet state and successfully transfer the asset issued in
           # part 1 — a successful mine here proves end-to-end persistence.
-          docker run --rm --network zcash-net \
-            -e ZCASH_NODE_ADDRESS=zebra-node \
-            -e ZCASH_NODE_PORT=18232 \
-            -e ZCASH_NODE_PROTOCOL=http \
-            -v wallet-data:/data \
-            zcash-tx-tool:local test-persistence-part2
-          echo "test-persistence-part2 completed successfully!"
+          (cd "$WALLET_DIR" && "$GITHUB_WORKSPACE/target/release/zcash_tx_tool" test-persistence-part2)
+          echo "test-persistence-part2 completed!"
 
           # 3-way head agreement: wallet_state, block_data tip, and Zebra agree on the same hash.
-          sql() { docker run --rm -v wallet-data:/data --entrypoint sqlite3 zcash-tx-tool:local /data/walletdb.sqlite "$1"; }
+          sql() { sqlite3 "$WALLET_DIR/walletdb.sqlite" "$1"; }
           ZEBRA_TIP_HASH=$(curl -sS -H 'content-type: text/plain;' \
             --data-binary '{"jsonrpc":"1.0","id":"ci","method":"getbestblockhash","params":[]}' \
             "$ZEBRA_RPC_URL" | jq -r '.result // empty')
@@ -176,7 +164,7 @@ jobs:
 
       - name: Verify reorg detection wipes block_data and resyncs to chain tip
         run: |
-          sql() { docker run --rm -v wallet-data:/data --entrypoint sqlite3 zcash-tx-tool:local /data/walletdb.sqlite "$1"; }
+          sql() { sqlite3 "$WALLET_DIR/walletdb.sqlite" "$1"; }
 
           # Simulate a chain fork by corrupting the stored hash at the head.
           # Next sync's head_matches_chain() must detect mismatch and call reset_full().
@@ -184,10 +172,7 @@ jobs:
           sql "UPDATE block_data SET hash = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef' WHERE height = $HEAD"
 
           # Any sync-triggering command exercises the check; test-issue-one is the cheapest.
-          docker run --rm --network zcash-net \
-            -e ZCASH_NODE_ADDRESS=zebra-node -e ZCASH_NODE_PORT=18232 -e ZCASH_NODE_PROTOCOL=http \
-            -v wallet-data:/data \
-            zcash-tx-tool:local test-issue-one
+          (cd "$WALLET_DIR" && "$GITHUB_WORKSPACE/target/release/zcash_tx_tool" test-issue-one)
 
           # After reset_full + resync, two cross-checks against Zebra:
           # 1) the once-corrupted height now stores the real hash (proves the deadbeef was wiped);
@@ -205,30 +190,13 @@ jobs:
 
           echo "Reorg detection verified: corrupted hash replaced and resynced to chain tip"
 
-      - name: Run tx-tool again for test-three-party and verify success
-        run: |                
-          # Run the tx tool and capture exit code
-          docker run --network zcash-net \
-            -e ZCASH_NODE_ADDRESS=zebra-node \
-            -e ZCASH_NODE_PORT=18232 \
-            -e ZCASH_NODE_PROTOCOL=http \
-            --name zcash-tx-tool \
-            zcash-tx-tool:local test-three-party
-          
-          # Get the exit code from the container
-          EXIT_CODE=$(docker inspect zcash-tx-tool --format='{{.State.ExitCode}}')
-          
-          # Clean up
-          docker rm zcash-tx-tool
-          
-          # Check if the tx_tool succeeded
-          if [ $EXIT_CODE -eq 0 ]; then
-            echo "tx-tool completed successfully!"        
-            exit 0
-          else
-            echo "tx-tool failed with exit code $EXIT_CODE"
-            exit 1
-          fi
+      - name: Run test-three-party (fresh state)
+        run: |
+          # test-three-party doesn't need persisted state; run from a fresh dir
+          # so it can't accidentally read leftovers from $WALLET_DIR.
+          THREE_PARTY_DIR="$(mktemp -d)"
+          (cd "$THREE_PARTY_DIR" && "$GITHUB_WORKSPACE/target/release/zcash_tx_tool" test-three-party)
+          echo "test-three-party completed successfully!"
 
       - name: Print Zebra logs
         if: always()
@@ -241,5 +209,3 @@ jobs:
         run: |
           docker stop zebra-node || true
           docker rm zebra-node || true
-          docker network rm zcash-net || true
-          docker volume rm wallet-data || true

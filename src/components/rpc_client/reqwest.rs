@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::error::Error;
 use zcash_primitives::block::BlockHash;
-use zcash_primitives::consensus::{BlockHeight, BranchId};
+use zcash_protocol::consensus::{BlockHeight, BranchId};
 use zcash_primitives::transaction::{Transaction, TxId};
 
 pub struct ReqwestRpcClient {
