@@ -1,5 +1,5 @@
 use zcash_primitives::block::BlockHash;
-use zcash_primitives::consensus::BlockHeight;
+use zcash_protocol::consensus::BlockHeight;
 use zcash_primitives::transaction::TxId;
 
 #[derive(Debug, Clone)]
