@@ -11,6 +11,7 @@
 //! application's configuration file.
 
 mod clean;
+mod demo;
 mod test_asset_swaps;
 mod test_balances;
 mod test_orchard_zsa;
@@ -20,6 +21,7 @@ use crate::commands::clean::CleanCmd;
 use crate::commands::test_asset_swaps::TestAssetSwapsCmd;
 use crate::commands::test_orchard_zsa::TestOrchardZSACmd;
 use crate::commands::test_three_party::TestThreePartyCmd;
+use crate::commands::demo::DemoCmd;
 use crate::config::AppConfig;
 use abscissa_core::{Command, Configurable, FrameworkError, Runnable};
 use std::path::PathBuf;
@@ -33,6 +35,7 @@ pub enum AppCmd {
     TestOrchardZSA(TestOrchardZSACmd),
     TestAssetSwaps(TestAssetSwapsCmd),
     TestThreeParty(TestThreePartyCmd),
+    Demo(DemoCmd),
     Clean(CleanCmd),
 }
 
