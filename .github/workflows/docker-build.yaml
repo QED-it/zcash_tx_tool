@@ -1,0 +1,81 @@
+# Validates that the production Dockerfile still builds and the resulting
+# image is runnable. Triggered only when the docker artifact could plausibly
+# have changed — keeps the slow ~700 MB params download off every PR.
+#
+# The smoke test invokes a couple of subcommands with `--help` and checks
+# their exit codes. clap returns non-zero for unknown subcommands, so this
+# catches:
+#   - Dockerfile syntax / install errors
+#   - missing or wrong-path ENTRYPOINT
+#   - the binary failing to start (linker errors, missing libs, etc.)
+#   - a subcommand being renamed or removed
+
+name: Docker image build & smoke test
+
+on:
+  push:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - zcutil/fetch-params.sh
+      - .github/workflows/docker-build.yaml
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      - zcutil/fetch-params.sh
+      - .github/workflows/docker-build.yaml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # For a same-repo push, both `push` and `pull_request` events fire for the
+    # same commit. Skip the `pull_request` run in that case (the `push` covers it).
+    # Fork PRs only fire `pull_request` (no push permission), so this branch lets
+    # them run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Free disk space (safe cleanup for Rust CI)
+        run: |
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/hostedtoolcache || true
+          df -h
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build tx-tool image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          tags: zcash-tx-tool:local
+          push: false
+          load: true
+          cache-from: type=gha,scope=tx-tool
+          cache-to: type=gha,mode=max,scope=tx-tool
+
+      - name: Smoke test (image runs, subcommands are registered)
+        run: |
+          # clap exits non-zero if a subcommand is unknown, so `<sub> --help`
+          # asserts both "image starts cleanly" and "this subcommand exists"
+          # without parsing output. Catches Dockerfile/linker errors, a wrong
+          # ENTRYPOINT, and renamed/removed subcommands.
+          docker run --rm zcash-tx-tool:local test-orchard-zsa --help >/dev/null
+          docker run --rm zcash-tx-tool:local test-three-party  --help >/dev/null
+          echo "Smoke test passed: image runs and expected subcommands are registered"

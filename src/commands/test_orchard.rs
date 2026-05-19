@@ -128,8 +128,6 @@ fn prepare_test(
     rpc_client: &mut ReqwestRpcClient,
 ) -> TxId {
     sync_from_height(c, target_height, wallet, rpc_client);
-    let activate = wallet.last_block_height().is_none();
-    let (_, coinbase_txid) =
-        mine_empty_blocks(100, rpc_client, activate).expect("block mined successfully"); // coinbase maturity = 100
+    let (_, coinbase_txid) = mine_empty_blocks(100, rpc_client).expect("block mined successfully"); // coinbase maturity = 100
     coinbase_txid
 }

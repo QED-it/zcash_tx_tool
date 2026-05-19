@@ -37,8 +37,7 @@ pub fn mine(
     rpc_client: &mut dyn RpcClient,
     txs: Vec<Transaction>,
 ) -> Result<(), Box<dyn Error>> {
-    let activate = wallet.last_block_height().is_none();
-    mine_block(rpc_client, txs, activate)?;
+    mine_block(rpc_client, txs)?;
     sync(conn, wallet, rpc_client);
     Ok(())
 }
@@ -46,12 +45,11 @@ pub fn mine(
 pub fn mine_block(
     rpc_client: &mut dyn RpcClient,
     txs: Vec<Transaction>,
-    activate: bool,
 ) -> Result<(u32, TxId), Box<dyn Error>> {
     let block_template = rpc_client.get_block_template()?;
     let block_height = block_template.height;
 
-    let block_proposal = template_into_proposal(block_template, txs, activate);
+    let block_proposal = template_into_proposal(block_template, txs);
     let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
 
     rpc_client.submit_block(block_proposal)?;
@@ -62,16 +60,15 @@ pub fn mine_block(
 pub fn mine_empty_blocks(
     num_blocks: u32,
     rpc_client: &mut dyn RpcClient,
-    activate: bool,
 ) -> Result<(u32, TxId), Box<dyn Error>> {
     if num_blocks == 0 {
         panic!("num_blocks must be greater than 0")
     }
 
-    let (block_height, coinbase_txid) = mine_block(rpc_client, vec![], activate)?;
+    let (block_height, coinbase_txid) = mine_block(rpc_client, vec![])?;
 
     for _ in 1..num_blocks {
-        mine_block(rpc_client, vec![], false)?;
+        mine_block(rpc_client, vec![])?;
     }
 
     Ok((block_height, coinbase_txid))
@@ -94,7 +91,7 @@ pub fn create_shield_coinbase_transaction(
     let coinbase_recipient = miner_key.address();
     let pk = miner_key.secret_key().public_key(&Secp256k1::new());
 
-    tx.add_transparent_input(
+    tx.add_transparent_p2pkh_input(
         pk,
         OutPoint::new(coinbase_txid.into(), 0),
         TxOut::new(coinbase_amount, coinbase_recipient.script().into()),
@@ -103,7 +100,7 @@ pub fn create_shield_coinbase_transaction(
     tx.add_orchard_output::<FeeError>(
         Some(wallet.orchard_ovk()),
         recipient,
-        COINBASE_VALUE,
+        Zatoshis::from_u64(COINBASE_VALUE).unwrap(),
         AssetBase::zatoshi(),
         MemoBytes::empty(),
     )
@@ -299,7 +296,7 @@ pub fn create_transfer_transaction(
     tx.add_orchard_output::<FeeError>(
         Some(ovk.clone()),
         recipient,
-        amount,
+        Zatoshis::from_u64(amount).unwrap(),
         asset,
         MemoBytes::empty(),
     )
@@ -310,7 +307,7 @@ pub fn create_transfer_transaction(
         tx.add_orchard_output::<FeeError>(
             Some(ovk),
             sender,
-            change_amount,
+            Zatoshis::from_u64(change_amount).unwrap(),
             asset,
             MemoBytes::empty(),
         )
@@ -367,7 +364,7 @@ pub fn create_burn_transaction(
         tx.add_orchard_output::<FeeError>(
             Some(ovk),
             arsonist,
-            change_amount,
+            Zatoshis::from_u64(change_amount).unwrap(),
             asset,
             MemoBytes::empty(),
         )
@@ -419,7 +416,7 @@ pub fn create_issue_transaction(
     tx.add_orchard_output::<FeeError>(
         Some(wallet.orchard_ovk()),
         dummy_recipient,
-        0,
+        Zatoshis::ZERO,
         AssetBase::zatoshi(),
         MemoBytes::empty(),
     )
@@ -461,7 +458,7 @@ pub fn create_finalization_transaction(
     tx.add_orchard_output::<FeeError>(
         Some(wallet.orchard_ovk()),
         dummy_recipient,
-        0,
+        Zatoshis::ZERO,
         AssetBase::zatoshi(),
         MemoBytes::empty(),
     )
@@ -473,13 +470,12 @@ pub fn create_finalization_transaction(
 pub fn template_into_proposal(
     block_template: BlockTemplate,
     mut txs: Vec<Transaction>,
-    activate: bool,
 ) -> BlockProposal {
     let coinbase = Transaction::read(
         hex::decode(block_template.coinbase_txn.data)
             .unwrap()
             .as_slice(),
-        BranchId::Nu6,
+        BranchId::Nu7,
     )
     .unwrap();
 
@@ -519,11 +515,7 @@ pub fn template_into_proposal(
             block_template.previous_block_hash,
         )),
         merkle_root,
-        final_sapling_root: if activate {
-            [0; 32]
-        } else {
-            hash_block_commitments
-        },
+        final_sapling_root: hash_block_commitments,
         time: block_template.cur_time,
         bits: u32::from_str_radix(block_template.bits.as_str(), 16).unwrap(),
         nonce: [2; 32],                 // Currently PoW is switched off in Zebra
@@ -539,7 +531,9 @@ pub fn template_into_proposal(
 }
 
 fn create_tx(target_height: BlockHeight, wallet: &Wallet) -> Builder<'_, RegtestNetwork, ()> {
-    let build_config = BuildConfig::TxV6 {
+    // V6 is the default for the Nu7 branch (which Regtest activates at height 1),
+    // so Standard auto-selects V6 here. No need to call propose_version.
+    let build_config = BuildConfig::Standard {
         sapling_anchor: None,
         orchard_anchor: wallet.orchard_anchor(),
     };
