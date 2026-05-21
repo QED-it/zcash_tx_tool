@@ -130,7 +130,7 @@ jobs:
       - name: Run test-orchard-zsa and persistence part 1
         run: |
           mkdir -p "$WALLET_DIR"
-          (cd "$WALLET_DIR" && "$GITHUB_WORKSPACE/target/release/zcash_tx_tool" test-orchard-zsa)
+          (cd "$WALLET_DIR" && "$GITHUB_WORKSPACE/target/release/zcash_tx_tool" -v test-orchard-zsa)
           echo "tx-tool test-orchard-zsa completed!"
 
           # Persistence test, part 1: under a fixed seed, issue an asset and exit.
