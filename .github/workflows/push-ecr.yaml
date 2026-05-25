@@ -1,5 +1,5 @@
-# This GitHub Actions workflow automates pushing the Zebra Server Docker image to Amazon ECR.
-# It triggers on any new tag or manual dispatch, builds a Docker image, and pushes it to Amazon Elastic Container Registry (ECR).
+# This GitHub Actions workflow automates pushing the tx-tool Docker image to Amazon ECR Public.
+# It triggers on any new tag or manual dispatch, builds a Docker image, and pushes it to Amazon Elastic Container Registry (ECR) Public.
 name: Push to Amazon ECR
 
 on:
@@ -13,20 +13,27 @@ on:
         required: true
         type: string
       ecr_repository:
-        description: 'ECR repository name (dev-zebra-server)'
+        description: 'ECR Public repository name including alias (e.g. j7v0v6n9/tx-tool)'
         required: false
         type: string
+      environment:
+        description: 'GitHub environment to deploy to (e.g. dev/dev-swaps)'
+        required: false
+        type: string
+        default: dev
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
-  ECR_REPOSITORY: ${{ inputs.ecr_repository || vars.ECR_REPOSITORY || 'dev-zebra-server' }}
+  # ECR Public API only exists in us-east-1.
+  AWS_REGION: us-east-1
+  # Repository includes the registry alias so the final image URI is public.ecr.aws/<alias>/<repo>.
+  ECR_REPOSITORY: ${{ inputs.ecr_repository || vars.ECR_REPOSITORY || 'j7v0v6n9/tx-tool' }}
   DOCKERFILE_PATH: ${{ vars.DOCKERFILE_PATH || 'Dockerfile' }}
 
 jobs:
   push-to-ecr:
     name: Push to ECR
     runs-on: ubuntu-latest
-    environment: dev-swaps
+    environment: ${{ inputs.environment || 'dev' }}
 
     steps:
       - name: Checkout
@@ -41,9 +48,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
+      - name: Login to Amazon ECR Public
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
 
       - name: Get Git tags and set image tags
         id: vars
