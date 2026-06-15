@@ -137,9 +137,16 @@ impl RpcClient for ReqwestRpcClient {
         let mut block_bytes = vec![];
         block.write(&mut block_bytes).unwrap();
 
+        let block_hex = hex::encode(&block_bytes);
+
+        // Opt-in block dump for external extraction.
+        if std::env::var_os("ZSA_DUMP_BLOCKS").is_some() {
+            println!("ZSA_BLOCK_HEX {block_hex}");
+        }
+
         let result = self.request(&RpcRequest::new_with_params(
             "submitblock",
-            vec![ParamType::String(hex::encode(block_bytes))],
+            vec![ParamType::String(block_hex)],
         ))?;
 
         match result {
