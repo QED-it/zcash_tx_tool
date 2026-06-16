@@ -130,7 +130,10 @@ jobs:
       - name: Run test-orchard-zsa and persistence part 1
         run: |
           mkdir -p "$WALLET_DIR"
-          (cd "$WALLET_DIR" && "$GITHUB_WORKSPACE/target/release/zcash_tx_tool" test-orchard-zsa)
+          # ZSA_DUMP_BLOCKS emits "ZSA_BLOCK_HEX <hex>" per block on stdout; filter
+          # it into the artifact while stderr logs still reach the CI console.
+          (cd "$WALLET_DIR" && ZSA_DUMP_BLOCKS=1 "$GITHUB_WORKSPACE/target/release/zcash_tx_tool" test-orchard-zsa) \
+            | grep -oP 'ZSA_BLOCK_HEX \K\S+' | tee "$GITHUB_WORKSPACE/zsa-blocks.txt"
           echo "tx-tool test-orchard-zsa completed!"
 
           # Persistence test, part 1: under a fixed seed, issue an asset and exit.
@@ -139,6 +142,12 @@ jobs:
           # commitment-tree marked positions all survive the process restart.
           (cd "$WALLET_DIR" && "$GITHUB_WORKSPACE/target/release/zcash_tx_tool" test-persistence-part1)
           echo "test-persistence-part1 completed!"
+
+      - name: Upload OrchardZSA blocks
+        uses: actions/upload-artifact@v4
+        with:
+          name: orchard-zsa-blocks
+          path: ${{ github.workspace }}/zsa-blocks.txt
 
       - name: Verify block_data + wallet state persisted from run 1 and match Zebra chain
         run: |

@@ -25,6 +25,7 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
 - [Block Data Storage](#block-data-storage)
 - [Block Data Storage Considerations](#block-data-storage-considerations)
 - [Running the tx-tool in Docker](#running-the-tx-tool-in-docker)
+- [Exporting OrchardZSA Test Blocks](#exporting-orchardzsa-test-blocks)
 - [Connecting to the Public ZSA Testnet](#connecting-to-the-public-zsa-testnet)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
@@ -259,6 +260,23 @@ There are currently (January 2026) ~3.2M blocks on Zcash mainnet. Approximate to
 ## Running the tx-tool in Docker
 
 The tx-tool is normally built and run natively, as described above. A Docker workflow is also supported for CI and self-contained deployments. See [`docs/tx_tool_docker_setup.md`](docs/tx_tool_docker_setup.md) for the build, persistence-volume layout, and a host-network example, plus a pointer to the multi-container recipe in `.github/workflows/zebra-test-ci.yaml`.
+
+## Exporting OrchardZSA Test Blocks
+
+Every CI run of `test-orchard-zsa` uploads the full hex of each submitted block as the `orchard-zsa-blocks` artifact (one block per line). Download it from a run with the [GitHub CLI](https://cli.github.com) (use `gh run list` to find run IDs):
+
+```bash
+gh run download <run-id> -n orchard-zsa-blocks
+```
+
+This writes the blocks to `orchard-zsa-blocks/zsa-blocks.txt`.
+
+To produce the same file locally, set `ZSA_DUMP_BLOCKS` when running the scenario — the tool then prints each submitted block as a `ZSA_BLOCK_HEX <hex>` line on stdout (normal logs stay on stderr):
+
+```bash
+ZSA_DUMP_BLOCKS=1 cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa \
+  | awk '/^ZSA_BLOCK_HEX /{print $2}' > zsa-blocks.txt
+```
 
 ## Connecting to the Public ZSA Testnet
 

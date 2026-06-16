@@ -341,9 +341,9 @@ dependencies = [
 
 [[package]]
 name = "bridgetree"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3990cc973c3b9c41c4dbb66cde22e3af77c4c7b133008d81f292ad12c27ed794"
+checksum = "3d74f010107ed76a581e5c348f27bdf47b8e6286c667d3ae5be473bd07bfc22f"
 dependencies = [
  "incrementalmerkletree",
 ]
@@ -662,9 +662,9 @@ dependencies = [
 
 [[package]]
 name = "diesel"
-version = "2.3.9"
+version = "2.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9940fb8467a0a06312218ed384185cb8536aa10d8ec017d0ce7fad2c1bd882d5"
+checksum = "29fe29a87fb84c631ffb3ba21798c4b1f3a964701ba78f0dce4bf8668562ec88"
 dependencies = [
  "diesel_derives",
  "downcast-rs",
@@ -2314,9 +2314,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.149"
+version = "1.0.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
+checksum = "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9"
 dependencies = [
  "itoa",
  "memchr",
