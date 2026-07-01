@@ -37,7 +37,7 @@ nonempty = "0.11.0"
 zcash_transparent = { version = "0.6.3", features = ["transparent-inputs"] }
 ripemd = { version = "0.1" }
 sha2 = "0.10"
-secp256k1 = { version = "0.29.1" }
+secp256k1 = { version = "0.31.1" }
 
 [dependencies.abscissa_core]
 version = "0.7.0"
