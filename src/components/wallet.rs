@@ -9,11 +9,11 @@ use std::convert::TryInto;
 use abscissa_core::prelude::info;
 
 use orchard::issuance::{
-    auth::{IssueAuthKey, ZSASchnorr},
+    auth::{IssueAuthKey, IssueValidatingKey, ZSASchnorr},
     IssueBundle, Signed,
 };
 use orchard::keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey};
-use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
+use orchard::note::{AssetBase, AssetId, ExtractedNoteCommitment, RandomSeed, Rho};
 use orchard::tree::{MerkleHashOrchard, MerklePath};
 use orchard::value::NoteValue;
 use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
@@ -295,6 +295,25 @@ impl Wallet {
         address
     }
 
+    /// Derive and register keys and default addresses for accounts
+    /// `0..num_accounts`, so block sync can decrypt notes addressed to them
+    /// and spends can locate their spending keys. Must be called before
+    /// syncing when the wallet is constructed fresh (keys live in memory).
+    pub fn register_accounts(&mut self, num_accounts: usize) {
+        for account in 0..num_accounts {
+            self.address_for_account(account, Scope::External);
+        }
+    }
+
+    /// The `AssetBase` of an asset defined by this wallet's issuance key and
+    /// the given asset description hash (ZIP 227 derivation).
+    pub fn asset_base_from_desc_hash(&self, asset_desc_hash: &[u8; 32]) -> AssetBase {
+        AssetBase::custom(&AssetId::new_v0(
+            &IssueValidatingKey::from(&self.issuance_key()),
+            asset_desc_hash,
+        ))
+    }
+
     pub(crate) fn orchard_ovk(&self) -> OutgoingViewingKey {
         let sk = SpendingKey::from_zip32_seed(
             self.seed.as_slice(),
@@ -390,6 +409,7 @@ impl Wallet {
 
         if let Some(issue_bundle) = tx.issue_bundle() {
             self.add_notes_from_issue_bundle(conn, &tx.txid(), issue_bundle, issued_notes_offset);
+            self.record_finalizations(conn, issue_bundle);
         };
 
         self.add_note_commitments(conn, &tx.txid(), tx.orchard_bundle(), tx.issue_bundle())
@@ -431,6 +451,17 @@ impl Wallet {
                 self.store_note(conn, txid, note_index, ivk.clone(), *note, [0; 512])
                     .unwrap();
             }
+        }
+    }
+
+    /// Asset finalization is public data carried by issuance bundles: record
+    /// it in the local asset registry so every wallet (not only the issuer)
+    /// knows when an asset's supply has been closed.
+    fn record_finalizations(&self, conn: &mut SqliteConnection, bundle: &IssueBundle<Signed>) {
+        for action in bundle.actions().iter().filter(|a| a.is_finalized()) {
+            let asset = AssetBase::custom(&AssetId::new_v0(bundle.ik(), action.asset_desc_hash()));
+            crate::components::asset_registry::record_seen_asset(conn, &asset);
+            crate::components::asset_registry::set_finalized(conn, &asset);
         }
     }
 

@@ -58,9 +58,13 @@ impl ReqwestRpcClient {
             request.method, response_string
         );
 
-        let rpc_result: RpcResponse<T> = serde_json::from_str(response_string)?;
+        let rpc_result: RpcResponse = serde_json::from_str(response_string)?;
 
-        Ok(rpc_result.result)
+        if let Some(error) = rpc_result.error {
+            return Err(format!("node error {}: {}", error.code, error.message).into());
+        }
+
+        Ok(serde_json::from_value(rpc_result.result)?)
     }
 }
 
@@ -199,8 +203,18 @@ impl RpcRequest {
 }
 
 #[derive(Deserialize)]
-struct RpcResponse<T> {
-    result: T,
+struct RpcResponse {
+    /// Left as a raw JSON value so `null` results (e.g. a successful
+    /// `submitblock`) deserialize according to the caller's expected type.
+    result: serde_json::Value,
+    #[serde(default)]
+    error: Option<RpcErrorObject>,
+}
+
+#[derive(Deserialize)]
+struct RpcErrorObject {
+    code: i64,
+    message: String,
 }
 
 // Trim the log string if longer than INFO_MAX_LEN

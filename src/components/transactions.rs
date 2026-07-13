@@ -480,6 +480,23 @@ pub fn template_into_proposal(
     .unwrap();
 
     let mut txs_with_coinbase = vec![coinbase];
+
+    // Include any mempool transactions the node selected for this template,
+    // so wallet transactions submitted via `sendrawtransaction` get mined
+    // into the next produced block. Explicitly provided txs take precedence
+    // over their mempool duplicates.
+    let provided_txids: Vec<TxId> = txs.iter().map(|tx| tx.txid()).collect();
+    for template_tx in &block_template.transactions {
+        let tx = Transaction::read(
+            hex::decode(&template_tx.data).unwrap().as_slice(),
+            BranchId::Nu7,
+        )
+        .unwrap();
+        if !provided_txids.contains(&tx.txid()) {
+            txs_with_coinbase.push(tx);
+        }
+    }
+
     txs_with_coinbase.append(&mut txs);
 
     let merkle_root = if txs_with_coinbase.len() == 1 {
