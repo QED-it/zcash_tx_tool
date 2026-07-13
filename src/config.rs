@@ -37,6 +37,14 @@ pub struct WalletSection {
     pub seed_phrase: String,
     /// Miner seed phrase as defined in BIP-39
     pub miner_seed_phrase: String,
+    /// Number of accounts (ZIP-32 account indices) the wallet derives keys
+    /// for on startup. Notes sent to addresses of accounts outside this range
+    /// are not detected during sync.
+    pub num_accounts: usize,
+    /// Path to this wallet's SQLite database. Overrides the `DATABASE_URL`
+    /// env var / `walletdb.sqlite` default, letting several wallets (each
+    /// with its own config file) coexist against one node.
+    pub db_path: Option<String>,
 }
 
 impl Default for WalletSection {
@@ -44,6 +52,8 @@ impl Default for WalletSection {
         Self {
             seed_phrase: "fabric dilemma shift time border road fork license among uniform early laundry caution deer stamp".to_string(), // tmLTZegcJN5zaufWQBARHkvqC62mTumm3jR
             miner_seed_phrase: "fabric dilemma shift time border road fork license among uniform early laundry caution deer stamp".to_string(), // tmLTZegcJN5zaufWQBARHkvqC62mTumm3jR
+            num_accounts: 3,
+            db_path: None,
         }
     }
 }

@@ -1,12 +1,12 @@
-# Zcash tx-tool
+# Zcash tx-tool — a ZSA wallet CLI
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The **Zcash tx-tool** is designed to create and send Zcash transactions to a node (e.g., Zebra). It currently supports transaction versions V5 and V6, including the Orchard ZSA (Zcash Shielded Assets) functionality.
+The **Zcash tx-tool** is a command-line wallet for **Zcash Shielded Assets (ZSA)**. It manages shielded notes, and can **issue**, **transfer**, **burn** and **finalize** Orchard-ZSA assets — as well as handle native ZEC — against a ZSA-enabled node (e.g., the QED-it fork of Zebra). It supports transaction versions V5 and V6, including the Orchard ZSA functionality (ZIP 226/227/230).
 
 This repository includes a simple Zebra Docker image that incorporates the OrchardZSA version of Zebra and runs in regtest mode.
 
-WARNING: This tool is not a wallet and should not be used as a wallet. This tool is in the early stages of development and should not be used in production environments.
+WARNING: This wallet is alpha software intended for regtest and testnet experimentation with the in-development ZSA protocol. Do not use it to hold real funds.
 
 ## Table of Contents
 
@@ -16,6 +16,11 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
 - [Getting Started](#getting-started)
     - [1. Build and Run the Zebra Docker Image](#1-build-and-run-the-zebra-docker-image)
     - [2. Set Up and Run the Zcash tx-tool](#2-set-up-and-run-the-zcash-transaction-tool)
+- [Wallet Usage](#wallet-usage)
+    - [Wallet Commands](#wallet-commands)
+    - [Asset References and Recipients](#asset-references-and-recipients)
+    - [Multi-Wallet Demo](#multi-wallet-demo)
+    - [Notes on Fees and Block Production](#notes-on-fees-and-block-production)
 - [Configuration](#configuration)
 - [Build Instructions](#build-instructions)
 - [Test Scenarios](#test-scenarios)
@@ -32,9 +37,12 @@ WARNING: This tool is not a wallet and should not be used as a wallet. This tool
 
 ## Features
 
-- **Transaction Creation**: Craft custom Zcash transactions.
-- **Transaction Submission**: Send transactions to a Zcash node.
-- **ZSA Support**: Work with Zcash Shielded Assets (Orchard ZSA).
+- **Note Management**: Tracks, persists and selects shielded Orchard notes across accounts; survives restarts and full rescans.
+- **ZSA Issuance / Transfer / Burn / Finalize**: The complete Orchard-ZSA asset lifecycle (ZIP 227 issuance, ZIP 226 transfers and burns), from the command line.
+- **Asset Registry**: Local registry of assets — own issued assets keep their metadata; received assets are discovered automatically and can be labelled.
+- **Native ZEC**: Shield regtest coinbase rewards and transfer ZEC alongside custom assets.
+- **Unified Addresses**: Displays and accepts Orchard receivers as unified addresses.
+- **Transaction Submission**: Self-mines blocks on regtest via `getblocktemplate`/`submitblock` (mempool submission available where node policy allows).
 - **Version Compatibility**: Supports transaction versions V5 and V6.
 
 ## Supported systems
@@ -127,11 +135,83 @@ cargo run --release --package zcash_tx_tool --bin zcash_tx_tool test-orchard-zsa
 
 **Note**: To re-run the test scenario (or to run a different scenario), reset the Zebra node by stopping and restarting the Zebra Docker container.
 
+## Wallet Usage
+
+Once the node is running and the tool is built (see [Getting Started](#getting-started)), the wallet is operated through subcommands:
+
+```bash
+# See node connection and wallet state
+zcash_tx_tool status
+
+# Show your shielded receiving addresses (unified + raw hex)
+zcash_tx_tool addresses
+
+# Issue 1,000,000 units of a new shielded asset to account 0
+zcash_tx_tool issue "MY-TOKEN" 1000000
+
+# Send 250,000 units to another wallet's unified address
+zcash_tx_tool transfer "MY-TOKEN" 250000 --to uregtest1...
+
+# Burn 50,000 units (provably reduce supply)
+zcash_tx_tool burn "MY-TOKEN" 50000
+
+# Permanently close the asset's supply
+zcash_tx_tool finalize "MY-TOKEN"
+
+# Balances, notes and known assets
+zcash_tx_tool balance
+zcash_tx_tool notes
+zcash_tx_tool assets
+```
+
+(When running from the repository, prefix with `cargo run --release --` or use `./target/release/zcash_tx_tool`.)
+
+### Wallet Commands
+
+| Command | Description |
+| --- | --- |
+| `status` | Node connection, chain tip, wallet sync height, note/asset counts |
+| `sync` | Scan new blocks for the wallet's notes and balances |
+| `addresses [--accounts N]` | Unified + raw Orchard receiving addresses per account |
+| `balance [--no-sync]` | Balance table: every known asset × every account |
+| `notes [--all]` | The wallet's notes (unspent by default) |
+| `assets [--label <base> --name <text>]` | List known ZSA assets, or label a discovered one |
+| `issue <desc> <amount> [--to R]` | Issue a new asset, or more of an existing one |
+| `transfer <asset> <amount> --to R [--from-account N]` | Send asset units (or `zec`) shielded |
+| `burn <asset> <amount> [--from-account N]` | Provably destroy asset units |
+| `finalize <asset>` | Permanently stop issuance of an own asset |
+| `mine [--blocks N]` | Produce regtest block(s), including mempool txs |
+| `shield [--to-account N]` | Mine + shield a coinbase reward (regtest ZEC faucet) |
+| `clean` | Reset all local wallet state (rescans on next sync) |
+
+All state-changing commands accept `--mempool` to submit via `sendrawtransaction` instead of self-mining (see [fees](#notes-on-fees-and-block-production)).
+
+### Asset References and Recipients
+
+- **Assets** can be referenced by their description string (for assets you issued or labelled), by a unique prefix of the hex AssetBase, or by the full 64-char hex. `zec`/`native` selects the native asset.
+- **Recipients** can be `account:<n>` (an own account), a unified address (`uregtest1…`), or an 86-char raw Orchard address hex.
+
+### Multi-Wallet Demo
+
+A complete two-party demo — issuer and receiver wallets with separate seeds and note databases against one regtest node — is provided in [`demo/`](./demo):
+
+```bash
+./demo/run_demo.sh
+```
+
+It walks through the full asset lifecycle: issue → transfer → discovery + labelling on the receiving side → burn → re-issue → finalize → post-finalization rejection, plus native ZEC shielding and payment. The wallet configs (`demo/issuer.toml`, `demo/alice.toml`) show how to run several wallets side by side.
+
+### Notes on Fees and Block Production
+
+On regtest the wallet acts as the block producer: transactions are placed directly into a block the wallet assembles and submits (`getblocktemplate` → `submitblock`), which is also how the CI test scenarios run. Transactions are currently built with a zero fee, which consensus permits — but node *mempool policy* (ZIP-317) rejects unpaid actions, so `--mempool` submission requires a node with relaxed policy. ZIP-317 fee support is on the roadmap.
+
 ## Configuration
 
 You can specify the path to the configuration file using the `--config` flag when running the application. The default configuration file name is `config.toml`.
 
 An example configuration file with default values is provided in [`regtest_config.toml`](./regtest-config.toml).
+
+Wallet-specific settings in the `[wallet]` section: `seed_phrase` (BIP-39 wallet identity), `miner_seed_phrase` (must match the node's coinbase address for `shield`), `num_accounts` (accounts scanned during sync, default 3), and `db_path` (per-wallet SQLite database, overriding `DATABASE_URL`).
 
 ## Build Instructions
 
