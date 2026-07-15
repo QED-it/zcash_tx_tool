@@ -100,7 +100,7 @@ jobs:
 
       # --- Native tx-tool build ---
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@1.86.0
+        uses: dtolnay/rust-toolchain@1.100.0
 
       - name: Rust cache (registry, git, target/)
         uses: Swatinem/rust-cache@v2
