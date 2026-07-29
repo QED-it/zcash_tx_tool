@@ -132,8 +132,10 @@ impl WalletCtx {
                 Err(_) => exit_err(&format!("invalid account index in recipient '{}'", s)),
             }
         }
-        if let Some(addr) = try_decode_unified_address(s) {
-            return addr;
+        match try_decode_unified_address(s) {
+            Ok(Some(addr)) => return addr,
+            Ok(None) => {}
+            Err(e) => exit_err(&e),
         }
         if s.len() == 86 {
             if let Ok(bytes) = hex::decode(s) {
@@ -277,20 +279,58 @@ impl WalletCtx {
     }
 }
 
+/// The network this wallet encodes and accepts addresses for. The tool targets
+/// regtest only — keys derive from the regtest coin type.
+pub const WALLET_NETWORK: NetworkType = NetworkType::Regtest;
+
 /// Encode an Orchard address as a unified address for regtest.
 pub fn encode_unified_address(addr: &Address) -> String {
     let ua = unified::Address::try_from_items(vec![Receiver::Orchard(addr.to_raw_address_bytes())])
         .expect("an Orchard receiver alone is a valid unified address");
-    ua.encode(&NetworkType::Regtest)
+    ua.encode(&WALLET_NETWORK)
 }
 
 /// Decode a unified address, extracting its Orchard receiver.
-pub fn try_decode_unified_address(s: &str) -> Option<Address> {
-    let (_net, ua) = unified::Address::decode(s).ok()?;
-    ua.items().into_iter().find_map(|item| match item {
-        Receiver::Orchard(bytes) => {
-            Option::<Address>::from(Address::from_raw_address_bytes(&bytes))
-        }
-        _ => None,
-    })
+///
+/// `Ok(None)` means the string is not a unified address at all, so the caller
+/// can try other recipient formats. `Err` means it is one this wallet cannot
+/// pay — a different network, or no Orchard receiver — which is worth
+/// reporting rather than silently falling through: sending regtest funds to an
+/// address parsed from a mainnet string would defeat the very disambiguation
+/// unified addresses exist to provide.
+pub fn try_decode_unified_address(s: &str) -> Result<Option<Address>, String> {
+    let Ok((net, ua)) = unified::Address::decode(s) else {
+        return Ok(None);
+    };
+    if net != WALLET_NETWORK {
+        return Err(format!(
+            "unified address '{}' is a {} address, but this wallet is {}-only",
+            s,
+            network_name(net),
+            network_name(WALLET_NETWORK)
+        ));
+    }
+    ua.items()
+        .into_iter()
+        .find_map(|item| match item {
+            Receiver::Orchard(bytes) => {
+                Option::<Address>::from(Address::from_raw_address_bytes(&bytes))
+            }
+            _ => None,
+        })
+        .map(Some)
+        .ok_or_else(|| {
+            format!(
+                "unified address '{}' has no Orchard receiver — this wallet is Orchard-only",
+                s
+            )
+        })
+}
+
+fn network_name(net: NetworkType) -> &'static str {
+    match net {
+        NetworkType::Main => "mainnet",
+        NetworkType::Test => "testnet",
+        NetworkType::Regtest => "regtest",
+    }
 }

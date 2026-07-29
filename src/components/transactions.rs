@@ -13,6 +13,7 @@ use orchard::value::NoteValue;
 use orchard::Address;
 use orchard::keys::Scope;
 use rand::rngs::OsRng;
+use std::collections::HashSet;
 use std::error::Error;
 use std::convert::TryFrom;
 use std::ops::Add;
@@ -498,7 +499,7 @@ pub fn template_into_proposal(
     // so wallet transactions submitted via `sendrawtransaction` get mined
     // into the next produced block. Explicitly provided txs take precedence
     // over their mempool duplicates.
-    let provided_txids: Vec<TxId> = txs.iter().map(|tx| tx.txid()).collect();
+    let provided_txids: HashSet<TxId> = txs.iter().map(|tx| tx.txid()).collect();
     for (index, template_tx) in block_template.transactions.iter().enumerate() {
         let tx = read_template_tx(&template_tx.data, &format!("mempool transaction {}", index))?;
         if !provided_txids.contains(&tx.txid()) {

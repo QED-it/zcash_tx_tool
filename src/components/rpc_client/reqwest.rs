@@ -206,6 +206,11 @@ impl RpcRequest {
 struct RpcResponse {
     /// Left as a raw JSON value so `null` results (e.g. a successful
     /// `submitblock`) deserialize according to the caller's expected type.
+    ///
+    /// Defaulted because a JSON-RPC error response may carry `error` alone;
+    /// without this, such a response fails to deserialize and the node's
+    /// error message never reaches the user.
+    #[serde(default)]
     result: serde_json::Value,
     #[serde(default)]
     error: Option<RpcErrorObject>,
