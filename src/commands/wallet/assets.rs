@@ -26,6 +26,9 @@ impl Runnable for AssetsCmd {
             if asset_registry::find_by_asset(&mut ctx.conn, &asset).is_none() {
                 exit_err(&format!("asset '{}' is not in the registry", asset_ref));
             }
+            if let Err(e) = asset_registry::check_label(&mut ctx.conn, &asset, name) {
+                exit_err(&e);
+            }
             asset_registry::set_label(&mut ctx.conn, &asset, name);
             println!(
                 "✔ labelled asset {} as '{}'",

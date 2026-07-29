@@ -189,6 +189,7 @@ All state-changing commands accept `--mempool` to submit via `sendrawtransaction
 ### Asset References and Recipients
 
 - **Assets** can be referenced by their description string (for assets you issued or labelled), by a unique prefix of the hex AssetBase, or by the full 64-char hex. `zec`/`native` selects the native asset.
+- **Labels** (`assets --label <base> --name <text>`) apply to assets discovered in received notes. An asset you issued cannot be relabelled — its description is the issuance description whose hash defines its AssetBase — and a name already in use is rejected, so referring to an asset by description stays unambiguous.
 - **Recipients** can be `account:<n>` (an own account, `n` below `num_accounts` — sync does not scan beyond that range), a unified address (`uregtest1…`), or an 86-char raw Orchard address hex.
 
 ### Multi-Wallet Demo

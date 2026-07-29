@@ -128,7 +128,47 @@ pub fn record_seen_asset(conn: &mut SqliteConnection, asset: &AssetBase) {
         .expect("Error recording asset");
 }
 
-/// Attach a user-supplied label to a discovered asset.
+/// Whether `label` may be attached to `asset`, or why not.
+///
+/// Two labels would corrupt the registry rather than annotate it:
+///
+/// * An own asset's `description` is the issuance description whose hash
+///   defines its `AssetBase` (ZIP 227) — protocol data, not a nickname.
+///   Overwriting it would leave the registry describing an asset that the
+///   description no longer identifies.
+/// * A description shared by two assets makes lookup by description
+///   ambiguous, and `find_by_description` would silently resolve to whichever
+///   row came first — the same hazard [`find_by_base_prefix`] callers reject
+///   for ambiguous hex prefixes.
+pub fn check_label(
+    conn: &mut SqliteConnection,
+    asset: &AssetBase,
+    label: &str,
+) -> Result<(), String> {
+    let base = asset_base_hex(asset);
+    if let Some(info) = find_by_asset(conn, asset) {
+        if info.is_own() {
+            return Err(format!(
+                "asset {} was issued by this wallet: its description '{}' defines its \
+                 AssetBase and cannot be relabelled",
+                base,
+                info.display_name()
+            ));
+        }
+    }
+    match find_by_description(conn, label) {
+        // Relabelling an asset with the name it already has is a no-op.
+        Some(other) if other.asset_base != base => Err(format!(
+            "'{}' already labels asset {} — pick another name, so that referring to \
+             an asset by description stays unambiguous",
+            label, other.asset_base
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// Attach a user-supplied label to a discovered asset. Callers should consult
+/// [`check_label`] first: this is a plain setter.
 pub fn set_label(conn: &mut SqliteConnection, asset: &AssetBase, label: &str) {
     diesel::update(a::assets.filter(a::asset_base.eq(asset_base_hex(asset))))
         .set(a::description.eq(label))

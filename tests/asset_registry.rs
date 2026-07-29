@@ -72,6 +72,54 @@ fn registry_roundtrip() {
     assert_eq!(asset_registry::list(&mut conn).len(), 2);
 }
 
+/// Labels annotate discovered assets; they must not overwrite an own asset's
+/// issuance description or collide with a label already in use, since either
+/// would make lookup by description wrong rather than merely confusing.
+#[test]
+fn labels_may_not_corrupt_the_registry() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("label-test.sqlite");
+    let mut conn = db::establish_connection(db_path.to_str().unwrap());
+    let wallet = Wallet::new(&mut conn, SEED_PHRASE);
+
+    let hash = desc_hash("OWN-ASSET");
+    let own = wallet.asset_base_from_desc_hash(&hash);
+    asset_registry::upsert_own_asset(&mut conn, &own, "OWN-ASSET", &hash);
+
+    let seen = wallet.asset_base_from_desc_hash(&desc_hash("SEEN-ASSET"));
+    asset_registry::record_seen_asset(&mut conn, &seen);
+    let other = wallet.asset_base_from_desc_hash(&desc_hash("OTHER-ASSET"));
+    asset_registry::record_seen_asset(&mut conn, &other);
+
+    // An own asset's description defines its AssetBase: not relabellable.
+    assert!(asset_registry::check_label(&mut conn, &own, "Renamed").is_err());
+
+    // A discovered asset takes a fresh label.
+    assert!(asset_registry::check_label(&mut conn, &seen, "Received Token").is_ok());
+    asset_registry::set_label(&mut conn, &seen, "Received Token");
+
+    // That label is now taken — including by an own asset's description.
+    assert!(asset_registry::check_label(&mut conn, &other, "Received Token").is_err());
+    assert!(asset_registry::check_label(&mut conn, &other, "OWN-ASSET").is_err());
+    // …but re-applying an asset's own label is a no-op, not a collision.
+    assert!(asset_registry::check_label(&mut conn, &seen, "Received Token").is_ok());
+    assert!(asset_registry::check_label(&mut conn, &other, "Another Token").is_ok());
+
+    // The rejected labels left the registry untouched.
+    assert_eq!(
+        asset_registry::find_by_asset(&mut conn, &own)
+            .unwrap()
+            .display_name(),
+        "OWN-ASSET"
+    );
+    assert!(
+        asset_registry::find_by_asset(&mut conn, &other)
+            .unwrap()
+            .description
+            .is_none()
+    );
+}
+
 /// A wallet reset throws away chain state and rescans from scratch, so the
 /// finalization it learned from issuance bundles must go with it — otherwise a
 /// finalization that a reorg removed would linger. User labels must survive.
