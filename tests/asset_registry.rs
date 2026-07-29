@@ -71,3 +71,80 @@ fn registry_roundtrip() {
 
     assert_eq!(asset_registry::list(&mut conn).len(), 2);
 }
+
+/// A wallet reset throws away chain state and rescans from scratch, so the
+/// finalization it learned from issuance bundles must go with it — otherwise a
+/// finalization that a reorg removed would linger. User labels must survive.
+#[test]
+fn reset_clears_chain_derived_finalization() {
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("reset-test.sqlite");
+    let mut conn = db::establish_connection(db_path.to_str().unwrap());
+    let mut wallet = Wallet::new(&mut conn, SEED_PHRASE);
+
+    let hash = desc_hash("ASSET-FINAL");
+    let own = wallet.asset_base_from_desc_hash(&hash);
+    asset_registry::upsert_own_asset(&mut conn, &own, "ASSET-FINAL", &hash);
+    asset_registry::set_finalized(&mut conn, &own);
+
+    let seen = wallet.asset_base_from_desc_hash(&desc_hash("ASSET-SEEN"));
+    asset_registry::record_seen_asset(&mut conn, &seen);
+    asset_registry::set_label(&mut conn, &seen, "Received Token");
+    asset_registry::set_finalized(&mut conn, &seen);
+
+    wallet.reset(&mut conn);
+
+    let info = asset_registry::find_by_asset(&mut conn, &own).expect("own asset kept");
+    assert!(!info.is_finalized(), "finalization must be re-derived");
+    assert!(info.is_own());
+    assert_eq!(info.display_name(), "ASSET-FINAL");
+
+    let info = asset_registry::find_by_asset(&mut conn, &seen).expect("discovered asset kept");
+    assert!(!info.is_finalized(), "finalization must be re-derived");
+    assert_eq!(info.display_name(), "Received Token", "label must survive");
+}
+
+/// Account indices reaching key derivation from user input must be validated,
+/// not truncated to a different account or unwrapped into a panic.
+#[test]
+fn account_index_is_validated() {
+    use orchard::keys::Scope::External;
+    use zcash_tx_tool::components::wallet::MAX_ACCOUNT_INDEX;
+
+    let tmp = TempDir::new().unwrap();
+    let db_path = tmp.path().join("accounts-test.sqlite");
+    let mut conn = db::establish_connection(db_path.to_str().unwrap());
+    let mut wallet = Wallet::new(&mut conn, SEED_PHRASE);
+
+    let addr = wallet
+        .try_address_for_account(1, External)
+        .expect("account 1 is derivable");
+    assert_eq!(addr, wallet.address_for_account(1, External));
+
+    // ZIP-32 account indices are hardened, so 2^31 and above are invalid.
+    let mut rejected = vec![MAX_ACCOUNT_INDEX as usize + 1, usize::MAX];
+    // 2^32 used to truncate to account 0 — a silent send to the wrong account.
+    #[cfg(target_pointer_width = "64")]
+    rejected.push(u32::MAX as usize + 1);
+
+    for account in rejected {
+        assert!(
+            wallet.try_address_for_account(account, External).is_err(),
+            "account index {} must be rejected",
+            account
+        );
+    }
+    assert!(
+        wallet
+            .try_address_for_account(MAX_ACCOUNT_INDEX as usize, External)
+            .is_ok()
+    );
+
+    assert!(wallet.register_accounts(2).is_ok());
+    assert!(
+        wallet
+            .register_accounts(MAX_ACCOUNT_INDEX as usize + 2)
+            .is_err(),
+        "an out-of-range account count must be rejected up front"
+    );
+}

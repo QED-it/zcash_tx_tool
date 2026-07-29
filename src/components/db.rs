@@ -50,6 +50,27 @@ pub fn open() -> SqliteConnection {
     establish_connection(&database_url())
 }
 
+/// Open the database of the wallet described by the active config: the
+/// configured `[wallet] db_path` when set, else the default URL.
+///
+/// Every command that reads or writes wallet state must select its database
+/// through this helper, so that a given `--config` file always addresses the
+/// same database.
+pub fn open_wallet(db_path: Option<&str>) -> SqliteConnection {
+    match db_path {
+        Some(path) => establish_connection(path),
+        None => open(),
+    }
+}
+
+/// The database URL [`open_wallet`] would use, for display in CLI output.
+pub fn wallet_database_url(db_path: Option<&str>) -> String {
+    match db_path {
+        Some(path) => path.to_string(),
+        None => database_url(),
+    }
+}
+
 /// Like [`open`] but returns `None` when no DATABASE_URL is set and the default
 /// file does not exist on disk.
 pub fn try_open() -> Option<SqliteConnection> {

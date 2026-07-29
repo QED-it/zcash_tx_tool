@@ -30,7 +30,7 @@ impl Runnable for ShieldCmd {
         ctx.require_node();
         ctx.sync();
 
-        let recipient = ctx.account_address(self.to_account);
+        let recipient = ctx.known_account_address(self.to_account);
         let miner_key = MinerKey::new(&config.wallet.miner_seed_phrase);
 
         println!(

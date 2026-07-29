@@ -25,6 +25,13 @@ impl Runnable for AddressesCmd {
             println!("  unified : {}", encode_unified_address(&addr));
             println!("  raw hex : {}", hex::encode(addr.to_raw_address_bytes()));
         }
+        if n > ctx.num_accounts {
+            println!(
+                "\nnote: sync only scans accounts 0..{}, so notes sent to accounts {}..{} \
+                 stay invisible until `num_accounts` is raised in the config",
+                ctx.num_accounts, ctx.num_accounts, n
+            );
+        }
         println!();
     }
 }

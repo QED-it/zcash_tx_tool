@@ -182,14 +182,14 @@ zcash_tx_tool assets
 | `finalize <asset>` | Permanently stop issuance of an own asset |
 | `mine [--blocks N]` | Produce regtest block(s), including mempool txs |
 | `shield [--to-account N]` | Mine + shield a coinbase reward (regtest ZEC faucet) |
-| `clean` | Reset all local wallet state (rescans on next sync) |
+| `clean` | Reset the local state of the wallet selected by `--config` (rescans on next sync) |
 
 All state-changing commands accept `--mempool` to submit via `sendrawtransaction` instead of self-mining (see [fees](#notes-on-fees-and-block-production)).
 
 ### Asset References and Recipients
 
 - **Assets** can be referenced by their description string (for assets you issued or labelled), by a unique prefix of the hex AssetBase, or by the full 64-char hex. `zec`/`native` selects the native asset.
-- **Recipients** can be `account:<n>` (an own account), a unified address (`uregtest1…`), or an 86-char raw Orchard address hex.
+- **Recipients** can be `account:<n>` (an own account, `n` below `num_accounts` — sync does not scan beyond that range), a unified address (`uregtest1…`), or an 86-char raw Orchard address hex.
 
 ### Multi-Wallet Demo
 
@@ -318,7 +318,7 @@ On subsequent runs, the tool:
 3. Uses preserved block hashes to validate rescans after `reset()`
 4. On any chain reorganization (or wallet/block-data inconsistency), wipes all persisted state (`block_data`, `wallet_state`, notes, commitment tree) and resyncs from scratch — there is no per-block rollback or partial rewind
 
-**Note**: `Wallet::reset` (and the `clean` subcommand) wipes everything: `block_data`, `wallet_state`, notes, and the in-memory tree. Subsequent runs auto-load any persisted `wallet_state` row and resume sync from `wallet_head + 1`, with no full re-sync.
+**Note**: `Wallet::reset` (and the `clean` subcommand) wipes everything: `block_data`, `wallet_state`, notes, and the in-memory tree. It also clears the asset registry's chain-derived finalization flags — they are re-learned from on-chain issuance bundles during the rescan, so a finalization removed by a reorg does not linger; user-supplied asset labels are kept. Subsequent runs auto-load any persisted `wallet_state` row and resume sync from `wallet_head + 1`, with no full re-sync.
 
 ## Block Data Storage Considerations
 

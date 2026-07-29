@@ -1,7 +1,6 @@
 //! `notes` — list the wallet's shielded notes.
 
 use abscissa_core::{Command, Runnable};
-use orchard::keys::Scope::External;
 use std::collections::HashMap;
 
 use crate::commands::wallet::WalletCtx;
@@ -23,7 +22,7 @@ impl Runnable for NotesCmd {
         // Map raw addresses back to account indices for display.
         let mut accounts: HashMap<Vec<u8>, usize> = HashMap::new();
         for i in 0..ctx.num_accounts {
-            let addr = ctx.wallet.address_for_account(i, External);
+            let addr = ctx.account_address(i);
             accounts.insert(addr.to_raw_address_bytes().to_vec(), i);
         }
 

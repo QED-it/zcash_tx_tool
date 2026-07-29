@@ -1,6 +1,6 @@
 use crate::components::block_data;
 use crate::components::miner::MinerKey;
-use crate::components::rpc_client::{BlockProposal, BlockTemplate, RpcClient};
+use crate::components::rpc_client::{try_decode_hex, BlockProposal, BlockTemplate, RpcClient};
 use crate::components::wallet::Wallet;
 use diesel::SqliteConnection;
 use crate::components::block_commitment::{
@@ -49,8 +49,12 @@ pub fn mine_block(
     let block_template = rpc_client.get_block_template()?;
     let block_height = block_template.height;
 
-    let block_proposal = template_into_proposal(block_template, txs);
-    let coinbase_txid = block_proposal.transactions.first().unwrap().txid();
+    let block_proposal = template_into_proposal(block_template, txs)?;
+    let coinbase_txid = block_proposal
+        .transactions
+        .first()
+        .ok_or("block proposal contains no transactions")?
+        .txid();
 
     rpc_client.submit_block(block_proposal)?;
 
@@ -467,17 +471,26 @@ pub fn create_finalization_transaction(
     build_tx(tx, &TransparentSigningSet::new(), &[], Some(asset))
 }
 
+/// Decode a hex-encoded transaction carried by a `getblocktemplate` response.
+///
+/// Template data comes from the node, so a malformed or incompatible entry is
+/// a normal error (e.g. an RPC version mismatch), not a reason to abort the
+/// process: `what` names the entry so the message identifies the culprit.
+fn read_template_tx(data: &str, what: &str) -> Result<Transaction, Box<dyn Error>> {
+    let bytes = hex::decode(data)
+        .map_err(|e| format!("invalid hex for {} in block template: {}", what, e))?;
+    Transaction::read(bytes.as_slice(), BranchId::Nu7)
+        .map_err(|e| format!("could not parse {} from block template: {}", what, e).into())
+}
+
 pub fn template_into_proposal(
     block_template: BlockTemplate,
     mut txs: Vec<Transaction>,
-) -> BlockProposal {
-    let coinbase = Transaction::read(
-        hex::decode(block_template.coinbase_txn.data)
-            .unwrap()
-            .as_slice(),
-        BranchId::Nu7,
-    )
-    .unwrap();
+) -> Result<BlockProposal, Box<dyn Error>> {
+    let coinbase = read_template_tx(
+        &block_template.coinbase_txn.data,
+        "the coinbase transaction",
+    )?;
 
     let mut txs_with_coinbase = vec![coinbase];
 
@@ -486,12 +499,8 @@ pub fn template_into_proposal(
     // into the next produced block. Explicitly provided txs take precedence
     // over their mempool duplicates.
     let provided_txids: Vec<TxId> = txs.iter().map(|tx| tx.txid()).collect();
-    for template_tx in &block_template.transactions {
-        let tx = Transaction::read(
-            hex::decode(&template_tx.data).unwrap().as_slice(),
-            BranchId::Nu7,
-        )
-        .unwrap();
+    for (index, template_tx) in block_template.transactions.iter().enumerate() {
+        let tx = read_template_tx(&template_tx.data, &format!("mempool transaction {}", index))?;
         if !provided_txids.contains(&tx.txid()) {
             txs_with_coinbase.push(tx);
         }
@@ -501,7 +510,7 @@ pub fn template_into_proposal(
 
     let merkle_root = if txs_with_coinbase.len() == 1 {
         // only coinbase tx is present, no need to calculate
-        crate::components::rpc_client::decode_hex(block_template.default_roots.merkle_root)
+        try_decode_hex(&block_template.default_roots.merkle_root, "merkle root")?
     } else {
         txs_with_coinbase
             .iter()
@@ -522,29 +531,39 @@ pub fn template_into_proposal(
         .collect::<AuthDataRoot>();
 
     let hash_block_commitments = block_commitment_from_parts(
-        crate::components::rpc_client::decode_hex(block_template.default_roots.chain_history_root),
+        try_decode_hex(
+            &block_template.default_roots.chain_history_root,
+            "chain history root",
+        )?,
         auth_data_root.0,
     );
 
     let block_header_data = BlockHeaderData {
         version: block_template.version as i32,
-        prev_block: BlockHash(crate::components::rpc_client::decode_hex(
-            block_template.previous_block_hash,
-        )),
+        prev_block: BlockHash(try_decode_hex(
+            &block_template.previous_block_hash,
+            "previous block hash",
+        )?),
         merkle_root,
         final_sapling_root: hash_block_commitments,
         time: block_template.cur_time,
-        bits: u32::from_str_radix(block_template.bits.as_str(), 16).unwrap(),
+        bits: u32::from_str_radix(block_template.bits.as_str(), 16).map_err(|e| {
+            format!(
+                "invalid difficulty bits '{}' in block template: {}",
+                block_template.bits, e
+            )
+        })?,
         nonce: [2; 32],                 // Currently PoW is switched off in Zebra
         solution: Vec::from([0; 1344]), // Currently PoW is switched off in Zebra
     };
 
-    let header = BlockHeader::from_data(block_header_data).unwrap();
+    let header = BlockHeader::from_data(block_header_data)
+        .map_err(|e| format!("could not assemble the block header: {}", e))?;
 
-    BlockProposal {
+    Ok(BlockProposal {
         header,
         transactions: txs_with_coinbase,
-    }
+    })
 }
 
 fn create_tx(target_height: BlockHeight, wallet: &Wallet) -> Builder<'_, RegtestNetwork, ()> {

@@ -38,7 +38,7 @@ impl Runnable for TransferCmd {
         }
 
         let asset = ctx.parse_asset(&self.asset);
-        let sender = ctx.account_address(self.from_account);
+        let sender = ctx.known_account_address(self.from_account);
         let recipient = ctx.parse_recipient(&self.to);
 
         let spendable = ctx.wallet.balance(&mut ctx.conn, sender, asset);

@@ -37,7 +37,7 @@ impl Runnable for BurnCmd {
         if bool::from(asset.is_zatoshi()) {
             exit_err("the native asset (ZEC) cannot be burned");
         }
-        let burner = ctx.account_address(self.from_account);
+        let burner = ctx.known_account_address(self.from_account);
 
         let spendable = ctx.wallet.balance(&mut ctx.conn, burner, asset);
         if spendable < self.amount {

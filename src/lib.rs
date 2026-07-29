@@ -35,6 +35,7 @@ pub const QUIET_COMMANDS: &[&str] = &[
     "finalize",
     "mine",
     "shield",
+    "clean",
 ];
 
 /// Whether the current invocation runs one of the [`QUIET_COMMANDS`].

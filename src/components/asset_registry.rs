@@ -144,6 +144,22 @@ pub fn set_finalized(conn: &mut SqliteConnection, asset: &AssetBase) {
         .expect("Error finalizing asset");
 }
 
+/// Clear the finalized flag on every registry entry.
+///
+/// Finalization is chain-derived: it is learned from on-chain issuance bundles
+/// during sync. Whenever the wallet throws away its chain state and rescans
+/// from scratch (`clean`, or reorg/divergence recovery), the flags must be
+/// dropped so they are re-derived from the chain that actually exists —
+/// otherwise a finalization that was reorged out would linger, misreporting
+/// supply state and locally blocking further issuance. User-authored fields
+/// (descriptions/labels) and the own-asset marker are kept.
+pub fn clear_finalized_flags(conn: &mut SqliteConnection) {
+    diesel::update(a::assets)
+        .set(a::finalized.eq(0))
+        .execute(conn)
+        .expect("Error clearing asset finalization flags");
+}
+
 /// Scan the notes table for assets not yet present in the registry and record
 /// them as discovered. Returns the newly recorded assets. Run after sync.
 pub fn discover_assets_from_notes(conn: &mut SqliteConnection) -> Vec<AssetBase> {

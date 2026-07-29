@@ -56,12 +56,11 @@ impl WalletCtx {
     /// Load the wallet context from the application config.
     pub fn load() -> Self {
         let config = APP.config();
-        let mut conn = match &config.wallet.db_path {
-            Some(path) => db::establish_connection(path),
-            None => db::open(),
-        };
+        let mut conn = db::open_wallet(config.wallet.db_path.as_deref());
         let mut wallet = Wallet::new(&mut conn, &config.wallet.seed_phrase);
-        wallet.register_accounts(config.wallet.num_accounts);
+        if let Err(e) = wallet.register_accounts(config.wallet.num_accounts) {
+            exit_err(&format!("invalid `num_accounts` in config: {}", e));
+        }
         let node_url = config.network.node_url();
         WalletCtx {
             conn,
@@ -99,8 +98,29 @@ impl WalletCtx {
         }
     }
 
+    /// Derive the default address of an account index given on the command
+    /// line, rejecting out-of-range indices with a friendly error instead of
+    /// truncating them to a different account or panicking.
     pub fn account_address(&mut self, account: usize) -> Address {
-        self.wallet.address_for_account(account, External)
+        match self.wallet.try_address_for_account(account, External) {
+            Ok(addr) => addr,
+            Err(e) => exit_err(&e),
+        }
+    }
+
+    /// Like [`Self::account_address`], but restricted to the accounts this
+    /// wallet derives keys for (`[wallet] num_accounts`). Sync never scans
+    /// beyond that range, so such an account can neither hold spendable notes
+    /// nor notice incoming ones after a restart.
+    pub fn known_account_address(&mut self, account: usize) -> Address {
+        if account >= self.num_accounts {
+            exit_err(&format!(
+                "account {} is outside this wallet: it derives keys for accounts 0..{} \
+                 (raise `num_accounts` in the config to use more)",
+                account, self.num_accounts
+            ));
+        }
+        self.account_address(account)
     }
 
     /// Parse a recipient: `account:<n>`, a unified address (`uregtest1…`),
@@ -108,7 +128,7 @@ impl WalletCtx {
     pub fn parse_recipient(&mut self, s: &str) -> Address {
         if let Some(idx) = s.strip_prefix("account:") {
             match idx.parse::<usize>() {
-                Ok(i) => return self.wallet.address_for_account(i, External),
+                Ok(i) => return self.known_account_address(i),
                 Err(_) => exit_err(&format!("invalid account index in recipient '{}'", s)),
             }
         }
@@ -219,9 +239,8 @@ impl WalletCtx {
     /// Pretty-print a balance table: one row per known asset (native ZEC
     /// first), one column per account.
     pub fn print_balances(&mut self, header: &str) {
-        let accounts: Vec<Address> = (0..self.num_accounts)
-            .map(|i| self.wallet.address_for_account(i, External))
-            .collect();
+        let num_accounts = self.num_accounts;
+        let accounts: Vec<Address> = (0..num_accounts).map(|i| self.account_address(i)).collect();
 
         let mut rows: Vec<(String, AssetBase)> =
             vec![("ZEC (zatoshis)".to_string(), AssetBase::zatoshi())];
