@@ -8,6 +8,7 @@
 
 use diesel::prelude::*;
 use orchard::note::AssetBase;
+use std::collections::HashSet;
 
 use crate::schema::assets::dsl as a;
 
@@ -210,6 +211,15 @@ pub fn discover_assets_from_notes(conn: &mut SqliteConnection) -> Vec<AssetBase>
         .load(conn)
         .expect("Error scanning note assets");
 
+    // Read the registry's contents once and test membership in memory: this
+    // runs on every sync, and a query per distinct asset adds up.
+    let mut known: HashSet<String> = a::assets
+        .select(a::asset_base)
+        .load(conn)
+        .expect("Error loading known assets")
+        .into_iter()
+        .collect();
+
     let mut discovered = Vec::new();
     for blob in asset_blobs {
         let bytes: [u8; 32] = match blob.as_slice().try_into() {
@@ -221,7 +231,8 @@ pub fn discover_assets_from_notes(conn: &mut SqliteConnection) -> Vec<AssetBase>
         if bool::from(asset.is_zatoshi()) {
             continue; // native ZEC needs no registry entry
         }
-        if find_by_asset(conn, &asset).is_none() {
+        // `insert` reports whether the asset was absent, i.e. newly discovered.
+        if known.insert(asset_base_hex(&asset)) {
             record_seen_asset(conn, &asset);
             discovered.push(asset);
         }
