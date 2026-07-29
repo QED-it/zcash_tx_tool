@@ -318,7 +318,8 @@ impl Wallet {
         let fvk = FullViewingKey::from(&sk);
         let address = fvk.address_at(0u32, scope);
         self.key_store.add_raw_address(address, fvk.to_ivk(scope));
-        self.key_store.add_full_viewing_key(fvk);
+        // `add_spending_key` registers the FVK (and both scopes' IVKs) it
+        // derives from `sk`, so there is no separate FVK insert to make here.
         self.key_store.add_spending_key(sk);
         Ok(address)
     }

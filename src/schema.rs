@@ -38,9 +38,10 @@ diesel::table! {
 
 diesel::table! {
     /// Registry of ZSA assets known to this wallet, keyed by hex-encoded
-    /// AssetBase. `description`/`desc_hash` are only known for assets issued
-    /// (or labelled) locally; assets discovered in received notes have NULL
-    /// description until the user labels them.
+    /// AssetBase. `desc_hash` is only known for assets issued locally;
+    /// `description` holds the issuance description for those, or the user's
+    /// label for an asset discovered in received notes — such an asset has a
+    /// NULL description until it is labelled.
     assets (id) {
         id -> Integer,
         asset_base -> Text,
