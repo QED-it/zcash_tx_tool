@@ -37,10 +37,17 @@ impl AssetInfo {
     }
 
     /// Display name: description when known, otherwise a shortened AssetBase.
+    ///
+    /// Falls back to the stored value whole if it is shorter than the prefix
+    /// we would show: a corrupt row in a local database should not take down
+    /// every command that lists assets.
     pub fn display_name(&self) -> String {
         match &self.description {
             Some(desc) => desc.clone(),
-            None => format!("[unlabelled {}…]", &self.asset_base[..8]),
+            None => format!(
+                "[unlabelled {}…]",
+                self.asset_base.get(..8).unwrap_or(&self.asset_base)
+            ),
         }
     }
 
@@ -238,4 +245,35 @@ pub fn discover_assets_from_notes(conn: &mut SqliteConnection) -> Vec<AssetBase>
         }
     }
     discovered
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AssetInfo;
+
+    fn row(asset_base: &str, description: Option<&str>) -> AssetInfo {
+        AssetInfo {
+            id: 1,
+            asset_base: asset_base.to_string(),
+            description: description.map(str::to_string),
+            desc_hash: None,
+            own: 0,
+            finalized: 0,
+        }
+    }
+
+    #[test]
+    fn display_name_survives_a_short_asset_base() {
+        // Registry rows are written as 64-char hex…
+        let full = "a".repeat(64);
+        assert_eq!(
+            row(&full, None).display_name(),
+            format!("[unlabelled {}…]", &full[..8])
+        );
+        // …but a corrupt local row must not panic the commands listing it.
+        assert_eq!(row("abc", None).display_name(), "[unlabelled abc…]");
+        assert_eq!(row("", None).display_name(), "[unlabelled …]");
+        // A described asset never consults the AssetBase at all.
+        assert_eq!(row("abc", Some("My Token")).display_name(), "My Token");
+    }
 }

@@ -25,6 +25,10 @@ pub struct ShieldCmd {
 
 impl Runnable for ShieldCmd {
     fn run(&self) {
+        if self.maturity == 0 {
+            exit_err("--maturity must be at least 1: shielding needs a coinbase to spend");
+        }
+
         let config = APP.config();
         let mut ctx = WalletCtx::load();
         ctx.require_node();
