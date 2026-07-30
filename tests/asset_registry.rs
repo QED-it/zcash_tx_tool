@@ -130,11 +130,13 @@ fn labels_may_not_corrupt_the_registry() {
     );
 }
 
-/// A wallet reset throws away chain state and rescans from scratch, so the
-/// finalization it learned from issuance bundles must go with it — otherwise a
-/// finalization that a reorg removed would linger. User labels must survive.
+/// A wallet reset throws away chain state and rescans from scratch, so every
+/// flag learned from issuance bundles must go with it: a finalization a reorg
+/// removed would linger, and a stale `issued_on_chain` would make the next
+/// `issue` build a re-issuance for an asset the chain has never seen — which
+/// ZIP 227 rejects for want of a reference note. Local metadata must survive.
 #[test]
-fn reset_clears_chain_derived_finalization() {
+fn reset_clears_chain_derived_flags() {
     let tmp = TempDir::new().unwrap();
     let db_path = tmp.path().join("reset-test.sqlite");
     let mut conn = db::establish_connection(db_path.to_str().unwrap());
@@ -143,22 +145,37 @@ fn reset_clears_chain_derived_finalization() {
     let hash = desc_hash("ASSET-FINAL");
     let own = wallet.asset_base_from_desc_hash(&hash);
     asset_registry::upsert_own_asset(&mut conn, &own, "ASSET-FINAL", &hash);
+    asset_registry::set_issued_on_chain(&mut conn, &own);
     asset_registry::set_finalized(&mut conn, &own);
 
     let seen = wallet.asset_base_from_desc_hash(&desc_hash("ASSET-SEEN"));
     asset_registry::record_seen_asset(&mut conn, &seen);
     asset_registry::set_label(&mut conn, &seen, "Received Token");
+    asset_registry::set_issued_on_chain(&mut conn, &seen);
     asset_registry::set_finalized(&mut conn, &seen);
+
+    let info = asset_registry::find_by_asset(&mut conn, &own).unwrap();
+    assert!(info.is_issued_on_chain() && info.is_finalized());
 
     wallet.reset(&mut conn);
 
     let info = asset_registry::find_by_asset(&mut conn, &own).expect("own asset kept");
     assert!(!info.is_finalized(), "finalization must be re-derived");
-    assert!(info.is_own());
+    assert!(
+        !info.is_issued_on_chain(),
+        "issuance must be re-derived, so the next issue marks itself first"
+    );
+    assert!(info.is_own(), "the own-asset marker is local metadata");
     assert_eq!(info.display_name(), "ASSET-FINAL");
+    assert_eq!(
+        info.desc_hash.as_deref(),
+        Some(hex::encode(hash).as_str()),
+        "the description hash is local metadata"
+    );
 
     let info = asset_registry::find_by_asset(&mut conn, &seen).expect("discovered asset kept");
     assert!(!info.is_finalized(), "finalization must be re-derived");
+    assert!(!info.is_issued_on_chain(), "issuance must be re-derived");
     assert_eq!(info.display_name(), "Received Token", "label must survive");
 }
 

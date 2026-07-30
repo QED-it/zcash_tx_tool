@@ -4,5 +4,6 @@ CREATE TABLE assets (
     description TEXT,
     desc_hash TEXT,
     own INTEGER NOT NULL DEFAULT 0,
-    finalized INTEGER NOT NULL DEFAULT 0
+    finalized INTEGER NOT NULL DEFAULT 0,
+    issued_on_chain INTEGER NOT NULL DEFAULT 0
 );

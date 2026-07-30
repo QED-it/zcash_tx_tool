@@ -47,8 +47,17 @@ impl Runnable for IssueCmd {
         let desc_hash = compute_asset_desc_hash(&NonEmpty::from_slice(desc_bytes).unwrap());
         let asset = ctx.wallet.asset_base_from_desc_hash(&desc_hash);
 
-        // First issuance of this asset from this wallet? (ZIP 227 requires
-        // the first issuance to be marked, creating the asset's reference note.)
+        // Has this asset been issued on the chain we just synced? ZIP 227
+        // requires the first issuance to be marked, creating the asset's
+        // reference note, and rejects a re-issuance without one — so the
+        // question is about the chain, not about what this wallet remembers
+        // doing. `issued_on_chain` is learned during sync and dropped whenever
+        // chain state is discarded, so a fresh chain, a reorg, or a `clean`
+        // all lead back to a correctly marked first issuance.
+        //
+        // The one case this cannot settle is a `--mempool` issuance that has
+        // not been mined yet: the chain genuinely does not carry it, so a
+        // second `issue` before mining marks itself first as well.
         let existing = asset_registry::find_by_asset(&mut ctx.conn, &asset);
         if let Some(info) = &existing {
             if info.is_finalized() {
@@ -72,7 +81,7 @@ impl Runnable for IssueCmd {
                 self.asset_desc, other, other
             ));
         }
-        let first_issuance = existing.is_none_or(|info| !info.is_own());
+        let first_issuance = existing.is_none_or(|info| !info.is_issued_on_chain());
 
         let recipient = ctx.parse_recipient(&self.to);
 

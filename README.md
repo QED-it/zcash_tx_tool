@@ -319,7 +319,11 @@ On subsequent runs, the tool:
 3. Uses preserved block hashes to validate rescans after `reset()`
 4. On any chain reorganization (or wallet/block-data inconsistency), wipes all persisted state (`block_data`, `wallet_state`, notes, commitment tree) and resyncs from scratch — there is no per-block rollback or partial rewind
 
-**Note**: `Wallet::reset` (and the `clean` subcommand) wipes everything: `block_data`, `wallet_state`, notes, and the in-memory tree. It also clears the asset registry's chain-derived finalization flags — they are re-learned from on-chain issuance bundles during the rescan, so a finalization removed by a reorg does not linger; user-supplied asset labels are kept. Subsequent runs auto-load any persisted `wallet_state` row and resume sync from `wallet_head + 1`, with no full re-sync.
+**Note**: `Wallet::reset` (and the `clean` subcommand) wipes everything: `block_data`, `wallet_state`, notes, and the in-memory tree. It also clears the asset registry's chain-derived flags — `finalized` and `issued_on_chain` — which are re-learned from on-chain issuance bundles during the rescan; user-supplied asset labels and own-asset metadata are kept. Subsequent runs auto-load any persisted `wallet_state` row and resume sync from `wallet_head + 1`, with no full re-sync.
+
+`issued_on_chain` is part of the `assets` table's original definition, so a wallet database created by an *earlier build of this branch* predates the column and must be deleted rather than migrated — `clean` opens the same schema and cannot repair the difference.
+
+Deriving those two flags from the chain rather than from what the wallet remembers doing is what keeps issuance correct across chain changes. ZIP 227 requires an asset's first issuance to be marked (it creates the reference note) and rejects a later issuance that lacks one, so `issue` decides "first or re-issuance?" from `issued_on_chain`. Point a wallet at a fresh regtest chain, recover from a reorg, or run `clean`, and the flag is gone with the rest of the chain state, so the next `issue` correctly marks itself first. The exception is a `--mempool` issuance that has not been mined: the chain does not carry it yet, so a second `issue` before mining also marks itself first.
 
 ## Block Data Storage Considerations
 

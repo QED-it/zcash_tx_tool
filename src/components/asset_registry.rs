@@ -27,7 +27,11 @@ pub struct AssetInfo {
     /// 1 if the asset was issued with this wallet's issuance key.
     pub own: i32,
     /// 1 if the asset supply has been finalized (no further issuance).
+    /// Chain-derived: learned during sync, cleared by a wallet reset.
     pub finalized: i32,
+    /// 1 if an issuance of this asset was seen on the chain currently synced.
+    /// Chain-derived: learned during sync, cleared by a wallet reset.
+    pub issued_on_chain: i32,
 }
 
 impl AssetInfo {
@@ -57,6 +61,12 @@ impl AssetInfo {
 
     pub fn is_finalized(&self) -> bool {
         self.finalized != 0
+    }
+
+    /// Whether the chain currently synced already carries an issuance of this
+    /// asset — the question ZIP 227's first-issuance flag actually asks.
+    pub fn is_issued_on_chain(&self) -> bool {
+        self.issued_on_chain != 0
     }
 }
 
@@ -208,20 +218,34 @@ pub fn set_finalized(conn: &mut SqliteConnection, asset: &AssetBase) {
         .expect("Error finalizing asset");
 }
 
-/// Clear the finalized flag on every registry entry.
-///
-/// Finalization is chain-derived: it is learned from on-chain issuance bundles
-/// during sync. Whenever the wallet throws away its chain state and rescans
-/// from scratch (`clean`, or reorg/divergence recovery), the flags must be
-/// dropped so they are re-derived from the chain that actually exists —
-/// otherwise a finalization that was reorged out would linger, misreporting
-/// supply state and locally blocking further issuance. User-authored fields
-/// (descriptions/labels) and the own-asset marker are kept.
-pub fn clear_finalized_flags(conn: &mut SqliteConnection) {
-    diesel::update(a::assets)
-        .set(a::finalized.eq(0))
+/// Record that the chain carries an issuance of this asset.
+pub fn set_issued_on_chain(conn: &mut SqliteConnection, asset: &AssetBase) {
+    diesel::update(a::assets.filter(a::asset_base.eq(asset_base_hex(asset))))
+        .set(a::issued_on_chain.eq(1))
         .execute(conn)
-        .expect("Error clearing asset finalization flags");
+        .expect("Error recording asset issuance");
+}
+
+/// Clear every chain-derived flag in the registry.
+///
+/// Both `finalized` and `issued_on_chain` are learned from on-chain issuance
+/// bundles during sync. Whenever the wallet throws away its chain state and
+/// rescans from scratch (`clean`, or reorg/divergence recovery), they must be
+/// dropped so they are re-derived from the chain that actually exists:
+///
+/// * a finalization that was reorged out would otherwise linger, misreporting
+///   supply state and locally blocking further issuance;
+/// * a stale `issued_on_chain` would make the next `issue` build a
+///   *re*-issuance for an asset the current chain has never seen, which ZIP 227
+///   rejects for want of a reference note.
+///
+/// User-authored fields (descriptions/labels) and the own-asset marker are
+/// local metadata and are kept.
+pub fn clear_chain_derived_flags(conn: &mut SqliteConnection) {
+    diesel::update(a::assets)
+        .set((a::finalized.eq(0), a::issued_on_chain.eq(0)))
+        .execute(conn)
+        .expect("Error clearing chain-derived asset flags");
 }
 
 /// Scan the notes table for assets not yet present in the registry and record
@@ -275,6 +299,7 @@ mod tests {
             desc_hash: None,
             own: 0,
             finalized: 0,
+            issued_on_chain: 0,
         }
     }
 

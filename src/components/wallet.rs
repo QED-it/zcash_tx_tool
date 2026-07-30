@@ -203,10 +203,11 @@ impl Wallet {
     /// registry. Used by `clean` and by sync_from_height when chain/wallet
     /// divergence is detected.
     ///
-    /// Both callers rescan the chain from scratch afterwards, so asset
-    /// finalizations are re-learned from the issuance bundles the current chain
-    /// actually contains; keeping stale flags would misreport supply state.
-    /// User-authored asset labels survive the reset.
+    /// Both callers rescan the chain from scratch afterwards, so which assets
+    /// the chain carries and whose supply is closed are re-learned from the
+    /// issuance bundles it actually contains; keeping stale flags would
+    /// misreport supply state and misjudge first issuance. User-authored asset
+    /// labels survive the reset.
     pub fn reset(&mut self, conn: &mut SqliteConnection) {
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
@@ -214,7 +215,7 @@ impl Wallet {
         notes_db::delete_all_notes(conn);
         tree_state::delete_tree_state(conn).expect("Failed to delete tree state");
         block_data::clear(conn);
-        asset_registry::clear_finalized_flags(conn);
+        asset_registry::clear_chain_derived_flags(conn);
     }
 
     pub fn last_block_hash(&self) -> Option<BlockHash> {
@@ -455,7 +456,7 @@ impl Wallet {
 
         if let Some(issue_bundle) = tx.issue_bundle() {
             self.add_notes_from_issue_bundle(conn, &tx.txid(), issue_bundle, issued_notes_offset);
-            self.record_finalizations(conn, issue_bundle);
+            self.record_issuance_bundle(conn, issue_bundle);
         };
 
         self.add_note_commitments(conn, &tx.txid(), tx.orchard_bundle(), tx.issue_bundle())
@@ -500,14 +501,22 @@ impl Wallet {
         }
     }
 
-    /// Asset finalization is public data carried by issuance bundles: record
-    /// it in the local asset registry so every wallet (not only the issuer)
-    /// knows when an asset's supply has been closed.
-    fn record_finalizations(&self, conn: &mut SqliteConnection, bundle: &IssueBundle<Signed>) {
-        for action in bundle.actions().iter().filter(|a| a.is_finalized()) {
+    /// Issuance bundles are public: record what they say about each asset in
+    /// the local registry, so every wallet (not only the issuer) knows which
+    /// assets this chain carries and whose supply has been closed.
+    ///
+    /// Both facts are read back out of the registry during sync — the existence
+    /// of an issuance decides ZIP 227's first-issuance flag for our own assets
+    /// — so they are recorded from the chain rather than from what this wallet
+    /// remembers doing, and are cleared whenever the chain state is discarded.
+    fn record_issuance_bundle(&self, conn: &mut SqliteConnection, bundle: &IssueBundle<Signed>) {
+        for action in bundle.actions() {
             let asset = AssetBase::custom(&AssetId::new_v0(bundle.ik(), action.asset_desc_hash()));
             asset_registry::record_seen_asset(conn, &asset);
-            asset_registry::set_finalized(conn, &asset);
+            asset_registry::set_issued_on_chain(conn, &asset);
+            if action.is_finalized() {
+                asset_registry::set_finalized(conn, &asset);
+            }
         }
     }
 
