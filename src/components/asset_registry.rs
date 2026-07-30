@@ -164,13 +164,29 @@ pub fn check_label(
             ));
         }
     }
-    match find_by_description(conn, label) {
-        // Relabelling an asset with the name it already has is a no-op.
-        Some(other) if other.asset_base != base => Err(format!(
+    describes_another_asset(conn, asset, label).map_err(|other| {
+        format!(
             "'{}' already labels asset {} — pick another name, so that referring to \
              an asset by description stays unambiguous",
-            label, other.asset_base
-        )),
+            label, other
+        )
+    })
+}
+
+/// Whether `description` is already taken by an asset other than `asset`,
+/// returning that asset's hex in `Err`.
+///
+/// Lookup by description takes the first matching row, so two assets sharing
+/// one description makes every `transfer`/`burn` naming it a coin toss.
+pub fn describes_another_asset(
+    conn: &mut SqliteConnection,
+    asset: &AssetBase,
+    description: &str,
+) -> Result<(), String> {
+    let base = asset_base_hex(asset);
+    match find_by_description(conn, description) {
+        // The asset already carrying this description is not a conflict.
+        Some(other) if other.asset_base != base => Err(other.asset_base),
         _ => Ok(()),
     }
 }

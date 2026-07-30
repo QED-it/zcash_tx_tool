@@ -105,6 +105,16 @@ fn labels_may_not_corrupt_the_registry() {
     assert!(asset_registry::check_label(&mut conn, &seen, "Received Token").is_ok());
     assert!(asset_registry::check_label(&mut conn, &other, "Another Token").is_ok());
 
+    // The same collision blocks issuing an asset described like an existing
+    // label: `issue` consults this before building a transaction.
+    assert!(
+        asset_registry::describes_another_asset(&mut conn, &other, "Received Token").is_err(),
+        "a description colliding with another asset's label must be reported"
+    );
+    assert!(asset_registry::describes_another_asset(&mut conn, &other, "OTHER-ASSET").is_ok());
+    // Re-issuing an asset under the description it already carries is fine.
+    assert!(asset_registry::describes_another_asset(&mut conn, &own, "OWN-ASSET").is_ok());
+
     // The rejected labels left the registry untouched.
     assert_eq!(
         asset_registry::find_by_asset(&mut conn, &own)

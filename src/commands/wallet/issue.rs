@@ -58,6 +58,20 @@ impl Runnable for IssueCmd {
                 ));
             }
         }
+
+        // The description is about to become this asset's registry entry, so
+        // it must not already name a different one — a label the user attached
+        // to a received asset, say. Checked before building the transaction,
+        // since the remedy is to relabel that asset and retry.
+        if let Err(other) =
+            asset_registry::describes_another_asset(&mut ctx.conn, &asset, &self.asset_desc)
+        {
+            exit_err(&format!(
+                "'{}' already names asset {} in this wallet — relabel it (`assets --label \
+                 {} --name …`) before issuing an asset with that description",
+                self.asset_desc, other, other
+            ));
+        }
         let first_issuance = existing.is_none_or(|info| !info.is_own());
 
         let recipient = ctx.parse_recipient(&self.to);
