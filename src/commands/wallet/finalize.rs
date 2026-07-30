@@ -36,6 +36,18 @@ impl Runnable for FinalizeCmd {
         if info.is_finalized() {
             exit_err(&format!("asset '{}' is already finalized", self.asset));
         }
+        // Finalization is issued as a non-first issuance action, which consensus
+        // rejects unless the chain already carries the asset's reference note.
+        // Catching that here costs nothing; letting it through means building a
+        // proof and waiting for the node to refuse the block.
+        if !info.is_issued_on_chain() {
+            exit_err(&format!(
+                "asset '{}' has not been issued on the chain this wallet has synced, \
+                 so there is no issuance to close — mine a pending `issue --mempool` \
+                 first, or issue the asset",
+                self.asset
+            ));
+        }
         let desc_hash_hex = info
             .desc_hash
             .as_ref()
