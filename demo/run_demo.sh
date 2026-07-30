@@ -47,7 +47,13 @@ step "4. Alice syncs — the asset appears (known only by its on-chain id)"
 $ALICE balance
 
 step "5. Alice labels the asset for her own bookkeeping"
-BASE=$($ALICE assets | awk 'END{print $NF}')
+# Pick the AssetBase out of the listing by its shape: the table ends with a
+# rule and a blank line, so reading the last line's last field yields "".
+BASE=$($ALICE assets | grep -oE '[0-9a-f]{64}' | tail -1)
+if [ -z "$BASE" ]; then
+    echo "ERROR: could not find an AssetBase in Alice's asset listing" >&2
+    exit 1
+fi
 $ALICE assets --label "$BASE" --name "QEDIT Demo Token"
 $ALICE assets
 

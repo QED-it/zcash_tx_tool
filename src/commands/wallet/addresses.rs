@@ -26,10 +26,20 @@ impl Runnable for AddressesCmd {
             println!("  raw hex : {}", hex::encode(addr.to_raw_address_bytes()));
         }
         if n > ctx.num_accounts {
+            // Name the bounds inclusively: range notation in a CLI message
+            // reads as either convention, and the shown accounts end at n - 1.
+            // `n > num_accounts` makes `n - 1` safe, but `num_accounts` itself
+            // may be 0, which has no last scanned account to name.
+            let scanned = match ctx.num_accounts {
+                0 => "no accounts".to_string(),
+                count => format!("accounts 0 through {}", count - 1),
+            };
             println!(
-                "\nnote: sync only scans accounts 0..{}, so notes sent to accounts {}..{} \
+                "\nnote: sync only scans {}, so notes sent to accounts {} through {} \
                  stay invisible until `num_accounts` is raised in the config",
-                ctx.num_accounts, ctx.num_accounts, n
+                scanned,
+                ctx.num_accounts,
+                n - 1
             );
         }
         println!();
