@@ -114,10 +114,16 @@ impl WalletCtx {
     /// nor notice incoming ones after a restart.
     pub fn known_account_address(&mut self, account: usize) -> Address {
         if account >= self.num_accounts {
+            // Name the bound inclusively, as `addresses` does: range notation
+            // in user-facing output reads as either convention.
+            let derived = match self.num_accounts {
+                0 => "no accounts at all".to_string(),
+                count => format!("accounts 0 through {}", count - 1),
+            };
             exit_err(&format!(
-                "account {} is outside this wallet: it derives keys for accounts 0..{} \
+                "account {} is outside this wallet: it derives keys for {} \
                  (raise `num_accounts` in the config to use more)",
-                account, self.num_accounts
+                account, derived
             ));
         }
         self.account_address(account)

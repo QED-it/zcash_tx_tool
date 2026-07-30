@@ -53,9 +53,10 @@ pub fn open() -> SqliteConnection {
 /// Open the database of the wallet described by the active config: the
 /// configured `[wallet] db_path` when set, else the default URL.
 ///
-/// Every command that reads or writes wallet state must select its database
-/// through this helper, so that a given `--config` file always addresses the
-/// same database.
+/// The wallet subcommands and `clean` all select their database this way, so
+/// that a given `--config` file always addresses the same one. The end-to-end
+/// test scenarios and `get-block-data` deliberately do not: they drive a single
+/// throwaway database chosen by [`open`], and ignore `[wallet] db_path`.
 pub fn open_wallet(db_path: Option<&str>) -> SqliteConnection {
     match db_path {
         Some(path) => establish_connection(path),
