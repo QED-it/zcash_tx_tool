@@ -35,3 +35,25 @@ diesel::table! {
         last_block_hash -> Text,
     }
 }
+
+diesel::table! {
+    /// Registry of ZSA assets known to this wallet, keyed by hex-encoded
+    /// AssetBase. `desc_hash` is only known for assets issued locally;
+    /// `description` holds the issuance description for those, or the user's
+    /// label for an asset discovered in received notes — such an asset has a
+    /// NULL description until it is labelled.
+    ///
+    /// `finalized` and `issued_on_chain` are chain-derived: they are learned
+    /// from on-chain issuance bundles during sync and cleared by a wallet
+    /// reset, so they always describe the chain currently synced. The other
+    /// columns are local metadata and survive a reset.
+    assets (id) {
+        id -> Integer,
+        asset_base -> Text,
+        description -> Nullable<Text>,
+        desc_hash -> Nullable<Text>,
+        own -> Integer,
+        finalized -> Integer,
+        issued_on_chain -> Integer,
+    }
+}

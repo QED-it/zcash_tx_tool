@@ -1,0 +1,22 @@
+# Demo wallet: the ISSUER ("QEDIT Corp") — issues, transfers, finalizes assets.
+# Run from the repository root:  zcash_tx_tool --config demo/issuer.toml <command>
+
+[wallet]
+# BIP-39 seed phrase — wallet identity (keys, addresses, issuance key).
+seed_phrase = "fabric dilemma shift time border road fork license among uniform early laundry caution deer stamp"
+# Regtest coinbase rewards are paid to the address derived from this seed
+# (must match the node's configured miner_address to use `shield`).
+miner_seed_phrase = "fabric dilemma shift time border road fork license among uniform early laundry caution deer stamp"
+# Accounts scanned during sync.
+num_accounts = 2
+# Each wallet keeps its own note database.
+db_path = "demo/issuer-wallet.sqlite"
+
+[network]
+node_address = "127.0.0.1"
+node_port = 18232
+protocol = "http"
+
+[chain]
+nu5_activation_height = 1
+nu7_activation_height = 1

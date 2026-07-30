@@ -22,6 +22,7 @@ bridgetree = "0.7.0"
 orchard = { version = "0.12.0", features = ["zsa-issuance"] }
 zcash_primitives = { version = "0.26.1", features = ["transparent-inputs", "non-standard-fees", "zsa-issuance", "zip-233"] }
 zcash_protocol = { version = "0.7.2" }
+zcash_address = { version = "0.10" }
 zcash_encoding = "0.3.0"
 zcash_proofs = "0.26.1"
 zip32 = "0.2"

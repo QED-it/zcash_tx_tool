@@ -81,6 +81,10 @@ impl Application for ZcashTxToolApp {
     fn tracing_config(&self, command: &EntryPoint) -> trace::Config {
         if command.verbose {
             trace::Config::verbose()
+        } else if crate::is_quiet_invocation() {
+            // Wallet commands print clean human-readable output; keep logs
+            // to warnings unless --verbose is given.
+            "warn".to_string().into()
         } else {
             trace::Config::default()
         }

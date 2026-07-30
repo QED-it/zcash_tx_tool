@@ -11,3 +11,6 @@
 **/.terragrunt/*
 **/.terragrunt-cache/*
 
+
+# Demo wallet databases
+demo/*.sqlite

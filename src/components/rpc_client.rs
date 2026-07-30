@@ -331,8 +331,19 @@ impl BlockProposal {
     }
 }
 
-pub(crate) fn decode_hex(hex: String) -> [u8; 32] {
-    let mut result_vec = hex::decode(hex).unwrap();
+/// Decode a 32-byte big-endian hex string from an RPC response into the
+/// little-endian byte array the consensus structs use.
+///
+/// `what` names the field, so a malformed response points at its cause.
+pub(crate) fn try_decode_hex(hex: &str, what: &str) -> Result<[u8; 32], Box<dyn Error>> {
+    let mut result_vec = hex::decode(hex).map_err(|e| {
+        format!(
+            "invalid hex for {} in RPC response ('{}'): {}",
+            what, hex, e
+        )
+    })?;
     result_vec.reverse();
-    result_vec.try_into().unwrap()
+    result_vec.try_into().map_err(|v: Vec<u8>| {
+        format!("{} in RPC response is {} bytes, expected 32", what, v.len()).into()
+    })
 }

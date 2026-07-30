@@ -9,11 +9,11 @@ use std::convert::TryInto;
 use abscissa_core::prelude::info;
 
 use orchard::issuance::{
-    auth::{IssueAuthKey, ZSASchnorr},
+    auth::{IssueAuthKey, IssueValidatingKey, ZSASchnorr},
     IssueBundle, Signed,
 };
 use orchard::keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey};
-use orchard::note::{AssetBase, ExtractedNoteCommitment, RandomSeed, Rho};
+use orchard::note::{AssetBase, AssetId, ExtractedNoteCommitment, RandomSeed, Rho};
 use orchard::tree::{MerkleHashOrchard, MerklePath};
 use orchard::value::NoteValue;
 use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
@@ -21,7 +21,7 @@ use orchard::{bundle::Authorized, Address, Anchor, Bundle, Note};
 use crate::components::persistence::model::NoteData;
 use crate::components::persistence::sqlite as notes_db;
 use crate::components::wallet::structs::OrderedAddress;
-use crate::components::{block_data, tree_state};
+use crate::components::{asset_registry, block_data, tree_state};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
 use zcash_primitives::block::BlockHash;
@@ -36,6 +36,10 @@ use zcash_protocol::value::ZatBalance;
 
 pub const MAX_CHECKPOINTS: usize = 100;
 pub const NOTE_COMMITMENT_TREE_DEPTH: u8 = 32;
+
+/// Largest usable ZIP-32 account index: account indices are always hardened in
+/// derivation paths, so they are effectively 31-bit ([`zip32::AccountId`]).
+pub const MAX_ACCOUNT_INDEX: u32 = (1 << 31) - 1;
 
 #[derive(Debug, Clone)]
 pub enum Error {
@@ -195,8 +199,15 @@ impl Wallet {
     }
 
     /// Reset all persisted wallet data: in-memory tree, notes, wallet_state row,
-    /// and the block_data hash cache. Used by `clean` and by sync_from_height
-    /// when chain/wallet divergence is detected.
+    /// the block_data hash cache, and the chain-derived flags of the asset
+    /// registry. Used by `clean` and by sync_from_height when chain/wallet
+    /// divergence is detected.
+    ///
+    /// Both callers rescan the chain from scratch afterwards, so which assets
+    /// the chain carries and whose supply is closed are re-learned from the
+    /// issuance bundles it actually contains; keeping stale flags would
+    /// misreport supply state and misjudge first issuance. User-authored asset
+    /// labels survive the reset.
     pub fn reset(&mut self, conn: &mut SqliteConnection) {
         self.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
         self.last_block_height = None;
@@ -204,6 +215,7 @@ impl Wallet {
         notes_db::delete_all_notes(conn);
         tree_state::delete_tree_state(conn).expect("Failed to delete tree state");
         block_data::clear(conn);
+        asset_registry::clear_chain_derived_flags(conn);
     }
 
     pub fn last_block_hash(&self) -> Option<BlockHash> {
@@ -280,19 +292,73 @@ impl Wallet {
         selected_notes
     }
 
-    pub fn address_for_account(&mut self, account: usize, scope: Scope) -> Address {
+    /// Derive (and register) the default address of a ZIP-32 account, failing
+    /// with a human-readable message for out-of-range indices instead of
+    /// silently truncating them to another account or panicking.
+    pub fn try_address_for_account(
+        &mut self,
+        account: usize,
+        scope: Scope,
+    ) -> Result<Address, String> {
+        let account_id = u32::try_from(account)
+            .ok()
+            .and_then(|i| AccountId::try_from(i).ok())
+            .ok_or_else(|| {
+                format!(
+                    "account index {} is out of range: ZIP-32 accounts are hardened, \
+                     so the largest valid index is {}",
+                    account, MAX_ACCOUNT_INDEX
+                )
+            })?;
         let sk = SpendingKey::from_zip32_seed(
             self.seed.as_slice(),
             constants::regtest::COIN_TYPE,
-            AccountId::try_from(account as u32).unwrap(),
+            account_id,
         )
-        .unwrap();
+        .map_err(|e| format!("could not derive keys for account {}: {}", account, e))?;
         let fvk = FullViewingKey::from(&sk);
         let address = fvk.address_at(0u32, scope);
         self.key_store.add_raw_address(address, fvk.to_ivk(scope));
-        self.key_store.add_full_viewing_key(fvk);
+        // `add_spending_key` registers the FVK (and both scopes' IVKs) it
+        // derives from `sk`, so there is no separate FVK insert to make here.
         self.key_store.add_spending_key(sk);
-        address
+        Ok(address)
+    }
+
+    /// [`Self::try_address_for_account`] for callers deriving a fixed, known
+    /// account index (test scenarios, internal dummy recipients). Code paths
+    /// that derive an index from user input must use the fallible form.
+    pub fn address_for_account(&mut self, account: usize, scope: Scope) -> Address {
+        self.try_address_for_account(account, scope)
+            .unwrap_or_else(|e| panic!("{}", e))
+    }
+
+    /// Derive and register keys and default addresses for accounts
+    /// `0..num_accounts`, so block sync can decrypt notes addressed to them
+    /// and spends can locate their spending keys. Must be called before
+    /// syncing when the wallet is constructed fresh (keys live in memory).
+    pub fn register_accounts(&mut self, num_accounts: usize) -> Result<(), String> {
+        // Check the whole range up front: deriving keys one index at a time
+        // would take effectively forever to reach an out-of-range one.
+        if num_accounts > MAX_ACCOUNT_INDEX as usize + 1 {
+            return Err(format!(
+                "{} accounts requested, but ZIP-32 account indices stop at {}",
+                num_accounts, MAX_ACCOUNT_INDEX
+            ));
+        }
+        for account in 0..num_accounts {
+            self.try_address_for_account(account, Scope::External)?;
+        }
+        Ok(())
+    }
+
+    /// The `AssetBase` of an asset defined by this wallet's issuance key and
+    /// the given asset description hash (ZIP 227 derivation).
+    pub fn asset_base_from_desc_hash(&self, asset_desc_hash: &[u8; 32]) -> AssetBase {
+        AssetBase::custom(&AssetId::new_v0(
+            &IssueValidatingKey::from(&self.issuance_key()),
+            asset_desc_hash,
+        ))
     }
 
     pub(crate) fn orchard_ovk(&self) -> OutgoingViewingKey {
@@ -390,6 +456,7 @@ impl Wallet {
 
         if let Some(issue_bundle) = tx.issue_bundle() {
             self.add_notes_from_issue_bundle(conn, &tx.txid(), issue_bundle, issued_notes_offset);
+            self.record_issuance_bundle(conn, issue_bundle);
         };
 
         self.add_note_commitments(conn, &tx.txid(), tx.orchard_bundle(), tx.issue_bundle())
@@ -430,6 +497,25 @@ impl Wallet {
                 let note_index = note_index + note_index_offset;
                 self.store_note(conn, txid, note_index, ivk.clone(), *note, [0; 512])
                     .unwrap();
+            }
+        }
+    }
+
+    /// Issuance bundles are public: record what they say about each asset in
+    /// the local registry, so every wallet (not only the issuer) knows which
+    /// assets this chain carries and whose supply has been closed.
+    ///
+    /// Both facts are read back out of the registry during sync — the existence
+    /// of an issuance decides ZIP 227's first-issuance flag for our own assets
+    /// — so they are recorded from the chain rather than from what this wallet
+    /// remembers doing, and are cleared whenever the chain state is discarded.
+    fn record_issuance_bundle(&self, conn: &mut SqliteConnection, bundle: &IssueBundle<Signed>) {
+        for action in bundle.actions() {
+            let asset = AssetBase::custom(&AssetId::new_v0(bundle.ik(), action.asset_desc_hash()));
+            asset_registry::record_seen_asset(conn, &asset);
+            asset_registry::set_issued_on_chain(conn, &asset);
+            if action.is_finalized() {
+                asset_registry::set_finalized(conn, &asset);
             }
         }
     }

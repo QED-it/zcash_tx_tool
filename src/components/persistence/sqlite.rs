@@ -26,6 +26,25 @@ pub fn find_non_spent_notes(
         .expect("Error loading notes")
 }
 
+/// All unspent notes in the wallet, across every address and asset.
+pub fn list_unspent_notes(conn: &mut SqliteConnection) -> Vec<NoteData> {
+    notes
+        .filter(spend_tx_id.is_null())
+        .order(id.asc())
+        .select(NoteData::as_select())
+        .load(conn)
+        .expect("Error loading notes")
+}
+
+/// Every note the wallet has ever tracked, including spent ones.
+pub fn list_all_notes(conn: &mut SqliteConnection) -> Vec<NoteData> {
+    notes
+        .order(id.asc())
+        .select(NoteData::as_select())
+        .load(conn)
+        .expect("Error loading notes")
+}
+
 pub fn find_notes_for_tx(conn: &mut SqliteConnection, txid: &TxId) -> Vec<NoteData> {
     notes
         .filter(tx_id.eq(txid.as_ref().to_vec()))

@@ -1,3 +1,4 @@
+pub mod asset_registry;
 pub mod block_commitment;
 pub mod block_data;
 pub mod db;

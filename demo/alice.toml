@@ -1,0 +1,20 @@
+# Demo wallet: ALICE — an independent wallet (different seed, different note DB)
+# receiving and holding shielded assets against the same regtest node.
+# Run from the repository root:  zcash_tx_tool --config demo/alice.toml <command>
+
+[wallet]
+# BIP-39 test-vector phrase; any valid BIP-39 phrase works.
+seed_phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+# Alice never mines in the demo, but the field is required; keep the default.
+miner_seed_phrase = "fabric dilemma shift time border road fork license among uniform early laundry caution deer stamp"
+num_accounts = 2
+db_path = "demo/alice-wallet.sqlite"
+
+[network]
+node_address = "127.0.0.1"
+node_port = 18232
+protocol = "http"
+
+[chain]
+nu5_activation_height = 1
+nu7_activation_height = 1
