@@ -49,7 +49,9 @@ $ALICE balance
 step "5. Alice labels the asset for her own bookkeeping"
 # Pick the AssetBase out of the listing by its shape: the table ends with a
 # rule and a blank line, so reading the last line's last field yields "".
-BASE=$($ALICE assets | grep -oE '[0-9a-f]{64}' | tail -1)
+# `|| true` so that grep finding nothing does not trip `set -e` before the
+# check below can report it.
+BASE=$($ALICE assets | grep -oE '[0-9a-f]{64}' | tail -1 || true)
 if [ -z "$BASE" ]; then
     echo "ERROR: could not find an AssetBase in Alice's asset listing" >&2
     exit 1
