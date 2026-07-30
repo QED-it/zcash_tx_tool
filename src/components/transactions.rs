@@ -474,9 +474,12 @@ pub fn create_finalization_transaction(
 
 /// Decode a hex-encoded transaction carried by a `getblocktemplate` response.
 ///
-/// Template data comes from the node, so a malformed or incompatible entry is
-/// a normal error (e.g. an RPC version mismatch), not a reason to abort the
-/// process: `what` names the entry so the message identifies the culprit.
+/// Template data comes from the node, so a malformed or incompatible entry (an
+/// RPC version mismatch, say) fails this mining attempt with a reported error
+/// rather than panicking, as decoding it with `unwrap` would. Callers
+/// propagate: a template we cannot parse in full would otherwise yield a block
+/// silently missing transactions the node selected. `what` names the entry so
+/// the message identifies the culprit.
 fn read_template_tx(data: &str, what: &str) -> Result<Transaction, Box<dyn Error>> {
     let bytes = hex::decode(data)
         .map_err(|e| format!("invalid hex for {} in block template: {}", what, e))?;
