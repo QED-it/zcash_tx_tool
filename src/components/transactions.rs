@@ -489,7 +489,7 @@ fn read_template_tx(data: &str, what: &str) -> Result<Transaction, Box<dyn Error
 
 pub fn template_into_proposal(
     block_template: BlockTemplate,
-    mut txs: Vec<Transaction>,
+    txs: Vec<Transaction>,
 ) -> Result<BlockProposal, Box<dyn Error>> {
     let coinbase = read_template_tx(
         &block_template.coinbase_txn.data,
@@ -498,19 +498,26 @@ pub fn template_into_proposal(
 
     let mut txs_with_coinbase = vec![coinbase];
 
-    // Include any mempool transactions the node selected for this template,
-    // so wallet transactions submitted via `sendrawtransaction` get mined
-    // into the next produced block. Explicitly provided txs take precedence
-    // over their mempool duplicates.
-    let provided_txids: HashSet<TxId> = txs.iter().map(|tx| tx.txid()).collect();
+    // Include the mempool transactions the node selected for this template, so
+    // wallet transactions submitted via `sendrawtransaction` get mined into the
+    // next produced block.
+    //
+    // Keep them in the node's order and take its copy of any duplicate: the
+    // node may have sequenced them to satisfy in-block dependencies, and a
+    // block carrying a child ahead of its parent is invalid even though the
+    // transaction set is the same.
+    let mut template_txids: HashSet<TxId> = HashSet::new();
     for (index, template_tx) in block_template.transactions.iter().enumerate() {
         let tx = read_template_tx(&template_tx.data, &format!("mempool transaction {}", index))?;
-        if !provided_txids.contains(&tx.txid()) {
-            txs_with_coinbase.push(tx);
-        }
+        template_txids.insert(tx.txid());
+        txs_with_coinbase.push(tx);
     }
 
-    txs_with_coinbase.append(&mut txs);
+    // Then whatever we were handed that the template does not already carry.
+    txs_with_coinbase.extend(
+        txs.into_iter()
+            .filter(|tx| !template_txids.contains(&tx.txid())),
+    );
 
     let merkle_root = if txs_with_coinbase.len() == 1 {
         // only coinbase tx is present, no need to calculate
