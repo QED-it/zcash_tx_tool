@@ -540,13 +540,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
-name = "core2"
-version = "0.3.3"
+name = "corez"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "239fa3ae9b63c2dc74bd3fa852d4792b8b305ae64eeede946265b6af62f1fff3"
-dependencies = [
- "memchr",
-]
+checksum = "4df6f98652d30167eaeea34d77b730e07c8caba6df17bd4551842b9b8da01deb"
 
 [[package]]
 name = "cpufeatures"
@@ -785,11 +782,11 @@ dependencies = [
 
 [[package]]
 name = "equihash"
-version = "0.2.2"
-source = "git+https://github.com/QED-it/librustzcash?rev=0ea737548f7aea6124056df54d55f6c5a35ef914#0ea737548f7aea6124056df54d55f6c5a35ef914"
+version = "0.3.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0#c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0"
 dependencies = [
  "blake2b_simd",
- "core2",
+ "corez",
 ]
 
 [[package]]
@@ -821,7 +818,7 @@ dependencies = [
 [[package]]
 name = "f4jumble"
 version = "0.1.1"
-source = "git+https://github.com/QED-it/librustzcash?rev=0ea737548f7aea6124056df54d55f6c5a35ef914#0ea737548f7aea6124056df54d55f6c5a35ef914"
+source = "git+https://github.com/QED-it/librustzcash?rev=c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0#c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0"
 dependencies = [
  "blake2b_simd",
 ]
@@ -1052,9 +1049,8 @@ dependencies = [
 
 [[package]]
 name = "halo2_gadgets"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45824ce0dd12e91ec0c68ebae2a7ed8ae19b70946624c849add59f1d1a62a143"
+version = "0.5.0"
+source = "git+https://github.com/QED-it/halo2?rev=ef3d0ba2e9a513658f8d3d00294ddebd92cc649e#ef3d0ba2e9a513658f8d3d00294ddebd92cc649e"
 dependencies = [
  "arrayvec",
  "bitvec",
@@ -1079,7 +1075,7 @@ checksum = "47716fe1ae67969c5e0b2ef826f32db8c3be72be325e1aa3c1951d06b5575ec5"
 [[package]]
 name = "halo2_poseidon"
 version = "0.1.0"
-source = "git+https://github.com/zcash/halo2?rev=2308caf68c48c02468b66cfc452dad54e355e32f#2308caf68c48c02468b66cfc452dad54e355e32f"
+source = "git+https://github.com/QED-it/halo2?rev=ef3d0ba2e9a513658f8d3d00294ddebd92cc649e#ef3d0ba2e9a513658f8d3d00294ddebd92cc649e"
 dependencies = [
  "bitvec",
  "ff",
@@ -1089,8 +1085,8 @@ dependencies = [
 
 [[package]]
 name = "halo2_proofs"
-version = "0.3.1"
-source = "git+https://github.com/zcash/halo2?rev=2308caf68c48c02468b66cfc452dad54e355e32f#2308caf68c48c02468b66cfc452dad54e355e32f"
+version = "0.3.2"
+source = "git+https://github.com/QED-it/halo2?rev=ef3d0ba2e9a513658f8d3d00294ddebd92cc649e#ef3d0ba2e9a513658f8d3d00294ddebd92cc649e"
 dependencies = [
  "blake2b_simd",
  "ff",
@@ -1762,13 +1758,13 @@ dependencies = [
 
 [[package]]
 name = "orchard"
-version = "0.12.0"
-source = "git+https://github.com/QED-it/orchard?rev=77d3274cb1f4620e9a1b86477c490fa123dff6bd#77d3274cb1f4620e9a1b86477c490fa123dff6bd"
+version = "0.14.0"
+source = "git+https://github.com/QED-it/orchard?rev=cf801a5d6701bc128e21678ba0034564af4a2aca#cf801a5d6701bc128e21678ba0034564af4a2aca"
 dependencies = [
  "aes",
  "bitvec",
  "blake2b_simd",
- "core2",
+ "corez",
  "ff",
  "fpe",
  "getset",
@@ -2181,8 +2177,8 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sapling-crypto"
-version = "0.6.0"
-source = "git+https://github.com/QED-it/sapling-crypto?rev=59535fb5d34b5c5cf1b20ef18269f5c65228378c#59535fb5d34b5c5cf1b20ef18269f5c65228378c"
+version = "0.7.0"
+source = "git+https://github.com/QED-it/sapling-crypto?rev=e785faaa5eaf67bd2cb328fdd82a345df44e5754#e785faaa5eaf67bd2cb328fdd82a345df44e5754"
 dependencies = [
  "aes",
  "bellman",
@@ -2190,7 +2186,7 @@ dependencies = [
  "blake2b_simd",
  "blake2s_simd",
  "bls12_381",
- "core2",
+ "corez",
  "document-features",
  "ff",
  "fpe",
@@ -3415,12 +3411,12 @@ dependencies = [
 
 [[package]]
 name = "zcash_address"
-version = "0.10.1"
-source = "git+https://github.com/QED-it/librustzcash?rev=0ea737548f7aea6124056df54d55f6c5a35ef914#0ea737548f7aea6124056df54d55f6c5a35ef914"
+version = "0.12.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0#c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0"
 dependencies = [
  "bech32",
  "bs58",
- "core2",
+ "corez",
  "f4jumble",
  "zcash_encoding",
  "zcash_protocol",
@@ -3428,10 +3424,10 @@ dependencies = [
 
 [[package]]
 name = "zcash_encoding"
-version = "0.3.0"
-source = "git+https://github.com/QED-it/librustzcash?rev=0ea737548f7aea6124056df54d55f6c5a35ef914#0ea737548f7aea6124056df54d55f6c5a35ef914"
+version = "0.4.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0#c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0"
 dependencies = [
- "core2",
+ "corez",
  "hex",
  "nonempty",
 ]
@@ -3450,49 +3446,38 @@ dependencies = [
 
 [[package]]
 name = "zcash_primitives"
-version = "0.26.4"
-source = "git+https://github.com/QED-it/librustzcash?rev=0ea737548f7aea6124056df54d55f6c5a35ef914#0ea737548f7aea6124056df54d55f6c5a35ef914"
+version = "0.28.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0#c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0"
 dependencies = [
- "bip32",
  "blake2b_simd",
  "block-buffer 0.11.0-rc.3",
- "bs58",
- "core2",
+ "corez",
  "crypto-common 0.2.0-rc.1",
  "document-features",
  "equihash",
  "ff",
- "fpe",
- "getset",
- "group",
  "hex",
  "incrementalmerkletree",
  "jubjub",
  "memuse",
  "nonempty",
  "orchard",
- "rand",
  "rand_core",
  "redjubjub",
- "ripemd 0.1.3",
  "sapling-crypto",
  "secp256k1",
  "sha2 0.10.9",
- "subtle",
- "tracing",
- "zcash_address",
  "zcash_encoding",
  "zcash_note_encryption",
  "zcash_protocol",
  "zcash_script",
  "zcash_transparent",
- "zip32",
 ]
 
 [[package]]
 name = "zcash_proofs"
-version = "0.26.1"
-source = "git+https://github.com/QED-it/librustzcash?rev=0ea737548f7aea6124056df54d55f6c5a35ef914#0ea737548f7aea6124056df54d55f6c5a35ef914"
+version = "0.28.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0#c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0"
 dependencies = [
  "bellman",
  "blake2b_simd",
@@ -3512,10 +3497,10 @@ dependencies = [
 
 [[package]]
 name = "zcash_protocol"
-version = "0.7.2"
-source = "git+https://github.com/QED-it/librustzcash?rev=0ea737548f7aea6124056df54d55f6c5a35ef914#0ea737548f7aea6124056df54d55f6c5a35ef914"
+version = "0.9.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0#c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0"
 dependencies = [
- "core2",
+ "corez",
  "document-features",
  "hex",
  "memuse",
@@ -3549,13 +3534,12 @@ dependencies = [
 
 [[package]]
 name = "zcash_transparent"
-version = "0.6.3"
-source = "git+https://github.com/QED-it/librustzcash?rev=0ea737548f7aea6124056df54d55f6c5a35ef914#0ea737548f7aea6124056df54d55f6c5a35ef914"
+version = "0.8.0"
+source = "git+https://github.com/QED-it/librustzcash?rev=c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0#c5c232db9c54eeb8bc1d0f4dc1b8a0e40f981bb0"
 dependencies = [
  "bip32",
- "blake2b_simd",
  "bs58",
- "core2",
+ "corez",
  "document-features",
  "getset",
  "hex",

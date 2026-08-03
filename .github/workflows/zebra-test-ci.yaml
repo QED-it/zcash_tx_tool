@@ -29,7 +29,8 @@ jobs:
     env:
       # The Zebra commit we test against. Update this to bump the pinned Zebra version.
       # Latest from branch: https://github.com/QED-it/zebra/tree/zsa-integration-demo
-      ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || '2b036fd6d511011e06f632519c7c9d64c2a8ac2d' }}
+      # FIXME: Repoint to the zsa-integration-demo commit after the v5.2.0 sync reaches it via zsa1 in Zebra.
+      ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || '33492d7fd73039fdb0007cf292e2b45e1f262477' }}
       # Host-side URL for talking to the Zebra container's JSON-RPC port.
       ZEBRA_RPC_URL: http://127.0.0.1:18232/
       # Persistence tests share state via this dir; binary is invoked from
