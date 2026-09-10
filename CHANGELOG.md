@@ -5,12 +5,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this library adheres to Rust's notion of
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-### Added
-- Show git metadata when running `zcash_tx_tool`
-- Embed `GIT_TAG` and `GIT_COMMIT` via build script
-- Adjust acceptance tests for the new output
-
 ## [0.6.0] - 2026-09-10
 Post-NU6.2 release. Aligns the dependency set with Zebra v5.2.0 and is only
 compatible with a Zebra node built from the commit pinned as `ZEBRA_COMMIT` in
@@ -35,12 +29,50 @@ compatible with a Zebra node built from the commit pinned as `ZEBRA_COMMIT` in
   its use in the Orchard circuit, and orchard 0.14's canonical proof-size
   enforcement (GHSA-2x4w-pxqw-58v9)
 
+## [0.5.0] - 2026-05-18
+### Added
+- `test-issue-one` scenario, issuing a single asset (#45)
+- `get-block-data` command and block header commitment support per ZIP-244
+- `test-persistence-part1` / `test-persistence-part2` scenarios, covering wallet
+  state, notes and commitment-tree positions surviving a process restart
+- CI: pin and test against a specific Zebra commit (#80), cache the tx-tool
+  build (#84), Rustfmt and Clippy lint workflows (#60), dependabot
+  configuration (#55), and AWS auth for the run-tx-tool workflow (#76)
+
+### Changed
+- Upgraded Zebra to `2b036fd6` and migrated to librustzcash 0.26 / orchard 0.12 (#86)
+- Updated librustzcash (#43)
+- Clearer messages while creating transfer and burn transactions (#74)
+- Removed the `.env` file and its configuration (#51)
+- Assorted fixes (#63), plus dependency and GitHub Actions bumps
+
+## [0.4.0] - 2025-11-06
+### Added
+- Asset finalization test (#42)
+
+### Changed
+- Updated librustzcash to revision `a996e53`, and again thereafter (#40, #41)
+- Docker entry point now runs the compiled executable directly (#37)
+- Release workflow pushes to ECR on a new release (#38), handling an
+  empty user-supplied tag (#39)
+
+## [0.3.2] - 2025-07-31
+### Changed
+- Version bump in `Cargo.toml`; no functional changes
+
+## [0.3.1] - 2025-07-31
+### Added
+- Show git metadata when running `zcash_tx_tool`
+- Embed `GIT_TAG` and `GIT_COMMIT` via build script
+- Adjust acceptance tests for the new output
+
 ## [0.3.0] - 2025-06-03
 ### Added
 - Support for the asset description hash in the issuance bundle
 - Structures for describing transfer and burn information, ability to convert them into transactions
 - Support for scenarios with arbitrary number of accounts
 - Additional scenario for a three party test case
+- Updated dependencies and the Zebra target branch to `zsa-integration-demo`
 
 ## [0.2.0] - 2025-02-28
 ### Added
