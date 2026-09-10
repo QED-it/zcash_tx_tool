@@ -10,7 +10,7 @@ Zebra is always run in Docker; that side of the workflow lives in the README.
 
 - Docker (any modern version).
 - ~3 GB of free disk space for the resulting image (Rust toolchain + release build + Sapling parameters).
-- Network access to `crates.io`, `github.com` (for the QED-it forks of orchard / librustzcash / sapling-crypto), and the IPFS gateway used by `zcutil/fetch-params.sh`.
+- Network access to `crates.io`, `github.com` (for the QED-it forks of orchard / librustzcash / sapling-crypto / halo2), and the IPFS gateway used by `zcutil/fetch-params.sh`.
 
 ### Command
 

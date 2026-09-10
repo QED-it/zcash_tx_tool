@@ -31,7 +31,7 @@ RUN mkdir -p /root/.local/share/ZcashParams
 COPY . .
 
 # Build
-RUN cargo build --release && \
+RUN cargo build --release --locked && \
     cp target/release/zcash_tx_tool /app/zcash_tx_tool
 
 # Run migrations (build-time; the runtime app also runs them on /data/walletdb.sqlite)

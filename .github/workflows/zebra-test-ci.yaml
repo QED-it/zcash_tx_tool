@@ -27,9 +27,12 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     env:
-      # The Zebra commit we test against. Update this to bump the pinned Zebra version.
-      # Latest from branch: https://github.com/QED-it/zebra/tree/zsa-integration-demo
-      # FIXME: Repoint to the zsa-integration-demo commit after the v5.2.0 sync reaches it via zsa1 in Zebra.
+      # The Zebra commit we test against, and the source of truth for which Zebra
+      # a tx-tool build is compatible with. Update this to bump the pinned version.
+      # Normally the head of https://github.com/QED-it/zebra/tree/zsa1; while a
+      # release sync is in flight it tracks the Zebra feature branch carrying that
+      # sync. Currently https://github.com/QED-it/zebra/tree/sync-zcash-v5.2.0,
+      # which carries the post-NU6.2 Orchard circuit. Repoint to zsa1 once it lands.
       ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || '3ccfc3784adedb4d1f5444c71f4944a9c9bc7211' }}
       # Host-side URL for talking to the Zebra container's JSON-RPC port.
       ZEBRA_RPC_URL: http://127.0.0.1:18232/
@@ -123,7 +126,7 @@ jobs:
           ./zcutil/fetch-params.sh
 
       - name: Build tx-tool
-        run: cargo build --release
+        run: cargo build --release --locked
 
       # --- Tests ---
       # The runtime app runs diesel_migrations on startup, so no separate
