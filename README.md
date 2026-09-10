@@ -65,12 +65,10 @@ sudo apt install pkg-config libssl-dev libsqlite3-dev
 
 ### 1. Build and Run the Zebra Docker Image
 
-The tx-tool is only compatible with the Zebra commit it is pinned against.
-That pin is `ZEBRA_COMMIT` in [`.github/workflows/zebra-test-ci.yaml`](.github/workflows/zebra-test-ci.yaml),
-and it is the source of truth — it is the commit CI builds and tests every
-change against. Normally it is the head of Zebra's `zsa1` branch; while a
-release sync is in flight it tracks the Zebra feature branch carrying that
-sync. Read the value from that workflow and use it below.
+The tx-tool is only compatible with the Zebra commit it is pinned against:
+`ZEBRA_COMMIT` in [`.github/workflows/zebra-test-ci.yaml`](.github/workflows/zebra-test-ci.yaml),
+which tracks Zebra's `zsa1` branch and is the commit CI builds and tests every
+change against. Read the value from that workflow and use it below.
 
 Open a terminal and execute the following commands:
 
@@ -81,9 +79,8 @@ git clone https://github.com/QED-it/zebra.git
 # Navigate to the Zebra directory
 cd zebra
 
-# Check out the commit the tx-tool is pinned against (ZEBRA_COMMIT in
-# .github/workflows/zebra-test-ci.yaml). Building any other commit risks a
-# node that cannot verify the transactions this tool produces.
+# Check out the pinned commit (ZEBRA_COMMIT in .github/workflows/zebra-test-ci.yaml);
+# any other commit risks a node that cannot verify this tool's transactions.
 git checkout <ZEBRA_COMMIT>
 
 # Build the Zebra Docker image

@@ -27,6 +27,5 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: .
           deny: warnings
-          # Fail on Cargo.lock drift: the pinned dependency set must stay in
-          # lockstep with the Zebra commit in zebra-test-ci.yaml.
+          # --locked: fail on Cargo.lock drift from the pinned Zebra dep set.
           check-args: --locked

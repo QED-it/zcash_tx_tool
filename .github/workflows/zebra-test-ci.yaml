@@ -28,12 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # The Zebra commit we test against, and the source of truth for which Zebra
-      # a tx-tool build is compatible with. Update this to bump the pinned version.
-      # Normally the head of https://github.com/QED-it/zebra/tree/zsa1; while a
-      # release sync is in flight it tracks the Zebra feature branch carrying that
-      # sync. Currently https://github.com/QED-it/zebra/tree/sync-zcash-v5.2.0,
-      # which carries the post-NU6.2 Orchard circuit. Repoint to zsa1 once it lands.
-      ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || '3ccfc3784adedb4d1f5444c71f4944a9c9bc7211' }}
+      # a tx-tool build is compatible with. Head of QED-it/zebra `zsa1`.
+      ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || '8c9c93fdd91b89fab387ec68362a93b2baca7bab' }}
       # Host-side URL for talking to the Zebra container's JSON-RPC port.
       ZEBRA_RPC_URL: http://127.0.0.1:18232/
       # Persistence tests share state via this dir; binary is invoked from
