@@ -27,9 +27,9 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     env:
-      # The Zebra commit we test against. Update this to bump the pinned Zebra version.
-      # Latest from branch: https://github.com/QED-it/zebra/tree/zsa-integration-demo
-      ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || '2b036fd6d511011e06f632519c7c9d64c2a8ac2d' }}
+      # The Zebra commit we test against, and the source of truth for which Zebra
+      # a tx-tool build is compatible with. Head of QED-it/zebra `zsa1`.
+      ZEBRA_COMMIT: ${{ vars.ZEBRA_COMMIT_TO_TEST || '8c9c93fdd91b89fab387ec68362a93b2baca7bab' }}
       # Host-side URL for talking to the Zebra container's JSON-RPC port.
       ZEBRA_RPC_URL: http://127.0.0.1:18232/
       # Persistence tests share state via this dir; binary is invoked from
@@ -122,7 +122,7 @@ jobs:
           ./zcutil/fetch-params.sh
 
       - name: Build tx-tool
-        run: cargo build --release
+        run: cargo build --release --locked
 
       # --- Tests ---
       # The runtime app runs diesel_migrations on startup, so no separate

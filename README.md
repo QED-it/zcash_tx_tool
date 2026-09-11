@@ -65,14 +65,23 @@ sudo apt install pkg-config libssl-dev libsqlite3-dev
 
 ### 1. Build and Run the Zebra Docker Image
 
+The tx-tool is only compatible with the Zebra commit it is pinned against:
+`ZEBRA_COMMIT` in [`.github/workflows/zebra-test-ci.yaml`](.github/workflows/zebra-test-ci.yaml),
+which tracks Zebra's `zsa1` branch and is the commit CI builds and tests every
+change against. Read the value from that workflow and use it below.
+
 Open a terminal and execute the following commands:
 
 ```bash
-# Clone the zebra repository with the ZSA integration branch
-git clone -b zsa-integration-demo --single-branch --depth=1 https://github.com/QED-it/zebra.git
+# Clone the Zebra repository
+git clone https://github.com/QED-it/zebra.git
 
 # Navigate to the Zebra directory
 cd zebra
+
+# Check out the pinned commit (ZEBRA_COMMIT in .github/workflows/zebra-test-ci.yaml);
+# any other commit risks a node that cannot verify this tool's transactions.
+git checkout <ZEBRA_COMMIT>
 
 # Build the Zebra Docker image
 docker build -t qedit/zebra-regtest-txv6 -f testnet-single-node-deploy/dockerfile .
@@ -81,7 +90,7 @@ docker build -t qedit/zebra-regtest-txv6 -f testnet-single-node-deploy/dockerfil
 docker run -p 18232:18232 qedit/zebra-regtest-txv6
 ```
 
-For more details on how the Docker image is created and synchronized, refer to the [Dockerfile](https://github.com/QED-it/zebra/blob/zsa-integration-demo/testnet-single-node-deploy/dockerfile) in the zebra repository.
+For more details on how the Docker image is created and synchronized, refer to the [Dockerfile](https://github.com/QED-it/zebra/blob/zsa1/testnet-single-node-deploy/dockerfile) in the zebra repository.
 
 ### 2. Set Up and Run the Zcash tx-tool
 

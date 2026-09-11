@@ -27,3 +27,5 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: .
           deny: warnings
+          # --locked: fail on Cargo.lock drift from the pinned Zebra dep set.
+          check-args: --locked
