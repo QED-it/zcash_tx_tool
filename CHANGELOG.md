@@ -10,19 +10,32 @@ Post-NU6.2 release. Aligns the dependency set with Zebra v5.2.0 and is only
 compatible with a Zebra node built from the commit pinned as `ZEBRA_COMMIT` in
 `.github/workflows/zebra-test-ci.yaml`.
 
+### Added
+- `ZSA_DUMP_BLOCKS` env var: when set, each submitted block is printed as
+  `ZSA_BLOCK_HEX <hex>`. CI runs of `test-orchard-zsa` collect these into the
+  `orchard-zsa-blocks` artifact, one block per line (#95)
+- Dependabot auto-merge workflow for patch and minor updates (#68)
+
 ### Changed
 - Aligned dependencies with Zebra v5.2.0: orchard 0.14, librustzcash 0.28
   (`zcash_primitives`, `zcash_proofs`, `zcash_transparent`, `zcash_protocol`,
   `zcash_encoding`), sapling-crypto 0.7, and the QED-it halo2 fork
-  (`halo2_proofs` 0.3.2, `halo2_gadgets` 0.5.0, `halo2_poseidon`)
+  (`halo2_proofs` 0.3.2, `halo2_gadgets` 0.5.0, `halo2_poseidon`) (#101)
 - Orchard proofs are now built for the post-NU6.2 Action circuit
   (`FixedPostNu6_2`), so transactions from this release are not verifiable by a
-  pre-NU6.2 node
+  pre-NU6.2 node (#101)
 - `ZEBRA_COMMIT` in `.github/workflows/zebra-test-ci.yaml` is now documented as
   the source of truth for the compatible Zebra commit; references to the retired
-  `zsa-integration-demo` branch are removed
+  `zsa-integration-demo` branch are removed (#101)
 - All CI, test, and Docker cargo invocations now pass `--locked`, so `Cargo.lock`
-  drift fails the build instead of resolving silently
+  drift fails the build instead of resolving silently (#101)
+- The `push-ecr` workflow publishes to ECR Public
+  (`public.ecr.aws/j7v0v6n9/tx-tool`, us-east-1) instead of the private registry,
+  with a selectable GitHub environment (#90)
+- Moved the Docker build, persistence-volume layout, and host-network example out
+  of the README into `docs/tx_tool_docker_setup.md` (#83)
+- Dependency bumps: diesel 2.3.10, diesel_migrations 2.3.2, clap 4.6.1,
+  bridgetree 0.7.1, serde_json 1.0.150, openssl 0.10.80 (#88, #91, #94)
 
 ### Security
 - Picks up the `halo2_gadgets` 0.5.0 fix for a critical vulnerability affecting
