@@ -22,6 +22,10 @@ on:
   schedule:
     - cron: "*/15 * * * *" # Runs every 15 min
 
+permissions:
+  id-token: write # OIDC token for aws-actions/configure-aws-credentials
+  contents: read
+
 env:
   ECR_PUBLIC_AUTH_REGION: us-east-1
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'tx-tool' }}
@@ -66,8 +70,7 @@ jobs:
       - name: Configure AWS credentials for ECR Public
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.ECR_PUBLIC_AUTH_REGION }}
 
       - name: Login to Amazon ECR Public
