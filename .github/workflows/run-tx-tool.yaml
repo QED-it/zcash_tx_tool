@@ -28,8 +28,7 @@ permissions:
 
 env:
   ECR_PUBLIC_AUTH_REGION: us-east-1
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'tx-tool' }}
-  ECR_PUBLIC_REGISTRY: public.ecr.aws
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'dev-tx-tool' }}
   ECR_REGISTRY_ALIAS: ${{ vars.ECR_REGISTRY_ALIAS || 'j7v0v6n9' }}
 
 jobs:
@@ -64,8 +63,8 @@ jobs:
           echo "ZCASH_NODE_PROTOCOL: $ZCASH_NODE_PROTOCOL"
           echo "IMAGE_TAG: $IMAGE_TAG"
           # Define and persist the full ECR image path
-          echo "ECR_IMAGE=$ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
-          echo "ECR_IMAGE: $ECR_PUBLIC_REGISTRY/$ECR_REGISTRY_ALIAS/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "ECR_IMAGE=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
+          echo "ECR_IMAGE: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
       - name: Configure AWS credentials for ECR Public
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
@@ -76,7 +75,6 @@ jobs:
       - name: Login to Amazon ECR Public
         uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
         with:
-          registry-type: public
 
       - name: Pull Docker image from ECR
         run: |
