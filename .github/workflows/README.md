@@ -30,6 +30,6 @@ These workflows leverage GitHub Actions for continuous integration and deploymen
 Default repository variables used in these workflows:
 
 * `AWS_REGION`: AWS region for ECR and other services. Default: `eu-central-1`
-* `ECR_REPOSITORY`: ECR repository name. Default: `tx-tool`
+* `ECR_REPOSITORY`: ECR repository name. Default: `dev-tx-tool`
 
 These variables ensure consistency and maintainability by reducing hardcoded values.
