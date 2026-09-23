@@ -13,7 +13,7 @@ on:
         required: true
         type: string
       ecr_repository:
-        description: 'ECR Public repository name including alias (e.g. j7v0v6n9/tx-tool)'
+        description: 'ECR Public repository name, without the registry alias (e.g. tx-tool)'
         required: false
         type: string
       environment:
@@ -29,8 +29,7 @@ permissions:
 env:
   # ECR Public API only exists in us-east-1.
   AWS_REGION: us-east-1
-  # Repository includes the registry alias so the final image URI is public.ecr.aws/<alias>/<repo>.
-  ECR_REPOSITORY: ${{ inputs.ecr_repository || vars.ECR_REPOSITORY || 'j7v0v6n9/tx-tool' }}
+  ECR_REPOSITORY: ${{ inputs.ecr_repository || vars.ECR_REPOSITORY || 'tx-tool' }}
   DOCKERFILE_PATH: ${{ vars.DOCKERFILE_PATH || 'Dockerfile' }}
 
 jobs:
@@ -82,7 +81,7 @@ jobs:
       - name: Build, tag, and push image to Amazon ECR
         id: build-image
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REGISTRY_ALIAS || 'j7v0v6n9' }}
           IMAGE_TAG_LATEST: latest
         run: |
           # Get Git information for build args
