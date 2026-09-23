@@ -29,7 +29,6 @@ permissions:
 env:
   ECR_PUBLIC_AUTH_REGION: us-east-1
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'dev-tx-tool' }}
-  ECR_REGISTRY_ALIAS: ${{ vars.ECR_REGISTRY_ALIAS || 'j7v0v6n9' }}
 
 jobs:
   run-container:
