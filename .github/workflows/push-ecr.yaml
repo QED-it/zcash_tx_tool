@@ -16,11 +16,6 @@ on:
         description: 'ECR Public repository name including alias (e.g. j7v0v6n9/tx-tool)'
         required: false
         type: string
-      environment:
-        description: 'GitHub environment to deploy to (e.g. dev/dev-swaps)'
-        required: false
-        type: string
-        default: dev-swaps
 
 permissions:
   id-token: write # OIDC token for aws-actions/configure-aws-credentials
@@ -37,7 +32,7 @@ jobs:
   push-to-ecr:
     name: Push to ECR
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment || 'dev-swaps' }}
+    environment: dev-swaps
 
     steps:
       - name: Checkout
@@ -83,8 +78,8 @@ jobs:
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          # Only dev moves latest, which the scheduled run pulls.
-          IMAGE_TAG_LATEST: ${{ (inputs.environment || 'dev-swaps') == 'dev' && 'latest' || '' }}
+          # Swaps images never take latest; main's scheduled run pulls it.
+          IMAGE_TAG_LATEST: ''
         run: |
           # Get Git information for build args
           GIT_COMMIT=$(git rev-parse HEAD)
