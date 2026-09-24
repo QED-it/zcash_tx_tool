@@ -29,8 +29,8 @@ permissions:
 env:
   # ECR Public API only exists in us-east-1.
   AWS_REGION: us-east-1
-  # Repository includes the registry alias so the final image URI is public.ecr.aws/<alias>/<repo>.
-  ECR_REPOSITORY: ${{ inputs.ecr_repository || vars.ECR_REPOSITORY || 'j7v0v6n9/tx-tool' }}
+  # <alias>/<repo> from the same vars as run-tx-tool.yaml; the input overrides both.
+  ECR_REPOSITORY: ${{ inputs.ecr_repository || format('{0}/{1}', vars.ECR_REGISTRY_ALIAS || 'j7v0v6n9', vars.ECR_REPOSITORY || 'tx-tool') }}
   DOCKERFILE_PATH: ${{ vars.DOCKERFILE_PATH || 'Dockerfile' }}
 
 jobs:
