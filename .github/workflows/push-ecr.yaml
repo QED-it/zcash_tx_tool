@@ -1,5 +1,5 @@
-# This GitHub Actions workflow automates pushing the Zebra Server Docker image to Amazon ECR.
-# It triggers on any new tag or manual dispatch, builds a Docker image, and pushes it to Amazon Elastic Container Registry (ECR).
+# This GitHub Actions workflow automates pushing the tx-tool Docker image to Amazon ECR Public.
+# It triggers on any new tag or manual dispatch, builds a Docker image, and pushes it to Amazon Elastic Container Registry (ECR) Public.
 name: Push to Amazon ECR
 
 on:
@@ -13,37 +13,49 @@ on:
         required: true
         type: string
       ecr_repository:
-        description: 'ECR repository name (dev-zebra-server)'
+        description: 'ECR Public repository name including alias (e.g. j7v0v6n9/tx-tool)'
         required: false
         type: string
+      environment:
+        description: 'GitHub environment to deploy to (e.g. dev/dev-swaps)'
+        required: false
+        type: string
+        default: dev-swaps
+
+permissions:
+  id-token: write # OIDC token for aws-actions/configure-aws-credentials
+  contents: read
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
-  ECR_REPOSITORY: ${{ inputs.ecr_repository || vars.ECR_REPOSITORY || 'dev-zebra-server' }}
+  # ECR Public API only exists in us-east-1.
+  AWS_REGION: us-east-1
+  # <alias>/<repo> from the same vars as run-tx-tool.yaml; the input overrides both.
+  ECR_REPOSITORY: ${{ inputs.ecr_repository || format('{0}/{1}', vars.ECR_REGISTRY_ALIAS || 'j7v0v6n9', vars.ECR_REPOSITORY || 'tx-tool') }}
   DOCKERFILE_PATH: ${{ vars.DOCKERFILE_PATH || 'Dockerfile' }}
 
 jobs:
   push-to-ecr:
     name: Push to ECR
     runs-on: ubuntu-latest
-    environment: dev-swaps
+    environment: ${{ inputs.environment || 'dev-swaps' }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
+      - name: Login to Amazon ECR Public
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+        with:
+          registry-type: public
 
       - name: Get Git tags and set image tags
         id: vars
@@ -71,7 +83,8 @@ jobs:
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG_LATEST: latest
+          # Only dev moves latest, which the scheduled run pulls.
+          IMAGE_TAG_LATEST: ${{ (inputs.environment || 'dev-swaps') == 'dev' && 'latest' || '' }}
         run: |
           # Get Git information for build args
           GIT_COMMIT=$(git rev-parse HEAD)
@@ -83,7 +96,9 @@ jobs:
           
           # Build docker container with multiple tags
           DOCKER_BUILD_ARGS=()
-          DOCKER_BUILD_ARGS+=("-t" "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST")
+          if [ -n "$IMAGE_TAG_LATEST" ]; then
+            DOCKER_BUILD_ARGS+=("-t" "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST")
+          fi
           
           # Only add IMAGE_TAG_VERSION if it's not empty
           if [ -n "$IMAGE_TAG_VERSION" ]; then
@@ -124,7 +139,9 @@ jobs:
           done
           
           # Output the image URIs
-          echo "image_latest=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST" >> $GITHUB_OUTPUT
+          if [ -n "$IMAGE_TAG_LATEST" ]; then
+            echo "image_latest=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST" >> $GITHUB_OUTPUT
+          fi
           
           if [ -n "$IMAGE_TAG_VERSION" ]; then
             echo "image_version=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION" >> $GITHUB_OUTPUT
