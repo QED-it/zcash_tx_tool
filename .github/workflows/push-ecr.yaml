@@ -83,7 +83,8 @@ jobs:
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG_LATEST: latest
+          # Only dev moves latest, which the scheduled run pulls.
+          IMAGE_TAG_LATEST: ${{ (inputs.environment || 'dev') == 'dev' && 'latest' || '' }}
         run: |
           # Get Git information for build args
           GIT_COMMIT=$(git rev-parse HEAD)
@@ -95,7 +96,9 @@ jobs:
           
           # Build docker container with multiple tags
           DOCKER_BUILD_ARGS=()
-          DOCKER_BUILD_ARGS+=("-t" "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST")
+          if [ -n "$IMAGE_TAG_LATEST" ]; then
+            DOCKER_BUILD_ARGS+=("-t" "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST")
+          fi
           
           # Only add IMAGE_TAG_VERSION if it's not empty
           if [ -n "$IMAGE_TAG_VERSION" ]; then
@@ -136,7 +139,9 @@ jobs:
           done
           
           # Output the image URIs
-          echo "image_latest=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST" >> $GITHUB_OUTPUT
+          if [ -n "$IMAGE_TAG_LATEST" ]; then
+            echo "image_latest=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_LATEST" >> $GITHUB_OUTPUT
+          fi
           
           if [ -n "$IMAGE_TAG_VERSION" ]; then
             echo "image_version=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION" >> $GITHUB_OUTPUT
