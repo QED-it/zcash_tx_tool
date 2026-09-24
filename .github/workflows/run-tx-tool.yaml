@@ -6,7 +6,7 @@ on:
       zcash_node_address:
         description: "Zcash node address"
         required: false
-        default: "dev.zebra.zsa-test.net"
+        default: "rpc.test-zsa.org"
       zcash_node_port:
         description: "Zcash node port"
         required: false
@@ -50,7 +50,7 @@ jobs:
       - name: Set default values if not set
         id: set-defaults
         run: |
-          echo "ZCASH_NODE_ADDRESS=${{ github.event.inputs.zcash_node_address || 'dev.zebra.zsa-test.net' }}" >> $GITHUB_ENV
+          echo "ZCASH_NODE_ADDRESS=${{ github.event.inputs.zcash_node_address || 'rpc.test-zsa.org' }}" >> $GITHUB_ENV
           echo "ZCASH_NODE_PORT=${{ github.event.inputs.zcash_node_port || '443' }}" >> $GITHUB_ENV
           echo "ZCASH_NODE_PROTOCOL=${{ github.event.inputs.zcash_node_protocol || 'https' }}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${{ github.event.inputs.image_tag || 'latest' }}" >> $GITHUB_ENV
